@@ -140,7 +140,7 @@ export function syncDisabledFile(list) {
   try {
     fs.writeFileSync(DISABLED_FILE, JSON.stringify(list), "utf8");
   } catch (err) {
-    log.warn("Extensions", "Failed to write disabled file:", err.message);
+    log.warn("Books", "Failed to write disabled file:", err.message);
   }
 }
 
@@ -302,7 +302,7 @@ function resolveExtensionEnv(manifest) {
 
   if (generated.length > 0) {
     log.verbose(
-      "Extensions",
+      "Books",
       `${manifest.name}: auto-generated ${generated.join(", ")}`,
     );
   }
@@ -453,7 +453,7 @@ function enforceAssetBudget(manifest, dir) {
   }
   if (tally.total > ASSET_LIMITS.perExtension.warn) {
     log.warn(
-      "Extensions",
+      "Books",
       `"${manifest.name}" ships ${fmtMB(tally.total)} of assets (warn threshold ${fmtMB(ASSET_LIMITS.perExtension.warn)}; hard limit ${fmtMB(ASSET_LIMITS.perExtension.fail)}).`,
     );
   }
@@ -605,7 +605,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
   // Sort by dependencies (proper topological sort)
   const sorted = topologicalSort(enabled);
   log.debug(
-    "Extensions",
+    "Books",
     `Load order: ${sorted.map((s) => s.manifest.name).join(", ")}`,
   );
 
@@ -617,11 +617,11 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       const missing = validateNeeds(manifest, storyServices);
       if (missing.length > 0) {
         log.debug(
-          "Extensions",
+          "Books",
           `[${_si}/${sorted.length}] ${manifest.name} SKIP (missing: ${missing.join(", ")}). loaded: ${[...loaded.keys()].join(", ")}`,
         );
         log.warn(
-          "Extensions",
+          "Books",
           `Skipping "${manifest.name}": missing required deps: ${missing.join(", ")}`,
         );
         _bootSkipped.push({ name: manifest.name, reason: "missing deps" });
@@ -633,7 +633,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         const envResult = resolveExtensionEnv(manifest);
         if (!envResult.ok) {
           log.warn(
-            "Extensions",
+            "Books",
             `Skipping "${manifest.name}": ${envResult.missing.join(", ")}. Set in .env and restart.`,
           );
           _bootSkipped.push({ name: manifest.name, reason: "missing env" });
@@ -645,14 +645,14 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       if (manifest.npm && manifest.npm.length > 0) {
         if (needsNpmInstall(dir, manifest.npm)) {
           log.warn(
-            "Extensions",
+            "Books",
             `"${manifest.name}": npm dependencies missing or outdated, running npm install...`,
           );
           try {
             await runNpmInstall(dir, manifest.npm, manifest.name);
           } catch (npmErr) {
             log.error(
-              "Extensions",
+              "Books",
               `Skipping "${manifest.name}": npm install failed: ${npmErr.message}`,
             );
             _bootSkipped.push({
@@ -679,7 +679,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           assetBudgetSummary = enforceAssetBudget(manifest, dir);
         } catch (budgetErr) {
           log.error(
-            "Extensions",
+            "Books",
             `"${manifest.name}": ${budgetErr.message} Skipped.`,
           );
           _bootSkipped.push({
@@ -693,7 +693,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Load the extension's init function
       const extModule = await import(toImportURL(entryPath));
       if (typeof extModule.init !== "function") {
-        log.warn("Extensions", `Skipping "${manifest.name}": no init() export`);
+        log.warn("Books", `Skipping "${manifest.name}": no init() export`);
         _bootSkipped.push({ name: manifest.name, reason: "no init()" });
         continue;
       }
@@ -737,7 +737,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           }
         }
         log.error(
-          "Extensions",
+          "Books",
           `"${manifest.name}": ${initErr.message}.${hint} Skipped.`,
         );
         _bootSkipped.push({
@@ -750,21 +750,21 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Validate init() return
       if (!instance || typeof instance !== "object") {
         log.warn(
-          "Extensions",
+          "Books",
           `"${manifest.name}": init() must return an object. Got ${typeof instance}. Skipped.`,
         );
         continue;
       }
       if (instance.router && typeof instance.router.use !== "function") {
         log.warn(
-          "Extensions",
+          "Books",
           `"${manifest.name}": router is not a valid Express router. Skipped.`,
         );
         continue;
       }
       if (instance.jobs !== undefined && !Array.isArray(instance.jobs)) {
         log.warn(
-          "Extensions",
+          "Books",
           `"${manifest.name}": jobs must be an array. Skipped.`,
         );
         continue;
@@ -774,7 +774,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         !Array.isArray(instance.middleware)
       ) {
         log.warn(
-          "Extensions",
+          "Books",
           `"${manifest.name}": middleware must be an array. Skipped.`,
         );
         continue;
@@ -785,7 +785,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         for (const mw of instance.middleware) {
           if (!mw.path || typeof mw.handler !== "function") {
             log.warn(
-              "Extensions",
+              "Books",
               `"${manifest.name}": middleware entry missing path or handler. Skipped.`,
             );
             continue;
@@ -812,7 +812,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           if (routeOwnership.has(rpath)) {
             const owner = routeOwnership.get(rpath);
             log.error(
-              "Extensions",
+              "Books",
               `Route collision: "${rpath}" claimed by both "${owner}" and "${manifest.name}". Skipping "${manifest.name}" routes.`,
             );
             hasCollision = true;
@@ -844,7 +844,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         opts.registerRawWebhook
       ) {
         opts.registerRawWebhook(instance.rawWebhook);
-        log.verbose("Extensions", `${manifest.name}: raw webhook registered`);
+        log.verbose("Books", `${manifest.name}: raw webhook registered`);
       }
 
       // No extension-side LLM tools. The four seed verb-tools are
@@ -864,7 +864,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
               AVAILABLE_MODELS.add(modelName);
             } catch (err) {
               log.warn(
-                "Extensions",
+                "Books",
                 `${manifest.name}: failed to load model ${modelName}:`,
                 err.message,
               );
@@ -951,7 +951,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           `Extension "${manifest.name}" declares the retired ` +
           `provides.defaultPermissions field. Author ables + grant ` +
           `them via grant-able instead. See seed/AblesAreAuth.md.`;
-        log.error("Extensions", msg);
+        log.error("Books", msg);
         throw new Error(msg);
       }
 
@@ -979,7 +979,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         });
         app.use(mountUrl, express.static(assetsDir));
         log.verbose(
-          "Extensions",
+          "Books",
           `${manifest.name}: mounted ${mountUrl}/ from ${assetsDir}`,
         );
       }
@@ -1002,10 +1002,10 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           `assets ${fmtMB(assetBudgetSummary.total)}${breakdown.length ? ` (${breakdown.join(", ")})` : ""}`,
         );
       }
-      log.verbose("Extensions", `Loaded: ${parts.join(" | ")}`);
+      log.verbose("Books", `Loaded: ${parts.join(" | ")}`);
     } catch (err) {
       log.error(
-        "Extensions",
+        "Books",
         `Failed to load "${manifest.name}":`,
         err.message,
       );
@@ -1101,13 +1101,13 @@ function validateHookListens(loadedMap) {
       const suggestion = nearestHookName(h, knownValid);
       if (suggestion) {
         log.warn(
-          "Extensions",
+          "Books",
           `"${extName}" listens to "${h}" but nothing fires it. ` +
             `Did you mean "${suggestion}"? No handler will run.`,
         );
       } else {
         log.warn(
-          "Extensions",
+          "Books",
           `"${extName}" listens to "${h}" but nothing fires it. ` +
             `Not a story hook and no extension declares it in fires. ` +
             `No handler will run.`,
@@ -1948,7 +1948,7 @@ export async function uninstallExtension(name) {
     await loadConfinedExtensions();
   } catch {}
 
-  log.verbose("Extensions", `Uninstalled: ${name}`);
+  log.verbose("Books", `Uninstalled: ${name}`);
   return { found: true };
 }
 
@@ -2027,7 +2027,7 @@ export async function installExtensionFiles(name, files) {
     }
   } catch (npmErr) {
     log.error(
-      "Extensions",
+      "Books",
       `${name}: npm install failed, rolling back: ${npmErr.message}`,
     );
     try {
@@ -2036,7 +2036,7 @@ export async function installExtensionFiles(name, files) {
     throw new Error(`npm install failed for "${name}": ${npmErr.message}`);
   }
 
-  log.verbose("Extensions", `Installed: ${name} (${filesWritten} files)`);
+  log.verbose("Books", `Installed: ${name} (${filesWritten} files)`);
   return { filesWritten };
 }
 
@@ -2141,10 +2141,10 @@ export async function disableExtension(name) {
     if (job.extensionName === name && typeof job.stop === "function") {
       try {
         job.stop();
-        log.verbose("Extensions", `Stopped job: ${job.name} (${name})`);
+        log.verbose("Books", `Stopped job: ${job.name} (${name})`);
       } catch (err) {
         log.warn(
-          "Extensions",
+          "Books",
           `Failed to stop job ${job.name}: ${err.message}`,
         );
       }
@@ -2157,7 +2157,7 @@ export async function disableExtension(name) {
     hooks.unregister(name);
   } catch {}
 
-  log.info("Extensions", `Disabled: ${name}`);
+  log.info("Books", `Disabled: ${name}`);
 }
 
 /**
@@ -2186,7 +2186,7 @@ export async function enableExtension(name) {
     // DB config not available, file sync is enough
   }
 
-  log.info("Extensions", `Enabled: ${name}`);
+  log.info("Books", `Enabled: ${name}`);
 }
 
 /**
@@ -2228,7 +2228,7 @@ export async function runExtensionMigrations(moment) {
   try {
     Space = (await import("../seed/materials/space/space.js")).default;
   } catch {
-    log.warn("Extensions", "Cannot run migrations: Space model not available");
+    log.warn("Books", "Cannot run migrations: Space model not available");
     return;
   }
 
@@ -2270,7 +2270,7 @@ export async function runExtensionMigrations(moment) {
     const migrationsPath = manifest.provides?.migrations;
     if (!migrationsPath) {
       log.warn(
-        "Extensions",
+        "Books",
         `${name}: schemaVersion ${targetVersion} declared but no migrations path`,
       );
       continue;
@@ -2294,7 +2294,7 @@ export async function runExtensionMigrations(moment) {
           migration.version <= targetVersion
         ) {
           log.verbose(
-            "Extensions",
+            "Books",
             `${name}: running migration v${migration.version}`,
           );
           try {
@@ -2302,7 +2302,7 @@ export async function runExtensionMigrations(moment) {
             ran++;
           } catch (err) {
             log.error(
-              "Extensions",
+              "Books",
               `${name}: migration v${migration.version} FAILED:`,
               err.message,
             );
@@ -2322,13 +2322,13 @@ export async function runExtensionMigrations(moment) {
           { scaffold: true, moment },
         );
         log.verbose(
-          "Extensions",
+          "Books",
           `${name}: schema updated to v${targetVersion} (${ran} migration(s))`,
         );
       }
     } catch (err) {
       log.error(
-        "Extensions",
+        "Books",
         `${name}: failed to load migrations:`,
         err.message,
       );
@@ -2345,12 +2345,12 @@ export async function startExtensionJobs() {
       if (typeof job.start === "function") {
         await job.start();
         log.verbose(
-          "Extensions",
+          "Books",
           `Job started: ${job.name} (${job.extensionName})`,
         );
       }
     } catch (err) {
-      log.error("Extensions", `Job failed to start: ${job.name}:`, err.message);
+      log.error("Books", `Job failed to start: ${job.name}:`, err.message);
     }
   }
 }
@@ -2365,7 +2365,7 @@ export function stopExtensionJobs() {
         job.stop();
       }
     } catch (err) {
-      log.error("Extensions", `Job failed to stop: ${job.name}:`, err.message);
+      log.error("Books", `Job failed to stop: ${job.name}:`, err.message);
     }
   }
 }

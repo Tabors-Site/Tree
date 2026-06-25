@@ -46,29 +46,24 @@
 // chains from GENESIS_PREV; cross-history biography continuity is the
 // be:switch fact on the REEL, not the act-chain.
 
-import { computeHash, GENESIS_PREV } from "../fact/hash.js";
+import { GENESIS_PREV } from "../fact/hash.js";
+import { native } from "../fact/native.js";
 import {
   readActHeadFile,
   advanceActHeadFile,
 } from "../fileStore.js";
 
-/** The hashable opening of an act. */
+// The hashable opening of an act + its identity — PURE RUST bindings to rust/treehash (content_of_act
+// excludes `startMessage`/`at`/closure bookkeeping; act_id = compute_hash(p, content_of_act)). The JS
+// implementations were deleted; rust/treehash is the single source of truth (proven by the act vectors).
+
+/** The hashable opening of an act (plain object). */
 export function contentOfAct(act) {
-  return {
-    through:        act.through,
-    to:             act.to ?? null,
-    ibpAddress:     act.ibpAddress ?? null,
-    activeAble:     act.activeAble ?? null,
-    inboxMessageId: act.inboxMessageId ?? null,
-    inReplyTo:      act.inReplyTo ?? null,
-    parentThread:   act.parentThread ?? null,
-    story:        act.story ?? null,
-    history:         typeof act.history === "string" && act.history.length ? act.history : "0",
-  };
+  return JSON.parse(native.contentOfAct(JSON.stringify(act)));
 }
 
 export function computeActId(p, act) {
-  return computeHash(p, contentOfAct(act));
+  return native.actId(p, JSON.stringify(act));
 }
 
 export function actHeadKey(story, history, beingId) {

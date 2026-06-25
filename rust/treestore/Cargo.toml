@@ -1,0 +1,14 @@
+[package]
+name = "treestore"
+version = "0.1.0"
+edition = "2021"
+description = "TreeOS append-only store (Tier 4) + the stamp (where acts turn into facts). Ports seed/past/fileStore.js: computeFactDoc (the act->fact identity), the reel-line format (JSON.stringify, insertion-order), readReel/readReelLineage, the .head pointer, and a real std::fs reel writer/reader. Built on treehash; chains verified by treeverify."
+license = "AGPL-3.0"
+
+[dependencies]
+treehash = { path = "../treehash" }
+treeverify = { path = "../treeverify" }
+
+[lib]
+name = "treestore"
+path = "src/lib.rs"

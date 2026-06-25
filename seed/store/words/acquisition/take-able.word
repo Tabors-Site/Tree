@@ -1,24 +1,3 @@
-# take-able.word — walk-in able acquisition (the take-able DO op).
-#
-# A being takes an installed, take-acquirable able at a space. WORD-SOLE: this `.word`
-# is the only path (no JS handler). The CONTROL strand (the gate chain + the idempotency
-# check + the §7 return) is the word; the acquisition lookups and the grant-record BUILD
-# are `see` escapes wired by acquisitionHost.js (getAbleSpecForGrant / normalizeAcquisition
-# / loadOrFold+alreadyHoldsAble / buildInternalGrant).
-#
-# NO host: emit — the word lays no fact of its own. `grant-internal` is a `see` (a pure
-# compute: it BUILDS the grant record, NO fact). EVERY take stamps its own do:take-able fact
-# (every act makes a fact): the word returns factParams + the grantee, do.js's runOpWord
-# promotes them (stampsWordFact, target forced to the grantee being via idFrom), and the
-# dispatcher's ONE auto-Fact lays the caller-attributed do:take-able. On the GRANT path
-# factParams carries the full grant record (able/anchor/grantedBy) and the being
-# reducer folds the able grant from it. On the idempotent already-held path factParams
-# carries just {able, anchor, outcome:"already"} — NO grantedBy, so the reducer folds nothing
-# (the able is already there), but the take is still recorded in the being's history.
-#
-# The STANDARD trigger binds `caller` (the acting being), `targetId` (the host space id),
-# and `branch`. `able` rides in as a top-level param.
-
 When a being takes a able at a space:
   see able-spec-for-grant(able, targetId) as found.
   If no found, refuse with "able is not installed on this space or any ancestor".

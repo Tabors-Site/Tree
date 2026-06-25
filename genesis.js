@@ -46,8 +46,9 @@
 // The unfolding has an order. It cannot be reshuffled without
 // breaking what later steps stand on:
 //
-//   1. DB connection, then indexes. The physical floor every space,
-//      matter row, being, and Fact sits on.
+//   1. The store opens. The append-only file store, the ground every
+//      space, matter, being, and Fact sits on; its journal replays so a
+//      torn write recovers before the first read.
 //   2. ensureSpaceRoot. The place root, the heaven space ("." . the
 //      I-Am's room), and the nine Tier-3 heaven spaces under heaven
 //      (identity, config, peers, extensions, tools, ables, operations,
@@ -90,7 +91,7 @@ import {
   getLoadedExtensionNames,
   getBootReport,
 } from "./shared/loader.js";
-import { startCasSweep } from "./seed/materials/matter/casSweep.js";
+import { armCasSweep } from "./seed/materials/matter/casSweep.js";
 import { getBlockedExtensionsAtSpace } from "./seed/materials/space/extensionScope.js";
 import { hooks } from "./seed/hooks.js";
 import { syncExtensionsToTree } from "./seed/sprout.js";
@@ -190,31 +191,29 @@ export async function genesis(app, opts = {}) {
   const { foldWords } = await import("./seed/present/word/wordFold.js");
   foldWords();
 
-  // Open the file store: ensure the store dir + replay the moment-
-  // journal (crash recovery) before any read or write fires. (The old
-  // auto-connect-on-import side effect is gone; connectDB is the entry.)
+  // Open the file store: ensure the store dir and replay the moment-
+  // journal (crash recovery) before any read or write fires. This is the
+  // ground every space, matter, being, and Fact sits on. There is no
+  // index to build: the store's lookups are a fold of the reels,
+  // maintained as the chain grows.
   const { connectDB } = await import("./seed/seedStory/dbConfig.js");
   await connectDB();
   log.info("Genesis", "Memory connected.");
 
-  // The physical floor every space, matter, being, and Fact sits on.
-  const { ensureIndexes } = await import("./seed/seedStory/indexes.js");
-  await ensureIndexes();
-
   // ── PLANT MODE ──
   //
   // If PLANT_FROM_GRAFT env var points at a seed JSON file, boot by
-  // replaying that seed's chains into the (assumed-empty) DB instead
+  // replaying that seed's chains into the (assumed-empty) store instead
   // of running default genesis. The story comes up with the seed's
   // original IDs, original biography, original I-Am — a continuation
-  // of the source story on this substrate.
+  // of the source story on this store.
   //
-  // Plant is destructive (the existing DB must be empty). The deployer
+  // Plant is destructive (the existing store must be empty). The deployer
   // is responsible for wiping first. plantGraft itself refuses to plant
-  // into a non-empty DB as a guard against misconfigured boots.
+  // into a non-empty store as a guard against misconfigured boots.
   //
   // Plant is continuation, not duplication. Two simultaneously-live
-  // substrates with the same story identity is undefined behavior;
+  // stores with the same story identity is undefined behavior;
   // the deployer ensures only one is canonical (see done/Chain-Rebuild.md).
   let plantedFromSeed = false;
   if (process.env.PLANT_FROM_GRAFT) {
@@ -222,9 +221,9 @@ export async function genesis(app, opts = {}) {
     const { GRAFTS_FOLDER, plantGraft } =
       await import("./seed/store/book/graft.js");
     const raw = process.env.PLANT_FROM_GRAFT;
-    // Filename-only (no separator, not absolute) → resolve against
-    // story/seeds/. Anything with a separator or absolute → use
-    // as-is. This lets operators say PLANT_FROM_GRAFT=alice.graft.json
+    // Filename-only (no separator, not absolute) → resolve against the
+    // grafts folder (GRAFTS_FOLDER). Anything with a separator or absolute
+    // → use as-is. This lets operators say PLANT_FROM_GRAFT=alice.graft.json
     // and have it Just Work from the canonical folder.
     const seedPath =
       raw.includes("/") || path.isAbsolute(raw)
@@ -241,15 +240,14 @@ export async function genesis(app, opts = {}) {
         `${result.counts.histories} histories, ${result.counts.reelHeads} reel heads. ` +
         `Cold-folding to materialize projections...`,
     );
-    // Materialize projections by walking every reelHead and folding.
-    // The substrate's read paths use loadOrFold, but downstream
-    // scaffolding (sprout's place-root cache, seed-delegate lookups)
-    // expects materialized projection rows. Without this pass, those
-    // would see an empty world and try to recreate it on top of the
-    // planted facts.
-    const ReelHead = (await import("./seed/past/reel/reelHead.js")).default;
+    // Materialize projections by walking every reel head and folding.
+    // The store's read paths use loadOrFold, but downstream scaffolding
+    // (sprout's place-root cache, seed-delegate lookups) expects the
+    // folded rows present. Without this pass, those would see an empty
+    // world and try to recreate it on top of the planted facts.
+    const { listReelHeads } = await import("./seed/past/fileStore.js");
     const { loadOrFold } = await import("./seed/materials/projections.js");
-    const heads = await ReelHead.find({}).lean();
+    const heads = listReelHeads();
     for (const head of heads) {
       try {
         await loadOrFold(head.type, head.id, head.history);
@@ -425,7 +423,7 @@ export async function genesis(app, opts = {}) {
     await initStoryConfig();
     log.info("Genesis", "Settings loaded.");
 
-    // I mirror the story/ directory into space and matter under
+    // I mirror my own source tree into space and matter under
     // `.source`. The source-space id cache primes for the read-only
     // DO gate, then the disk walk runs detached.
     const { ensureSourceTree } =
@@ -447,31 +445,15 @@ export async function genesis(app, opts = {}) {
     log.info("Genesis", "Settings loaded.");
   }
 
-  // Beings with heaven authority. The seed delegates (cherub, birther, llm-
-  // assigner, story-manager, arrival, etc.) need hasAccess on
-  // heaven so they can act inside the Tier-3 heaven spaces (./ables,
-  // ./operations, ./tools, ...). Mechanism: add them as contributors
-  // on heaven. I is heaven's rootOwner already; the new
-  // contributors list grows from boot scaffold (seed delegates) and
-  // later cherub.register (first human heaven authority).
-  //
-  // Earlier this slot ran ensureReignMatter / loadReigningBeings /
-  // ensureSeedDelegatesReign / ensureIAmChildrenReign . a parallel
-  // roster that duplicated rootOwner + contributors with its own
-  // cache, matter, and DO ops. Collapsed 2026-06-04. Heaven uses the
-  // same ownership system every other space uses.
-  // ensureSeedDelegatesOnHeaven manages its own per-delegate moments
-  // (read-modify-write on contributors[] would clobber inside one
-  // shared moment — every iteration would see the empty list and
-  // write a singleton). One withIAmAct per delegate inside the call.
+  // Heaven authority for the seed delegates. Under ables-are-auth
+  // (seed/AblesAreAuth.md), each delegate is granted the angel able
+  // anchored at heaven (the grants below), and the able-walk authorize
+  // finds heaven.qualities.ables.angel by walking the grant anchor. I am
+  // heaven's rootOwner already. (This replaced an older contributors
+  // roster on heaven; heaven now uses the same ownership every space does.)
   //
   // Skip when plantedFromSeed — the seed carries beings with heaven authority.
   if (!plantedFromSeed) {
-    // ensureSeedDelegatesOnHeaven retired with ables-are-auth — the
-    // members.angel class is no longer the heaven gate. Delegates get
-    // angel able granted at heaven below; the able-walk authorize
-    // finds heaven.qualities.ables.angel by walking the grant anchor.
-
     // Seed migrations. Each migration's writes ride one I-Am act.
     await withIAmAct("seed migrations", async (ctx) => {
       const { runSeedMigrations } =
@@ -481,13 +463,13 @@ export async function genesis(app, opts = {}) {
     });
   }
   // Note: plantedFromSeed skips seed migrations because the seed's
-  // schema version should match the substrate's. A future cross-version
+  // schema version should match this store's. A future cross-version
   // plant would need to run migrations on the planted data; for now,
   // same-version seeds only.
 
   // Cross-world pull-back. Per CROSS-WORLD.md "Pull-back safety": a
   // being whose position is foreign must not stay stuck there across
-  // a substrate restart. Scan for beings whose position names a
+  // a restart. Scan for beings whose position names a
   // foreign world and reset them home. The scan is cheap when no
   // beings are cross-world (the common case until canopy lands).
   try {
@@ -817,9 +799,9 @@ export async function genesis(app, opts = {}) {
   // Loaded by side effect; module-load calls registerOperation.
   await import("./seed/store/words/able-manager/flowOp.js");
 
-  // history-manager's create-history DO op. The substrate's history
-  // helpers (seed/materials/history/) own the heavy lifting; the op
-  // is a thin handler routing through createBranch.
+  // history-manager's create-history DO op. The history helpers
+  // (seed/materials/history/) own the heavy lifting; the op is a thin
+  // handler routing through createBranch.
   const { registerHistoryManagerOps } =
     await import("./seed/present/ables/history-manager/ops.js");
   registerHistoryManagerOps();
@@ -938,7 +920,7 @@ export async function genesis(app, opts = {}) {
     if (loadedCount > 0) {
       log.info(
         "Genesis",
-        `I load my ${loadedCount} extension${loadedCount === 1 ? "" : "s"}.`,
+        `I load my ${loadedCount} book${loadedCount === 1 ? "" : "s"}.`,
       );
     }
   }
@@ -998,7 +980,7 @@ export async function genesis(app, opts = {}) {
   });
 
   await startExtensionJobs();
-  startCasSweep();
+  armCasSweep();
 
   // The /skins model catalog — a normal root-child space every
   // uploaded model matter (type "model") lands in, so the 3D portal
@@ -1065,8 +1047,8 @@ export async function genesis(app, opts = {}) {
 
   // Two parallel sync calls, two I-Am moments — independent
   // reconciliations of independent registries. Each is the I-Am's
-  // act on its own substrate; running them as separate moments lets
-  // them progress in parallel (Promise.all) without a shared deltaF.
+  // own act; running them as separate moments lets them progress in
+  // parallel (Promise.all) without a shared deltaF.
   // (The JSON tool registry retired with the Word cutover — 14.md
   // §4.5 — so there is no tools sync.)
   (async () => {
@@ -1111,11 +1093,11 @@ export function printReady() {
   console.log("");
 
   if (boot.skipped === 0) {
-    log.info("Story", `Extensions: ${boot.loaded} loaded, all clear.`);
+    log.info("Story", `Books: ${boot.loaded} loaded, all clear.`);
   } else {
     log.info(
       "Place",
-      `Extensions: ${boot.loaded} loaded, ${boot.skipped} skipped.`,
+      `Books: ${boot.loaded} loaded, ${boot.skipped} skipped.`,
     );
     log.warn("Story", `Skipped: ${boot.skippedNames.join(", ")}`);
   }

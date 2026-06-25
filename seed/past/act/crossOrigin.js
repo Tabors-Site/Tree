@@ -33,7 +33,7 @@ export function actorHistoryFrom(moment, hint) {
   if (typeof history !== "string" || !history.length) {
     throw new Error(
       `actorHistoryFrom: moment.actorAct.history missing${hint ? ` (${hint})` : ""}. ` +
-        `Every moment opener (planActRow, withIAmAct, withBeingAct) must seat the Act on the ctx.`,
+        `Every moment opener (planActRow, withIAmAct, withBeingFact) must seat the Act on the ctx.`,
     );
   }
   return history;

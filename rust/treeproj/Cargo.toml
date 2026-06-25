@@ -1,0 +1,19 @@
+[package]
+name = "treeproj"
+version = "0.1.0"
+edition = "2021"
+description = "TreeOS projection cache: the .proj snapshots (folded-state cache backing the read side), ported from fileStore.js loadSnapshot/saveSnapshot. A snapshot is rebuildable by folding the reel (treefold over treestore), never truth — so the read side never blocks on a fold it can cache."
+license = "AGPL-3.0"
+
+[dependencies]
+treehash = { path = "../treehash" }
+treefold = { path = "../treefold" }
+treestore = { path = "../treestore" }
+
+# The cache test stamps a real reel (treestore) then refolds it — same stamp path as treefold's write-half.
+[dev-dependencies]
+treestore = { path = "../treestore" }
+
+[lib]
+name = "treeproj"
+path = "src/lib.rs"

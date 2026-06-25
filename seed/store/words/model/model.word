@@ -1,28 +1,6 @@
-# model.word — set-model: give a being/space/matter its 3D body (store/words/model/, the
-# set-model DO op).
-#
-# The CONTROL strand (the actor gate + the clear-vs-set fork + the modelMatterId gate) is
-# .word. The genuine computes stay host READS (modelHost.js), reusing the two SEE_FLOOR names
-# this slice owns (the see-op door is a CLOSED set, 17.md): assert-may-set-model (the per-kind
-# self/author/owner auth gate, throws on deny) and resolve-model-block (the ONE block builder —
-# branched on `clear`: SET resolves the model matter + snapshots hash/url/name AND builds the
-# set-<kind> {field,value,merge}; CLEAR builds the null {field,value,merge}). Each is a pure
-# `see` — it reads/computes and RETURNS; it lays no fact and mutates nothing.
-#
-# THE DESIGN — the word AUTHORS its fact. set-model lays no separate fact: the dispatcher's
-# auto-fact (do.js runOpWord → stampsWordFact) stamps the ONE caller-attributed do:set-model.
-# The word RETURNS that fact's params (`factParams` = the {field,value,merge} block resolve-model-
-# block built) plus a {kind,id} `factTarget` — the DYNAMIC reel (being | space | matter), so
-# stampsWordFact targets the right slot and the qualities reducer applies the deep write. The
-# top-level set/cleared is the ANSWER the asker reads (the result).
-#
-# The STANDARD trigger binds `target` ({kind,id}), `targetKind` (its extracted kind),
-# `targetId` (its extracted id), `caller` (the acting being), `branch`, and the params
-# (`modelMatterId`, `scale`, `rotation`, `clear`, `forMatterType`).
-
 When a caller sets a model on a target:
   If no caller, refuse with "set-model: identity required" as unauthorized.
-  see assert-may-set-model(targetKind, target, caller) as gated.
+  If not may-set-model(targetKind, target, caller), refuse with "set-model: only the target's owner / author / self (or the tree owner) may set its model" as forbidden.
   If clear:
     see resolve-model-block(targetKind, modelMatterId, scale, rotation, forMatterType, clear) as block.
     Return cleared: true, factParams: $block, factTarget: { kind: $targetKind, id: $targetId }.

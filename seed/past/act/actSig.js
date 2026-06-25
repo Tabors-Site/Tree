@@ -1,6 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// actSig — the signature that proves a being authored an act with
+// actSig — the signature that proves a Name authored an act with
 // exactly its facts.
 //
 // One chokepoint signs every act: sealAct (4-stamped.js). The signature

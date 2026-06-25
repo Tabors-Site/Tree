@@ -1,0 +1,562 @@
+{
+  "format": "treeos-chain-vectors",
+  "version": 1,
+  "vectors": [
+    {
+      "kind": "fact",
+      "name": "fact-ok-3",
+      "items": [
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 1
+          },
+          "seq": 1,
+          "p": "0000000000000000000000000000000000000000000000000000000000000000",
+          "history": "0",
+          "_id": "f0467a7d48fb2ca1ced7521fd272ee1c576286174b257d8a1862255445d222e1"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 2
+          },
+          "seq": 2,
+          "p": "f0467a7d48fb2ca1ced7521fd272ee1c576286174b257d8a1862255445d222e1",
+          "history": "0",
+          "_id": "2dcb2233828eb94e33ca42b07699bdb6a23568ef0bb4165db3fec98332933ac4"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 3
+          },
+          "seq": 3,
+          "p": "2dcb2233828eb94e33ca42b07699bdb6a23568ef0bb4165db3fec98332933ac4",
+          "history": "0",
+          "_id": "c8cd4694f7bd3386904f785a7dc5d46aad56d5c54195f23eabe577fd6b3840c7"
+        }
+      ],
+      "verdict": {
+        "ok": true,
+        "count": 3,
+        "headHash": "c8cd4694f7bd3386904f785a7dc5d46aad56d5c54195f23eabe577fd6b3840c7"
+      }
+    },
+    {
+      "kind": "fact",
+      "name": "fact-ok-rich",
+      "items": [
+        {
+          "through": "be1",
+          "verb": "be",
+          "act": "birth",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "name": "Alice",
+            "qualities": {
+              "cognition": {
+                "defaultKind": "llm"
+              }
+            }
+          },
+          "result": {
+            "ok": true
+          },
+          "foldSeq": 5,
+          "seq": 1,
+          "p": "0000000000000000000000000000000000000000000000000000000000000000",
+          "history": "0",
+          "_id": "de97d2d8e6d51f6aa55f2dafedd31ae7f3d519ae356da4781289e1431c7785a8"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 9
+          },
+          "seq": 2,
+          "p": "de97d2d8e6d51f6aa55f2dafedd31ae7f3d519ae356da4781289e1431c7785a8",
+          "history": "0",
+          "_id": "c65bf99ee5818e39f6df66140ecf1912c4c1b2ea4f18457cfbaa76568dc41d13"
+        }
+      ],
+      "verdict": {
+        "ok": true,
+        "count": 2,
+        "headHash": "c65bf99ee5818e39f6df66140ecf1912c4c1b2ea4f18457cfbaa76568dc41d13"
+      }
+    },
+    {
+      "kind": "fact",
+      "name": "fact-empty",
+      "items": [],
+      "verdict": {
+        "ok": true,
+        "count": 0,
+        "headHash": null
+      }
+    },
+    {
+      "kind": "fact",
+      "name": "fact-hash-tamper",
+      "items": [
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 1
+          },
+          "seq": 1,
+          "p": "0000000000000000000000000000000000000000000000000000000000000000",
+          "history": "0",
+          "_id": "f0467a7d48fb2ca1ced7521fd272ee1c576286174b257d8a1862255445d222e1"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 999
+          },
+          "seq": 2,
+          "p": "f0467a7d48fb2ca1ced7521fd272ee1c576286174b257d8a1862255445d222e1",
+          "history": "0",
+          "_id": "2dcb2233828eb94e33ca42b07699bdb6a23568ef0bb4165db3fec98332933ac4"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 3
+          },
+          "seq": 3,
+          "p": "2dcb2233828eb94e33ca42b07699bdb6a23568ef0bb4165db3fec98332933ac4",
+          "history": "0",
+          "_id": "c8cd4694f7bd3386904f785a7dc5d46aad56d5c54195f23eabe577fd6b3840c7"
+        }
+      ],
+      "verdict": {
+        "ok": false,
+        "count": 2,
+        "brokenAt": 2,
+        "reason": "hash-mismatch",
+        "expected": "53d539a8471525d1bd369be4c503a83e04df5821cb618e619909ad3bb877e91a",
+        "actual": "2dcb2233828eb94e33ca42b07699bdb6a23568ef0bb4165db3fec98332933ac4"
+      }
+    },
+    {
+      "kind": "fact",
+      "name": "fact-prev-tamper",
+      "items": [
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 1
+          },
+          "seq": 1,
+          "p": "0000000000000000000000000000000000000000000000000000000000000000",
+          "history": "0",
+          "_id": "f0467a7d48fb2ca1ced7521fd272ee1c576286174b257d8a1862255445d222e1"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 2
+          },
+          "seq": 2,
+          "p": "f0467a7d48fb2ca1ced7521fd272ee1c576286174b257d8a1862255445d222e1",
+          "history": "0",
+          "_id": "2dcb2233828eb94e33ca42b07699bdb6a23568ef0bb4165db3fec98332933ac4"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 3
+          },
+          "seq": 3,
+          "p": "1111111111111111111111111111111111111111111111111111111111111111",
+          "history": "0",
+          "_id": "c8cd4694f7bd3386904f785a7dc5d46aad56d5c54195f23eabe577fd6b3840c7"
+        }
+      ],
+      "verdict": {
+        "ok": false,
+        "count": 3,
+        "brokenAt": 3,
+        "reason": "prev-mismatch",
+        "expected": "2dcb2233828eb94e33ca42b07699bdb6a23568ef0bb4165db3fec98332933ac4",
+        "actual": "1111111111111111111111111111111111111111111111111111111111111111"
+      }
+    },
+    {
+      "kind": "fact",
+      "name": "fact-seq-gap",
+      "items": [
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 1
+          },
+          "seq": 1,
+          "p": "0000000000000000000000000000000000000000000000000000000000000000",
+          "history": "0",
+          "_id": "f0467a7d48fb2ca1ced7521fd272ee1c576286174b257d8a1862255445d222e1"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 2
+          },
+          "seq": 3,
+          "p": "f0467a7d48fb2ca1ced7521fd272ee1c576286174b257d8a1862255445d222e1",
+          "history": "0",
+          "_id": "2dcb2233828eb94e33ca42b07699bdb6a23568ef0bb4165db3fec98332933ac4"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 3
+          },
+          "seq": 3,
+          "p": "2dcb2233828eb94e33ca42b07699bdb6a23568ef0bb4165db3fec98332933ac4",
+          "history": "0",
+          "_id": "c8cd4694f7bd3386904f785a7dc5d46aad56d5c54195f23eabe577fd6b3840c7"
+        }
+      ],
+      "verdict": {
+        "ok": false,
+        "count": 2,
+        "brokenAt": 2,
+        "reason": "seq-gap",
+        "expected": 2,
+        "actual": 3
+      }
+    },
+    {
+      "kind": "fact",
+      "name": "fact-unaddressed",
+      "items": [
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 1
+          },
+          "seq": 1,
+          "p": "0000000000000000000000000000000000000000000000000000000000000000",
+          "history": "0",
+          "_id": "f0467a7d48fb2ca1ced7521fd272ee1c576286174b257d8a1862255445d222e1"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 2
+          },
+          "seq": 2,
+          "p": "f0467a7d48fb2ca1ced7521fd272ee1c576286174b257d8a1862255445d222e1",
+          "history": "0",
+          "_id": "nothex"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "x",
+            "value": 3
+          },
+          "seq": 3,
+          "p": "2dcb2233828eb94e33ca42b07699bdb6a23568ef0bb4165db3fec98332933ac4",
+          "history": "0",
+          "_id": "c8cd4694f7bd3386904f785a7dc5d46aad56d5c54195f23eabe577fd6b3840c7"
+        }
+      ],
+      "verdict": {
+        "ok": false,
+        "count": 2,
+        "brokenAt": 2,
+        "reason": "unaddressed",
+        "expected": "f0467a7d48fb2ca1ced7521fd272ee1c576286174b257d8a1862255445d222e1",
+        "actual": "f0467a7d48fb2ca1ced7521fd272ee1c576286174b257d8a1862255445d222e1"
+      }
+    },
+    {
+      "kind": "act",
+      "name": "act-ok-3",
+      "items": [
+        {
+          "through": "be1",
+          "verb": "do",
+          "to": "sp1",
+          "activeAble": "gardener",
+          "p": "0000000000000000000000000000000000000000000000000000000000000000",
+          "history": "0",
+          "_id": "e3a2d2662f49c3821f649bebec1cc34d6b0cb4f3757b6b138d0505067028d7ca"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "to": "sp2",
+          "activeAble": "gardener",
+          "p": "e3a2d2662f49c3821f649bebec1cc34d6b0cb4f3757b6b138d0505067028d7ca",
+          "history": "0",
+          "_id": "624c26ec47d4630ea6ec367e04326ab7d56c6683166023bd6827965da81b559d"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "to": "sp3",
+          "activeAble": "gardener",
+          "p": "624c26ec47d4630ea6ec367e04326ab7d56c6683166023bd6827965da81b559d",
+          "history": "0",
+          "_id": "5968142b775ca9ae7227886b929c9a818f634316c23985af07a1049fb336086c"
+        }
+      ],
+      "verdict": {
+        "ok": true,
+        "count": 3,
+        "headHash": "5968142b775ca9ae7227886b929c9a818f634316c23985af07a1049fb336086c"
+      }
+    },
+    {
+      "kind": "act",
+      "name": "act-empty",
+      "items": [],
+      "verdict": {
+        "ok": true,
+        "count": 0,
+        "headHash": null
+      }
+    },
+    {
+      "kind": "act",
+      "name": "act-hash-tamper",
+      "items": [
+        {
+          "through": "be1",
+          "verb": "do",
+          "to": "sp1",
+          "activeAble": "gardener",
+          "p": "0000000000000000000000000000000000000000000000000000000000000000",
+          "history": "0",
+          "_id": "e3a2d2662f49c3821f649bebec1cc34d6b0cb4f3757b6b138d0505067028d7ca"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "to": "TAMPERED",
+          "activeAble": "gardener",
+          "p": "e3a2d2662f49c3821f649bebec1cc34d6b0cb4f3757b6b138d0505067028d7ca",
+          "history": "0",
+          "_id": "624c26ec47d4630ea6ec367e04326ab7d56c6683166023bd6827965da81b559d"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "to": "sp3",
+          "activeAble": "gardener",
+          "p": "624c26ec47d4630ea6ec367e04326ab7d56c6683166023bd6827965da81b559d",
+          "history": "0",
+          "_id": "5968142b775ca9ae7227886b929c9a818f634316c23985af07a1049fb336086c"
+        }
+      ],
+      "verdict": {
+        "ok": false,
+        "count": 2,
+        "brokenAt": "624c26ec47d4630ea6ec367e04326ab7d56c6683166023bd6827965da81b559d",
+        "reason": "hash-mismatch",
+        "expected": "94f9228cc54ca02943f9023f7c17a30097e2eb67198fb6f131505861155e549d",
+        "actual": "624c26ec47d4630ea6ec367e04326ab7d56c6683166023bd6827965da81b559d"
+      }
+    },
+    {
+      "kind": "act",
+      "name": "act-prev-tamper",
+      "items": [
+        {
+          "through": "be1",
+          "verb": "do",
+          "to": "sp1",
+          "activeAble": "gardener",
+          "p": "0000000000000000000000000000000000000000000000000000000000000000",
+          "history": "0",
+          "_id": "e3a2d2662f49c3821f649bebec1cc34d6b0cb4f3757b6b138d0505067028d7ca"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "to": "sp2",
+          "activeAble": "gardener",
+          "p": "e3a2d2662f49c3821f649bebec1cc34d6b0cb4f3757b6b138d0505067028d7ca",
+          "history": "0",
+          "_id": "624c26ec47d4630ea6ec367e04326ab7d56c6683166023bd6827965da81b559d"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "to": "sp3",
+          "activeAble": "gardener",
+          "p": "2222222222222222222222222222222222222222222222222222222222222222",
+          "history": "0",
+          "_id": "5968142b775ca9ae7227886b929c9a818f634316c23985af07a1049fb336086c"
+        }
+      ],
+      "verdict": {
+        "ok": false,
+        "count": 3,
+        "brokenAt": "5968142b775ca9ae7227886b929c9a818f634316c23985af07a1049fb336086c",
+        "reason": "prev-mismatch",
+        "expected": "624c26ec47d4630ea6ec367e04326ab7d56c6683166023bd6827965da81b559d",
+        "actual": "2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    },
+    {
+      "kind": "act",
+      "name": "act-unaddressed",
+      "items": [
+        {
+          "through": "be1",
+          "verb": "do",
+          "to": "sp1",
+          "activeAble": "gardener",
+          "p": "0000000000000000000000000000000000000000000000000000000000000000",
+          "history": "0",
+          "_id": "e3a2d2662f49c3821f649bebec1cc34d6b0cb4f3757b6b138d0505067028d7ca"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "to": "sp2",
+          "activeAble": "gardener",
+          "p": "e3a2d2662f49c3821f649bebec1cc34d6b0cb4f3757b6b138d0505067028d7ca",
+          "history": "0",
+          "_id": "nothex"
+        },
+        {
+          "through": "be1",
+          "verb": "do",
+          "to": "sp3",
+          "activeAble": "gardener",
+          "p": "624c26ec47d4630ea6ec367e04326ab7d56c6683166023bd6827965da81b559d",
+          "history": "0",
+          "_id": "5968142b775ca9ae7227886b929c9a818f634316c23985af07a1049fb336086c"
+        }
+      ],
+      "verdict": {
+        "ok": false,
+        "count": 2,
+        "brokenAt": "nothex",
+        "reason": "unaddressed",
+        "expected": "e3a2d2662f49c3821f649bebec1cc34d6b0cb4f3757b6b138d0505067028d7ca",
+        "actual": "e3a2d2662f49c3821f649bebec1cc34d6b0cb4f3757b6b138d0505067028d7ca"
+      }
+    }
+  ]
+}

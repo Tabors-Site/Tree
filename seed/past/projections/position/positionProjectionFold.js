@@ -74,15 +74,24 @@ async function handleSetBeingCoord(fact /*, type, id*/) {
   if (!spaceId) return;
 
   const _id = positionRowId(beingId, spaceId);
-  const now = fact.date instanceof Date ? fact.date : new Date(fact.date || Date.now());
+  // INERT display witness only (the fact's frozen seal-time). The position's
+  // truth-ordering is lastMoveSeq (the seq guard below), never updatedAt, and
+  // nothing sorts on updatedAt. Drop the old `|| Date.now()` live-clock fallback
+  // . folding a fresh wall-clock is forbidden (the same bug the inbox/threads
+  // sweep killed). null when the fact carries no date.
+  const updatedWitness = fact.date instanceof Date
+    ? fact.date
+    : (fact.date != null ? new Date(fact.date) : null);
 
   const $set = {
     beingId,
     spaceId,
     x: value.x,
     y: value.y,
+    // Clock-free truth-ordering key (the move fact's per-reel seq).
     lastMoveSeq: fact.seq,
-    updatedAt: now,
+    // Inert display witness only; never sorted/compared/folded-as-fallback.
+    updatedAt: updatedWitness,
   };
   if (Number.isFinite(value.z)) $set.z = value.z;
 

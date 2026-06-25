@@ -880,7 +880,7 @@ export function listFoldedProhibitions() {
   return out;
 }
 
-// ── able-words as words (the ableWordRegistry unification; ABLES-UNIFICATION.md) ──
+// ── able-words as words (the ableWordRegistry unification) ──
 //
 // A able-word is a word named "able:op", kind:"ableword", carrying its IR SOURCE (the .word file).
 // The parsed IR stays HOST (ableWordRegistry's irCache); the fold carries only able:op -> source, the

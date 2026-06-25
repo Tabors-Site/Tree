@@ -26,6 +26,18 @@ pub fn canonicalize(value: &Json) -> String {
     out
 }
 
+/// `JSON.stringify(value)` — insertion-order serialization (NO key sort, NO empty-object drop). This
+/// is the on-disk line format the store writes: a reel line is `JSON.stringify(doc) + "\n"`, a `.head`
+/// is `JSON.stringify({head, headHash})`, an act-log line is `JSON.stringify(actDoc)`. Same value
+/// formatting as `canonicalize` (numbers, strings, escaping) but object keys keep their INSERTION
+/// order, exactly as JS `JSON.stringify`. (The one JSON.stringify rule not modeled — dropping
+/// `undefined` object values — never applies: parsed-JSON / built docs carry `null`, never `undefined`.)
+pub fn stringify(value: &Json) -> String {
+    let mut out = String::new();
+    write_value(value, &mut out);
+    out
+}
+
 /// The structural normalization (key sort + empty-object drop), before serialization.
 pub fn to_canonical(value: &Json) -> Json {
     match value {

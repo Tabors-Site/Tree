@@ -118,7 +118,7 @@ export async function withGenesisGuard(fn) {
  * Use this when the I-Am is the structural actor of a piece of work
  * the substrate needs to record. If there's a real being available
  * (operator, cherub, a seed delegate), prefer THAT being's identity
- * with a real moment from its moment (or withBeingAct(beingId, ...)).
+ * with a real moment from its moment (or withBeingFact(beingId, ...)).
  *
  * Zero facts → the moment is a no-op; no Act row is written. Stable
  * reconciliations cost nothing.
@@ -228,23 +228,43 @@ export async function withIAmAct(sourceLabel, fn) {
  * @param {(moment) => Promise<*>} fn
  * @returns {Promise<*>} fn's return value
  */
-export async function withBeingAct(beingId, sourceLabel, history, fn) {
+export async function withBeingFact(beingId, sourceLabel, history, fn) {
   if (typeof beingId !== "string" || !beingId.length) {
-    throw new Error("withBeingAct: beingId is required");
+    throw new Error("withBeingFact: beingId is required");
   }
   if (typeof history !== "string" || !history.length) {
-    throw new Error('withBeingAct: history is required (pass "0" for main)');
+    throw new Error('withBeingFact: history is required (pass "0" for main)');
   }
   if (typeof fn !== "function") {
-    throw new Error("withBeingAct: fn must be a function");
+    throw new Error("withBeingFact: fn must be a function");
   }
-  // Same open→seal serialization as withIAmAct (see there). The
-  // scheduler's moments are NOT under this lock — their cross-check
-  // is the CAS'd head advance at seal.
   const { withActChainLock } = await import("./past/act/actChainLock.js");
   const { getStoryDomain } = await import("./ibp/address.js");
   const story = getStoryDomain();
-  return withActChainLock(story, history, beingId, async () => {
+
+  // The actor NAME — the being expresses a trueName (the name whose key signs).
+  // No fallback: a being with no trueName cannot act. Resolved BEFORE the lock on
+  // purpose: the act-chain head keys by this NAME (4-stamped advances by
+  // `by ?? through` = the trueName), so the LOCK must key by the SAME name. Beings
+  // are facts; only Names act, and an act-chain belongs to a Name. Two beings that
+  // share a trueName (the host delegates, all i-am) would otherwise hold different
+  // beingId locks while advancing one i-am head, and the CAS refuses the second
+  // with ACT_CHAIN_MOVED. Keying the lock by name (like withIAmAct/withNameAct)
+  // serializes same-name acts onto their one shared chain.
+  const { loadOrFold } = await import("./materials/projections.js");
+  const actorSlot = await loadOrFold("being", beingId, history);
+  const nameId = actorSlot?.state?.trueName;
+  if (!nameId) {
+    throw new Error(
+      `withBeingFact: being ${String(beingId).slice(0, 8)} has no trueName; ` +
+        `cannot resolve the name that signs.`,
+    );
+  }
+
+  // Same open→seal serialization as withIAmAct (see there), keyed by the NAME (it
+  // matches the CAS). The scheduler's moments are NOT under this lock — their
+  // cross-check is the CAS'd head advance at seal.
+  return withActChainLock(story, history, nameId, async () => {
 
     // Content-addressed like every act (past/act/actHash.js).
     const { computeActId, readActHead } = await import("./past/act/actHash.js");
@@ -260,19 +280,9 @@ export async function withBeingAct(beingId, sourceLabel, history, fn) {
       story,
       history: history,
     };
-    // The actor NAME — the being expresses a trueName (the name whose key
-    // signs). No fallback: a being with no trueName cannot act.
-    const { loadOrFold } = await import("./materials/projections.js");
-    const actorSlot = await loadOrFold("being", beingId, history);
-    const nameId = actorSlot?.state?.trueName;
-    if (!nameId) {
-      throw new Error(
-        `withBeingAct: being ${String(beingId).slice(0, 8)} has no trueName; ` +
-          `cannot resolve the name that signs.`,
-      );
-    }
-    // Key the act-chain by the NAME (the trueName that signs), not the being it
-    // acts through. Matches the seal (4-stamped advances by `by ?? through`).
+    // The act-chain head keys by the NAME resolved above (the trueName that
+    // signs), not the being it acts through. Matches the seal (4-stamped advances
+    // by `by ?? through`).
     const p = await readActHead(story, history, nameId);
     const actId = computeActId(p, opening);
     const plannedAct = {
@@ -309,7 +319,7 @@ export async function withBeingAct(beingId, sourceLabel, history, fn) {
     });
     if (!sealed) {
       throw new Error(
-        `withBeingAct(${sourceLabel}): sealAct returned null — Act did not materialize`,
+        `withBeingFact(${sourceLabel}): sealAct returned null — Act did not materialize`,
       );
     }
     return result;
@@ -320,7 +330,7 @@ export async function withBeingAct(beingId, sourceLabel, history, fn) {
  * withNameAct — open + seal a 5D NAME-ACT: a Name acts in the library with NO being (5d.md — the
  * being stays home; only the name acts there). The act-chain keys by the NAME (not a being), on
  * history "0" (the library reel never forks — separated by KIND, not by a history marker). `by` is
- * the name itself (it IS the signer); `through` is null. The 4D peer of withBeingAct, with the body
+ * the name itself (it IS the signer); `through` is null. The 4D peer of withBeingFact, with the body
  * dropped: by/through stay split (as the schema already has them), through goes home.
  *
  * @param {string} nameId       the acting Name (the signer + the chain key)
@@ -402,7 +412,7 @@ export async function withNameAct(nameId, sourceLabel, fn) {
 // requires session-threading through every child sealAct call; it
 // lands when a real use case appears (federation pull, cross-reel
 // transfer). Until then, the verbs themselves seal one act per call
-// and the wrappers (withIAmAct / withBeingAct) each carry one op.
+// and the wrappers (withIAmAct / withBeingFact) each carry one op.
 
 // The heaven space. Named "." . sits directly under the space root
 // and parents every Tier-3 heaven space below. The I-Am's home.

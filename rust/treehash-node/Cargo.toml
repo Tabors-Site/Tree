@@ -1,0 +1,20 @@
+[package]
+name = "treehash-node"
+version = "0.1.0"
+edition = "2021"
+description = "napi-rs FFI wrapper: exposes the zero-dep treehash crate (Tier 1) to Node, so seed/past/fact/hash.js can delegate computeHash/contentOf/canonicalize/factId to Rust in-process."
+license = "AGPL-3.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "2", default-features = false, features = ["napi8"] }
+napi-derive = "2"
+treehash = { path = "../treehash" }
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+lto = true

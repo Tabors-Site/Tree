@@ -1,0 +1,238 @@
+{
+  "format": "treeos-store-vectors",
+  "version": 1,
+  "stampVectors": [
+    {
+      "name": "stamp-genesis",
+      "history": "0",
+      "spec": {
+        "through": "beT",
+        "verb": "do",
+        "act": "set-being",
+        "of": {
+          "kind": "being",
+          "id": "beT"
+        },
+        "params": {
+          "field": "x",
+          "value": 1
+        }
+      },
+      "head": {
+        "head": 0,
+        "headHash": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "ord": null,
+      "line": "{\"_id\":\"52a1d0a0f2f48cd303fc9948c6d5bad7f830acbf1a60b461d3221bb32c6bee7a\",\"p\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":1,\"through\":\"beT\",\"verb\":\"do\",\"act\":\"set-being\",\"of\":{\"kind\":\"being\",\"id\":\"beT\"},\"params\":{\"field\":\"x\",\"value\":1},\"history\":\"0\"}\n",
+      "nextHead": {
+        "head": 1,
+        "headHash": "52a1d0a0f2f48cd303fc9948c6d5bad7f830acbf1a60b461d3221bb32c6bee7a"
+      }
+    },
+    {
+      "name": "stamp-second-ord",
+      "history": "0",
+      "spec": {
+        "through": "beT",
+        "verb": "do",
+        "act": "set-being",
+        "of": {
+          "kind": "being",
+          "id": "beT"
+        },
+        "params": {
+          "field": "x",
+          "value": 2
+        }
+      },
+      "head": {
+        "head": 1,
+        "headHash": "52a1d0a0f2f48cd303fc9948c6d5bad7f830acbf1a60b461d3221bb32c6bee7a"
+      },
+      "ord": 5,
+      "line": "{\"_id\":\"9055e7576a0a0676974bc4279d4a7b81950df22970f84aff87f11f7891ef8b85\",\"p\":\"52a1d0a0f2f48cd303fc9948c6d5bad7f830acbf1a60b461d3221bb32c6bee7a\",\"seq\":2,\"through\":\"beT\",\"verb\":\"do\",\"act\":\"set-being\",\"of\":{\"kind\":\"being\",\"id\":\"beT\"},\"params\":{\"field\":\"x\",\"value\":2},\"history\":\"0\",\"ord\":5}\n",
+      "nextHead": {
+        "head": 2,
+        "headHash": "9055e7576a0a0676974bc4279d4a7b81950df22970f84aff87f11f7891ef8b85"
+      }
+    },
+    {
+      "name": "stamp-third",
+      "history": "0",
+      "spec": {
+        "through": "beT",
+        "verb": "be",
+        "act": "death",
+        "of": {
+          "kind": "being",
+          "id": "beT"
+        },
+        "params": {
+          "byActor": "be0"
+        }
+      },
+      "head": {
+        "head": 2,
+        "headHash": "9055e7576a0a0676974bc4279d4a7b81950df22970f84aff87f11f7891ef8b85"
+      },
+      "ord": 6,
+      "line": "{\"_id\":\"0b8a61bd9945bdaf625f24b0e4783e81009afe0bf37338106640cc3a01a56c67\",\"p\":\"9055e7576a0a0676974bc4279d4a7b81950df22970f84aff87f11f7891ef8b85\",\"seq\":3,\"through\":\"beT\",\"verb\":\"be\",\"act\":\"death\",\"of\":{\"kind\":\"being\",\"id\":\"beT\"},\"params\":{\"byActor\":\"be0\"},\"history\":\"0\",\"ord\":6}\n",
+      "nextHead": {
+        "head": 3,
+        "headHash": "0b8a61bd9945bdaf625f24b0e4783e81009afe0bf37338106640cc3a01a56c67"
+      }
+    },
+    {
+      "name": "stamp-spec-history",
+      "history": "0",
+      "spec": {
+        "through": "beT",
+        "verb": "do",
+        "act": "set-being",
+        "of": {
+          "kind": "being",
+          "id": "beT"
+        },
+        "params": {
+          "field": "x",
+          "value": 1
+        },
+        "history": "1a"
+      },
+      "head": {
+        "head": 0,
+        "headHash": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "ord": null,
+      "line": "{\"_id\":\"5cd50ed2e8fb568b0dd047a6092d1cfe668ab47b79733c57d0c0358dbb66fc64\",\"p\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":1,\"through\":\"beT\",\"verb\":\"do\",\"act\":\"set-being\",\"of\":{\"kind\":\"being\",\"id\":\"beT\"},\"params\":{\"field\":\"x\",\"value\":1},\"history\":\"1a\"}\n",
+      "nextHead": {
+        "head": 1,
+        "headHash": "5cd50ed2e8fb568b0dd047a6092d1cfe668ab47b79733c57d0c0358dbb66fc64"
+      }
+    },
+    {
+      "name": "stamp-rich-noord",
+      "history": "0",
+      "spec": {
+        "through": "beT",
+        "verb": "be",
+        "act": "birth",
+        "by": "nmAlice",
+        "of": {
+          "kind": "being",
+          "id": "beT"
+        },
+        "actId": "act123",
+        "params": {
+          "name": "Alice",
+          "qualities": {
+            "cognition": {
+              "defaultKind": "llm"
+            }
+          },
+          "coord": {
+            "x": 1,
+            "y": 2
+          }
+        },
+        "result": {
+          "ok": true
+        }
+      },
+      "head": {
+        "head": 0,
+        "headHash": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "ord": 42,
+      "line": "{\"_id\":\"7e294aeca8661d3ba6c730bd1a1fcb37c9ebb0ef3b55be3eb6dcc0533b3fa1c1\",\"p\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":1,\"through\":\"beT\",\"verb\":\"be\",\"act\":\"birth\",\"by\":\"nmAlice\",\"of\":{\"kind\":\"being\",\"id\":\"beT\"},\"actId\":\"act123\",\"params\":{\"name\":\"Alice\",\"qualities\":{\"cognition\":{\"defaultKind\":\"llm\"}},\"coord\":{\"x\":1,\"y\":2}},\"result\":{\"ok\":true},\"history\":\"0\",\"ord\":42}\n",
+      "nextHead": {
+        "head": 1,
+        "headHash": "7e294aeca8661d3ba6c730bd1a1fcb37c9ebb0ef3b55be3eb6dcc0533b3fa1c1"
+      }
+    },
+    {
+      "name": "stamp-empty-obj",
+      "history": "0",
+      "spec": {
+        "through": "beT",
+        "verb": "do",
+        "act": "set-being",
+        "of": {
+          "kind": "being",
+          "id": "beT"
+        },
+        "params": {}
+      },
+      "head": {
+        "head": 0,
+        "headHash": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "ord": null,
+      "line": "{\"_id\":\"b4abff076b9194ef84373c3803ce4e9fada41c82535e7fd0db4734478f4a8aa2\",\"p\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":1,\"through\":\"beT\",\"verb\":\"do\",\"act\":\"set-being\",\"of\":{\"kind\":\"being\",\"id\":\"beT\"},\"params\":{},\"history\":\"0\"}\n",
+      "nextHead": {
+        "head": 1,
+        "headHash": "b4abff076b9194ef84373c3803ce4e9fada41c82535e7fd0db4734478f4a8aa2"
+      }
+    }
+  ],
+  "realReel": {
+    "reelText": "{\"_id\":\"77f33d8480fc8e91720974e035e4a76e3a5e18c3f94d69d1a7e1979d4f630e6c\",\"p\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":1,\"through\":\"beReal\",\"verb\":\"do\",\"act\":\"set-being\",\"of\":{\"kind\":\"being\",\"id\":\"beReal\"},\"params\":{\"field\":\"n\",\"value\":1},\"history\":\"0\"}\n{\"_id\":\"f72a0a944b6ba1268cd0485f04e854d28982ff00475947255c872d5db8dd7134\",\"p\":\"77f33d8480fc8e91720974e035e4a76e3a5e18c3f94d69d1a7e1979d4f630e6c\",\"seq\":2,\"through\":\"beReal\",\"verb\":\"do\",\"act\":\"set-being\",\"of\":{\"kind\":\"being\",\"id\":\"beReal\"},\"params\":{\"field\":\"n\",\"value\":2},\"history\":\"0\"}\n{\"_id\":\"c28ef7fe4562b541c7a0e877a643e22d9c6efa0a957ede1072f4aa533ab2c2e0\",\"p\":\"f72a0a944b6ba1268cd0485f04e854d28982ff00475947255c872d5db8dd7134\",\"seq\":3,\"through\":\"beReal\",\"verb\":\"do\",\"act\":\"set-being\",\"of\":{\"kind\":\"being\",\"id\":\"beReal\"},\"params\":{\"field\":\"n\",\"value\":3},\"history\":\"0\"}\n",
+    "facts": [
+      {
+        "_id": "77f33d8480fc8e91720974e035e4a76e3a5e18c3f94d69d1a7e1979d4f630e6c",
+        "p": "0000000000000000000000000000000000000000000000000000000000000000",
+        "seq": 1,
+        "through": "beReal",
+        "verb": "do",
+        "act": "set-being",
+        "of": {
+          "kind": "being",
+          "id": "beReal"
+        },
+        "params": {
+          "field": "n",
+          "value": 1
+        },
+        "history": "0"
+      },
+      {
+        "_id": "f72a0a944b6ba1268cd0485f04e854d28982ff00475947255c872d5db8dd7134",
+        "p": "77f33d8480fc8e91720974e035e4a76e3a5e18c3f94d69d1a7e1979d4f630e6c",
+        "seq": 2,
+        "through": "beReal",
+        "verb": "do",
+        "act": "set-being",
+        "of": {
+          "kind": "being",
+          "id": "beReal"
+        },
+        "params": {
+          "field": "n",
+          "value": 2
+        },
+        "history": "0"
+      },
+      {
+        "_id": "c28ef7fe4562b541c7a0e877a643e22d9c6efa0a957ede1072f4aa533ab2c2e0",
+        "p": "f72a0a944b6ba1268cd0485f04e854d28982ff00475947255c872d5db8dd7134",
+        "seq": 3,
+        "through": "beReal",
+        "verb": "do",
+        "act": "set-being",
+        "of": {
+          "kind": "being",
+          "id": "beReal"
+        },
+        "params": {
+          "field": "n",
+          "value": 3
+        },
+        "history": "0"
+      }
+    ],
+    "headExpected": {
+      "head": 3,
+      "headHash": "c28ef7fe4562b541c7a0e877a643e22d9c6efa0a957ede1072f4aa533ab2c2e0"
+    }
+  }
+}

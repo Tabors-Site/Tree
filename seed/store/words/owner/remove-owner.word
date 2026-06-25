@@ -1,12 +1,3 @@
-# remove-owner.word — clear a space's owner (the remove-owner DO op). WORD-SOLE + COMPOSITE: a gate,
-# then ONE deed. may-remove-owner mirrors the floor rule (not heaven, it has a non-genesis owner, and
-# the caller owns the parent — the parent-owner approves the revoke). The WRITE is a leaf-call:
-# `do set-space {field:owner, value:null}` unsets the owner on the space's reel (the set-space leaf
-# holds its own reel lock), so remove-owner's fact is a do:set-space {field:owner}, never a synthetic
-# do:remove-owner. The op lays no own fact — its one deed IS the fact. remove-owner IS a gated
-# set-space ("apple is do"). The target is a space or stance; `see space-id-of` resolves the id. The
-# trigger binds target, caller, branch.
-
 When a being removes the owner of a space:
   If no caller, refuse with "remove-owner: identity required" as unauthorized.
   see space-id-of(target) as spaceId.

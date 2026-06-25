@@ -37,7 +37,7 @@ await import(`${R}/begin.js`);
 const { findByName, loadOrFold } = await import(
   `${R}/seed/materials/projections.js`
 );
-const { withIAmAct, withBeingAct } = await import(`${R}/seed/sprout.js`);
+const { withIAmAct, withBeingFact } = await import(`${R}/seed/sprout.js`);
 const { I } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { birthBeing } = await import(
   `${R}/seed/materials/being/identity/birth.js`
@@ -67,7 +67,7 @@ const bad = (l, d) => {
     console.log(`      ${typeof d === "string" ? d : JSON.stringify(d)}`);
 };
 const addConn = async (being, name) => {
-  await withBeingAct(String(being), "add llm connection", "0", async (m) => {
+  await withBeingFact(String(being), "add llm connection", "0", async (m) => {
     await doVerb(
       { kind: "being", id: String(being) },
       "add-llm-connection",

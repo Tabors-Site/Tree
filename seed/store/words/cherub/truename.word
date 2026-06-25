@@ -1,17 +1,3 @@
-# truename.word — be:truename: hand a being to a (declared) Name by re-pointing
-# its trueName. The CONTROL strand: the gate ordering (identity -> target -> token
-# -> resolve -> exists -> not-banished) and the fact-lay. The four floor reads stay
-# host see-ops (truenameHost.js): resolve a pubkey-or-real-name token to a canonical
-# nameId, resolve the target being from the address handle, assert the Name EXISTS
-# on main, and assert it is NOT banished. The word lays NO fact of its own -- it
-# RETURNS the fact params as factParams + the target being as factTarget; the JS
-# shim promotes factParams -> _factParams and the BE dispatcher lays the single
-# caller-attributed be:truename fact on the TARGET being's reel.
-#
-# The bridge binds caller (the actor's beingId), beingName (the address handle, for
-# resolve-target-being), and trueNameToken (the raw pubkey-or-real-name from
-# payload.trueName).
-
 When a being trues a name:
   If no caller, refuse with "be:truename requires an authenticated caller" as unauthorized.
   If no beingName, refuse with "be:truename requires an explicit target being in the address (e.g. <story>/@<being>)" as invalid-input.

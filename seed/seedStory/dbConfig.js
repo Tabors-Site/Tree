@@ -15,41 +15,28 @@
 
 import log from "./log.js";
 import { existsSync } from "node:fs";
-import {
-  configureStore,
-  storeRoot,
-  replayJournal,
-} from "../past/fileStore.js";
+import { configureStore, storeRoot } from "../past/fileStore.js";
 
 /**
- * Open the file store: ensure the data dir exists (configureStore makes
- * journal/ + reels/), then replay the moment-journal so any moment that
- * was committed-to-WAL but not yet acked is re-applied idempotently
- * before the first read/write.
+ * Open the file store: ensure the data dir exists (configureStore makes the
+ * reels/ tree). Write-through, no journal — the reel-line append IS the stamp,
+ * so the on-disk reels are the truth at open and there is nothing to replay.
  *
  * The active store folder is the file equivalent of a database name: a
  * sibling under store/. It is chosen, in order, by an explicit opts.story,
  * then the STORE_NAME env var, then the default "past". Naming it
- * something new spins up a fresh, isolated store (its own reels, journal,
- * and projections under store/<name>/), exactly like pointing at a new
+ * something new spins up a fresh, isolated store (its own reels and
+ * projections under store/<name>/), exactly like pointing at a new
  * database. Tests pass an explicit root to land in a scratch dir.
  *
  * @param {{root?:string, story?:string}} [opts]
- * @returns {Promise<{root:string, replayed:number, torn:boolean}>}
+ * @returns {Promise<{root:string}>}
  */
 export async function connectDB(opts = {}) {
   const story = opts.story ?? process.env.STORE_NAME ?? undefined;
   const root = configureStore({ ...opts, story });
-  const { replayed, torn } = replayJournal();
-  if (replayed > 0) {
-    log.info("DB", `file store ready at ${root}, replayed ${replayed} journal record(s)`);
-  } else {
-    log.verbose("DB", `file store ready at ${root}`);
-  }
-  if (torn) {
-    log.warn("DB", "moment-journal had a torn trailing record (a crash mid-commit); it was discarded.");
-  }
-  return { root, replayed, torn };
+  log.verbose("Store", `file store ready at ${root}`);
+  return { root };
 }
 
 // Store health: the store is "healthy" when its root directory

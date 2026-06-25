@@ -173,7 +173,7 @@ async function runWordNativeOutput(prose, { able, moment, history, beingId, user
   // any other word. This cognition-moment is the DECISION, not an act — it seals nothing of its own
   // (returns see; moment.js closes the inbox cleanly). The deeds are the acts; among them, the
   // being's own call re-invokes the next moment (the generative loop). Signed BY the being's Name
-  // THROUGH the being (runWordToStore → withBeingAct). A refusal mid-deeds → failure.
+  // THROUGH the being (runWordToStore → withBeingFact). A refusal mid-deeds → failure.
   try {
     await runWordToStore(ir, {
       beingId: String(beingId),

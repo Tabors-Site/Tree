@@ -500,7 +500,7 @@ export async function logFact(input, opts = {}) {
         facts: [{ history, kind: okind, id: oid, spec: baseDoc }],
       });
     } catch (err) {
-      log.error("DB", `Fact save failed (${act}): ${err.message}`);
+      log.error("Store", `Fact save failed (${act}): ${err.message}`);
       throw new Error("Failed to stamp Fact");
     }
   }

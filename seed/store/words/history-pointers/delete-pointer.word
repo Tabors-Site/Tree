@@ -1,10 +1,3 @@
-# delete-pointer.word — remove a named history pointer (ops.js, the delete-pointer op).
-# The set-pointer sibling. The CONTROL strand (the gate chain: a caller, a valid name, a
-# non-reserved name, a resolved .histories space) is `.word`; the heaven reads + the lone
-# set-space (qualities.pointers) stay host (heaven-routed, MAIN-pinned), reusing the SAME
-# isPointerName / RESERVED_POINTERS / readPointers / findPointersSpaceId / doVerb the JS
-# handler calls. The bridge binds `caller` (the acting being id) and `name` (the pointer).
-
 When a being deletes a history pointer:
   If no caller, refuse with "delete-pointer requires an authenticated being" as unauthorized.
   see valid-pointer-name(name) as validName.

@@ -47,7 +47,7 @@ try {
   const { connectDB, isDbHealthy } = await import(`${SEED}/seedStory/dbConfig.js`);
   const conn = await connectDB({ story: "bootfiles" });
   isDbHealthy()
-    ? ok(`connectDB opened the file store at ${conn.root} (replayed ${conn.replayed}); isDbHealthy()`)
+    ? ok(`connectDB opened the file store at ${conn.root}; isDbHealthy()`)
     : bad(`connectDB / isDbHealthy`, conn);
 
   const { I } = await import(`${SEED}/materials/being/seedBeings.js`);

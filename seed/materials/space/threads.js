@@ -268,9 +268,13 @@ export async function listLiveThreads({
   void stance;
   void priority;
 
+  // Most-recently-active first by the clock-free append ordinal (highest ord =
+  // latest fact/seal that touched the thread), never a wall-clock. The doctrine:
+  // order by sequence/lineage, not a timestamp. lastAct is carried back only as
+  // an inert display witness.
   const rows = await ThreadsProjection.find(match)
-    .sort({ lastAct: -1 })
+    .sort({ ord: -1 })
     .limit(Math.max(1, Math.min(limit, 500)))
     .lean();
-  return rows.map((r) => ({ id: r._id, lastAct: r.lastAct }));
+  return rows.map((r) => ({ id: r._id, ord: r.ord ?? null, lastAct: r.lastAct }));
 }

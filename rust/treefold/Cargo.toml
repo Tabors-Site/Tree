@@ -8,6 +8,12 @@ license = "AGPL-3.0"
 [dependencies]
 treehash = { path = "../treehash" }
 
+# Dev-only: the write-half proof (tests/stamp_then_fold.rs) stamps a real reel through the store, then
+# folds it — closing the read+write+verify+fold loop in pure Rust. treestore is a sibling crate; the
+# fold lib itself stays zero-dep beyond treehash (the determinism spine is unchanged).
+[dev-dependencies]
+treestore = { path = "../treestore" }
+
 [lib]
 name = "treefold"
 path = "src/lib.rs"

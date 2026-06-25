@@ -430,8 +430,8 @@ export function configHostEnv() {
 }
 
 // Self-register the co-located world strands so resolveAbleWord("config", <op>) finds them.
-registerAbleWord("config", "set-config", new URL("./set-config.word", import.meta.url));
-registerAbleWord("config", "delete-config", new URL("./delete-config.word", import.meta.url));
+registerAbleWord("config", "set-config", new URL("./store/words/config/set-config.word", import.meta.url));
+registerAbleWord("config", "delete-config", new URL("./store/words/config/delete-config.word", import.meta.url));
 
 // set-config — WORD-SOURCED, no handler. do.js's runOpWord routes it via word.factVerb:"name" to
 // runOpNameAct: set-config.word validates + authors factParams {key,value}; the dispatcher lays the
@@ -526,7 +526,7 @@ export function closeStoryHostEnv() {
   };
 }
 
-registerAbleWord("config", "close-story", new URL("./close-story.word", import.meta.url));
+registerAbleWord("config", "close-story", new URL("./store/words/config/close-story.word", import.meta.url));
 
 registerOperation("close-story", {
   targets: ["space"],

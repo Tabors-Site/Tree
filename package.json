@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "build:native": "bash rust/build-node.sh",
+    "prestart": "npm run build:native",
+    "pretest": "npm run build:native",
     "start": "node plant.js",
     "test": "node .test/scripts/verify-canon-vectors.js && node .test/scripts/verify-history-resolution.js",
     "test:e2e": "bash .test/e2e/run-e2e.sh",

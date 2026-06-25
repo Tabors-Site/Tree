@@ -1,26 +1,3 @@
-# set-render.word — the canonical sensory-write op (setRender.js, the set-render DO op).
-#
-# `qualities.render` is the seed-owned namespace any matter/space/being carries:
-# the model it appears as in 3D, the animations + sounds fact-arrivals trigger,
-# and any future sensory channel. set-render writes the whole block in one op.
-#
-# WORD-SOLE (handler-less). The CONTROL strand (the return) is `.word`. The ONE genuine
-# compute reads as a `see`-op (a host fn, but spoken as a see-op, never a `host:` escape),
-# a pure compute (NO fact):
-#   - validate-render-block(params, targetKind): validate the target KIND + the render
-#     block (reject unknown keys; validate model / scale / rotation / animations / sounds
-#     — THROWS IbpError on a bad kind or key, surfacing as the op's refusal), then shape
-#     the { field:"qualities.render", value, merge } the lone do:set-render fact carries
-#     (the SAME shape the retired JS handler laid; applySetQualities folds it unchanged).
-# There is NO host: emit and NO write sentence — the word lays no fact of its own. It
-# returns the fact params as `factParams` (the cut promotes them to the dispatcher's
-# _factParams); the ONE auto-Fact path in do.js lays the caller-attributed do:set-render
-# fact, its target resolved to the DISPATCH target (call-target fallback) so of.kind stays
-# the actual matter|space|being kind.
-#
-# The bridge binds the standard trigger: `targetKind` (matter|space|being) and the render
-# `params` (the block: model, scale, rotation, animations, sounds, merge).
-
 When a being sets the render of a target:
   see validate-render-block(params, targetKind) as renderParams.
   Return rendered: true, factParams: $renderParams.

@@ -1,0 +1,13 @@
+[package]
+name = "treeverify"
+version = "0.1.0"
+edition = "2021"
+description = "TreeOS chain verification (Tier 3): re-hash each fact/act and walk the p-links, on the proven treehash. Ported from seed/past/fact/verifyReel.js (the fact-chain) + seed/past/act/actHash.js verifyActChain (the act-chain). Detection only, never repair."
+license = "AGPL-3.0"
+
+[dependencies]
+treehash = { path = "../treehash" }
+
+[lib]
+name = "treeverify"
+path = "src/lib.rs"

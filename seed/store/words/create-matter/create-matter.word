@@ -1,32 +1,3 @@
-# matter.word — create-matter: bring a new matter into a space (matter/ops.js,
-# the create-matter DO op).
-#
-# A being brings new matter into a space (or under a parent matter). The handler
-# is mostly genuine COMPUTE that legitimately stays host: matter-type resolution
-# (explicit OR classify from the content's own shape) + the type-registry gate
-# (getMatterType / typeAllowsContentKind / typeAllowsMime, which THROW on a bad
-# type/kind/mime), the content-store work (putContent hashes text bytes into CAS,
-# hasContent verifies a two-step cas ref exists — storage, not the fact chain),
-# the bounded unique-name search (resolveMatterName), the coord-bounds clamp
-# (reads the space size and throws out-of-bounds), the content-addressed row id
-# (matterContentId — a sha256 over the birth spec), and the parent-matter spaceId
-# inheritance (a gated load folded into resolveBirthSpec). One host call,
-# resolveBirthSpec, returns the finalized birth spec + the derived matterId; it
-# reuses the SAME getMatterType / classifyMatter / putContent / hasContent /
-# resolveMatterName / matterContentId the JS handler calls — NO reimplementation.
-#
-# THE CONTROL strand is .word: the actor gate (refuse when no identified actor)
-# and the return. There is NO host: emit — the word lays no fact of its own. It
-# returns the enriched birth spec as `factParams` (the cut promotes it to the
-# dispatcher's _factParams) plus the content-addressed matterId; the ONE auto-Fact
-# path in do.js then lays the caller-attributed do:create-matter fact. resolve-
-# birth-spec stays a `see` (the floor: type resolution, CAS putContent, the
-# content-addressed id) — a read, not an escape.
-#
-# The bridge binds `target`, `targetKind`, the create `params` (spec: name, type,
-# content, coord, spaceId, parentMatterId), `caller` (the acting being), and
-# `branch`.
-
 When a being brings matter into a space:
   If no caller, refuse with "create-matter requires an identified actor".
   see resolve-birth-spec(target, targetKind, params, caller, branch) as birth.

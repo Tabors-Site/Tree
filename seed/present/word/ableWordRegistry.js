@@ -95,7 +95,7 @@ export function registerAbleWord(able, op, fileUrl) {
 }
 
 // The registered able-words (the pre-genesis buffer) — declareAbleWordsToFold reads these to declare
-// each into the unified wordStore fold (ABLES-UNIFICATION.md WP-2). Each: { able, op, fileUrl }.
+// each into the unified wordStore fold (the able-word unification, WP-2). Each: { able, op, fileUrl }.
 export function listRegistered() {
   return [...REGISTRY.values()];
 }
@@ -115,7 +115,7 @@ export function resolveAbleWord(able, op, history) {
   return resolveAbleWordViaFold(able, op, history);
 }
 
-// ABLES-UNIFICATION phase-1 parity path: resolve a able-word's IR by reading the UNIFIED wordStore
+// the able-word unification phase-1 parity path: resolve a able-word's IR by reading the UNIFIED wordStore
 // fold (existence + source, sync) + the per-history overlay (enabled). verify-ablewordfold compares
 // this to resolveAbleWord (the REGISTRY path) to prove the read cutover is a no-op before REGISTRY is
 // deleted in phase 2. Same SYNC contract as resolveAbleWord (the overlay is an in-memory index).
@@ -374,7 +374,7 @@ export async function runAbleWord(
 // spacebar says that is a run-on — N words crammed into one moment with the spaces deleted.
 //
 // runWordToStore runs the same Word as a SEQUENCE OF MOMENTS instead. It opens NO shared moment;
-// it sets ctx.perActMoment.open = a withBeingAct cycle, so the evaluator opens a fresh moment for
+// it sets ctx.perActMoment.open = a withBeingFact cycle, so the evaluator opens a fresh moment for
 // EACH fact-laying act (do / be / name / call), lays that act's ONE fact, and seals it to store,
 // advancing the being's chain — then the next act is the next moment. A Word of N acts lays N
 // acts/facts on the chain, one fact each. Declarations (is / can / law / ...) fold IS-side into
@@ -382,7 +382,7 @@ export async function runAbleWord(
 // foreach) walks into nested acts, each its own moment. Bindings + laws + world-state thread
 // across the moments on ctx, exactly as a story's words carry meaning forward.
 //
-// The being acts as ITSELF: every moment's act is signed BY its Name (withBeingAct resolves the
+// The being acts as ITSELF: every moment's act is signed BY its Name (withBeingFact resolves the
 // being's trueName), THROUGH the being. `name` is the auth identity doVerb checks. Returns the
 // §7 `return` result (if any), the folded `laws`, and the final `bindings`.
 //
@@ -407,7 +407,7 @@ export async function runWordToStore(
     );
   if (typeof history !== "string" || !history.length)
     throw new Error('runWordToStore: history is required (pass "0" for main)');
-  const { withBeingAct } = await import("../../sprout.js");
+  const { withBeingFact } = await import("../../sprout.js");
   // How many acts opened a moment this run. >0 means the being ACTED (deeds reached store);
   // 0 means a pure SEE (only declarations/reads — nothing to commit). This is the signal the
   // re-invocation hook reads: acted → call the being's next moment (the generative chain);
@@ -418,7 +418,7 @@ export async function runWordToStore(
     // A read-ambient moment (history only): the floor `see`s / host computes that read the actor's
     // history (actorHistoryFrom) run BEFORE/BETWEEN the deeds, when there is no real moment yet. They
     // lay nothing, so this never seals. The DEEDS open their own moments via perActMoment.open
-    // (stampOneAct swaps ctx.moment to the fresh withBeingAct moment for each, then restores this).
+    // (stampOneAct swaps ctx.moment to the fresh withBeingFact moment for each, then restores this).
     moment: { actorAct: { history } },
     identity: { beingId: String(beingId), name },
     history,
@@ -434,11 +434,11 @@ export async function runWordToStore(
     trigger: { ...trigger },
     flows: [],
     // The spacebar: each fact-laying act is its own word → its own moment → its own commit.
-    // The opener is one withBeingAct cycle (open the act, lay its fact, seal to store).
+    // The opener is one withBeingFact cycle (open the act, lay its fact, seal to store).
     perActMoment: {
       open: (label, fn) => {
         stamped++; // a fact-laying act dispatched this moment — the being acted
-        return withBeingAct(String(beingId), label, history, fn);
+        return withBeingFact(String(beingId), label, history, fn);
       },
     },
   };

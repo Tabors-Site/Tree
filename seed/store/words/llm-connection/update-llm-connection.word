@@ -1,17 +1,3 @@
-# update-llm-connection.word — re-mint the changed fields of a being's llm connection
-# (connect.js update path, materials/being/ops.js update-llm-connection DO op).
-#
-# ONE fact — the merged connection at qualities.llmConnections.<id>. A connection is one
-# word however rich its content (name/url/model/key), the spacebar: create-matter is the
-# proof. The host see resolve-connection-update is the floor — validate, SSRF-gate the new
-# base URL, re-encrypt a new key, merge only the CHANGED fields — and lays NO fact; the
-# dispatcher lays the one do:set-being (target = the being, skipAudit gone). encryptedApiKey
-# rides as ciphertext (redact strips it). `wasAssigned` rides the return so the handler can
-# bust the client cache post-fact (a side-effect, not a fact).
-#
-# The bridge binds `target` (the being), the update `params` (connectionId, name, baseUrl,
-# model, apiKey), `caller` (the acting being), and `branch`.
-
 When a being updates an llm connection:
   If no caller, refuse with "update-llm-connection requires an identified actor".
   see resolve-connection-update(target, params, caller, branch) as patch.

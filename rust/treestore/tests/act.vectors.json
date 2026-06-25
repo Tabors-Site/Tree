@@ -1,0 +1,359 @@
+{
+  "format": "treeos-act-vectors",
+  "version": 1,
+  "actStampVectors": [
+    {
+      "name": "act-genesis",
+      "opening": {
+        "through": "be1",
+        "to": null,
+        "ibpAddress": null,
+        "activeAble": null,
+        "inboxMessageId": null,
+        "inReplyTo": null,
+        "parentThread": null,
+        "story": "s1",
+        "history": "0"
+      },
+      "headHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "id": "dfc7f537cad527edc92e8415991c2b36dc59ca79469e6f8faee204dc5efc9545",
+      "line": "{\"_id\":\"dfc7f537cad527edc92e8415991c2b36dc59ca79469e6f8faee204dc5efc9545\",\"p\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"through\":\"be1\",\"to\":null,\"ibpAddress\":null,\"activeAble\":null,\"inboxMessageId\":null,\"inReplyTo\":null,\"parentThread\":null,\"story\":\"s1\",\"history\":\"0\"}\n"
+    },
+    {
+      "name": "act-second",
+      "opening": {
+        "through": "be1",
+        "to": "be2",
+        "ibpAddress": null,
+        "activeAble": "gardener",
+        "inboxMessageId": null,
+        "inReplyTo": null,
+        "parentThread": null,
+        "story": "s1",
+        "history": "0"
+      },
+      "headHash": "dfc7f537cad527edc92e8415991c2b36dc59ca79469e6f8faee204dc5efc9545",
+      "id": "879b2c1414f66ab3a3cd7f361c47179d0ba92a3201d038472d04b5e3c87817c9",
+      "line": "{\"_id\":\"879b2c1414f66ab3a3cd7f361c47179d0ba92a3201d038472d04b5e3c87817c9\",\"p\":\"dfc7f537cad527edc92e8415991c2b36dc59ca79469e6f8faee204dc5efc9545\",\"through\":\"be1\",\"to\":\"be2\",\"ibpAddress\":null,\"activeAble\":\"gardener\",\"inboxMessageId\":null,\"inReplyTo\":null,\"parentThread\":null,\"story\":\"s1\",\"history\":\"0\"}\n"
+    },
+    {
+      "name": "act-third",
+      "opening": {
+        "through": "be1",
+        "to": null,
+        "ibpAddress": null,
+        "activeAble": null,
+        "inboxMessageId": null,
+        "inReplyTo": "dfc7f537cad527edc92e8415991c2b36dc59ca79469e6f8faee204dc5efc9545",
+        "parentThread": "th1",
+        "story": "s1",
+        "history": "0"
+      },
+      "headHash": "879b2c1414f66ab3a3cd7f361c47179d0ba92a3201d038472d04b5e3c87817c9",
+      "id": "6e4e10e71477d6fb875b0a29929b0e94ced0ef2a0f1547d16b133839b22f47bf",
+      "line": "{\"_id\":\"6e4e10e71477d6fb875b0a29929b0e94ced0ef2a0f1547d16b133839b22f47bf\",\"p\":\"879b2c1414f66ab3a3cd7f361c47179d0ba92a3201d038472d04b5e3c87817c9\",\"through\":\"be1\",\"to\":null,\"ibpAddress\":null,\"activeAble\":null,\"inboxMessageId\":null,\"inReplyTo\":\"dfc7f537cad527edc92e8415991c2b36dc59ca79469e6f8faee204dc5efc9545\",\"parentThread\":\"th1\",\"story\":\"s1\",\"history\":\"0\"}\n"
+    },
+    {
+      "name": "act-startmsg-excluded",
+      "opening": {
+        "through": "be1",
+        "to": null,
+        "ibpAddress": null,
+        "activeAble": null,
+        "inboxMessageId": null,
+        "inReplyTo": null,
+        "parentThread": null,
+        "story": "s1",
+        "history": "0",
+        "startMessage": {
+          "content": "hi",
+          "source": "x"
+        }
+      },
+      "headHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "id": "dfc7f537cad527edc92e8415991c2b36dc59ca79469e6f8faee204dc5efc9545",
+      "line": "{\"_id\":\"dfc7f537cad527edc92e8415991c2b36dc59ca79469e6f8faee204dc5efc9545\",\"p\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"through\":\"be1\",\"to\":null,\"ibpAddress\":null,\"activeAble\":null,\"inboxMessageId\":null,\"inReplyTo\":null,\"parentThread\":null,\"story\":\"s1\",\"history\":\"0\",\"startMessage\":{\"content\":\"hi\",\"source\":\"x\"}}\n"
+    }
+  ],
+  "realActLog": {
+    "actsText": "{\"_id\":\"b1a8feb5ea598a53fb8335e416fc8742f1f1db1340448cbd85eb6359874bfcf3\",\"p\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"by\":\"nmAlice\",\"through\":\"be1\",\"to\":\"be1\",\"ibpAddress\":null,\"activeAble\":null,\"inboxMessageId\":null,\"inReplyTo\":null,\"parentThread\":null,\"story\":\"teststory\",\"history\":\"0\"}\n{\"_id\":\"335c6f3df43d05764adc7dd49f048f06b05c5f82a098c637143755a2d65c4b3d\",\"p\":\"b1a8feb5ea598a53fb8335e416fc8742f1f1db1340448cbd85eb6359874bfcf3\",\"by\":\"nmAlice\",\"through\":\"be1\",\"to\":\"be2\",\"ibpAddress\":null,\"activeAble\":null,\"inboxMessageId\":null,\"inReplyTo\":null,\"parentThread\":null,\"story\":\"teststory\",\"history\":\"0\"}\n{\"_id\":\"9eeaf8c2c8b4c11cdcaeba9aefbc7b0a02f436e60cf9298949feaf55c301447b\",\"p\":\"335c6f3df43d05764adc7dd49f048f06b05c5f82a098c637143755a2d65c4b3d\",\"by\":\"nmAlice\",\"through\":\"be1\",\"to\":\"be3\",\"ibpAddress\":null,\"activeAble\":null,\"inboxMessageId\":null,\"inReplyTo\":null,\"parentThread\":null,\"story\":\"teststory\",\"history\":\"0\"}\n",
+    "acts": [
+      {
+        "_id": "b1a8feb5ea598a53fb8335e416fc8742f1f1db1340448cbd85eb6359874bfcf3",
+        "p": "0000000000000000000000000000000000000000000000000000000000000000",
+        "by": "nmAlice",
+        "through": "be1",
+        "to": "be1",
+        "ibpAddress": null,
+        "activeAble": null,
+        "inboxMessageId": null,
+        "inReplyTo": null,
+        "parentThread": null,
+        "story": "teststory",
+        "history": "0"
+      },
+      {
+        "_id": "335c6f3df43d05764adc7dd49f048f06b05c5f82a098c637143755a2d65c4b3d",
+        "p": "b1a8feb5ea598a53fb8335e416fc8742f1f1db1340448cbd85eb6359874bfcf3",
+        "by": "nmAlice",
+        "through": "be1",
+        "to": "be2",
+        "ibpAddress": null,
+        "activeAble": null,
+        "inboxMessageId": null,
+        "inReplyTo": null,
+        "parentThread": null,
+        "story": "teststory",
+        "history": "0"
+      },
+      {
+        "_id": "9eeaf8c2c8b4c11cdcaeba9aefbc7b0a02f436e60cf9298949feaf55c301447b",
+        "p": "335c6f3df43d05764adc7dd49f048f06b05c5f82a098c637143755a2d65c4b3d",
+        "by": "nmAlice",
+        "through": "be1",
+        "to": "be3",
+        "ibpAddress": null,
+        "activeAble": null,
+        "inboxMessageId": null,
+        "inReplyTo": null,
+        "parentThread": null,
+        "story": "teststory",
+        "history": "0"
+      }
+    ],
+    "headExpected": "9eeaf8c2c8b4c11cdcaeba9aefbc7b0a02f436e60cf9298949feaf55c301447b"
+  },
+  "sealVectors": [
+    {
+      "name": "seal-one-reel-threaded",
+      "ord": 7,
+      "specs": [
+        {
+          "history": "0",
+          "kind": "being",
+          "id": "beX",
+          "spec": {
+            "through": "beX",
+            "verb": "do",
+            "act": "set-being",
+            "of": {
+              "kind": "being",
+              "id": "beX"
+            },
+            "params": {
+              "v": 1
+            }
+          }
+        },
+        {
+          "history": "0",
+          "kind": "being",
+          "id": "beX",
+          "spec": {
+            "through": "beX",
+            "verb": "do",
+            "act": "set-being",
+            "of": {
+              "kind": "being",
+              "id": "beX"
+            },
+            "params": {
+              "v": 2
+            }
+          }
+        }
+      ],
+      "facts": [
+        {
+          "history": "0",
+          "kind": "being",
+          "id": "beX",
+          "doc": {
+            "_id": "c0209f19dc4b39a1dc70a7550f4efd64d70c1a9420b1746e9d400b58613c4b95",
+            "p": "0000000000000000000000000000000000000000000000000000000000000000",
+            "seq": 1,
+            "through": "beX",
+            "verb": "do",
+            "act": "set-being",
+            "of": {
+              "kind": "being",
+              "id": "beX"
+            },
+            "params": {
+              "v": 1
+            },
+            "history": "0",
+            "ord": 7
+          }
+        },
+        {
+          "history": "0",
+          "kind": "being",
+          "id": "beX",
+          "doc": {
+            "_id": "ee19c5887296971dfb99d82403059e2af44f6dba3655e0d42895811b5551f6ed",
+            "p": "c0209f19dc4b39a1dc70a7550f4efd64d70c1a9420b1746e9d400b58613c4b95",
+            "seq": 2,
+            "through": "beX",
+            "verb": "do",
+            "act": "set-being",
+            "of": {
+              "kind": "being",
+              "id": "beX"
+            },
+            "params": {
+              "v": 2
+            },
+            "history": "0",
+            "ord": 7
+          }
+        }
+      ],
+      "reels": [
+        "0:being:beX"
+      ],
+      "fanout": false
+    },
+    {
+      "name": "seal-fanout",
+      "ord": 8,
+      "specs": [
+        {
+          "history": "0",
+          "kind": "being",
+          "id": "beX",
+          "spec": {
+            "through": "beX",
+            "verb": "do",
+            "act": "set-being",
+            "of": {
+              "kind": "being",
+              "id": "beX"
+            },
+            "params": {
+              "v": 1
+            }
+          }
+        },
+        {
+          "history": "0",
+          "kind": "being",
+          "id": "beY",
+          "spec": {
+            "through": "beY",
+            "verb": "do",
+            "act": "set-being",
+            "of": {
+              "kind": "being",
+              "id": "beY"
+            },
+            "params": {
+              "v": 1
+            }
+          }
+        }
+      ],
+      "facts": [
+        {
+          "history": "0",
+          "kind": "being",
+          "id": "beX",
+          "doc": {
+            "_id": "c0209f19dc4b39a1dc70a7550f4efd64d70c1a9420b1746e9d400b58613c4b95",
+            "p": "0000000000000000000000000000000000000000000000000000000000000000",
+            "seq": 1,
+            "through": "beX",
+            "verb": "do",
+            "act": "set-being",
+            "of": {
+              "kind": "being",
+              "id": "beX"
+            },
+            "params": {
+              "v": 1
+            },
+            "history": "0",
+            "ord": 8
+          }
+        },
+        {
+          "history": "0",
+          "kind": "being",
+          "id": "beY",
+          "doc": {
+            "_id": "a921bba2ff68af7d71287d12f63fb3026120dcf57bc86e55bed0f6bb1aa1ecfd",
+            "p": "0000000000000000000000000000000000000000000000000000000000000000",
+            "seq": 1,
+            "through": "beY",
+            "verb": "do",
+            "act": "set-being",
+            "of": {
+              "kind": "being",
+              "id": "beY"
+            },
+            "params": {
+              "v": 1
+            },
+            "history": "0",
+            "ord": 8
+          }
+        }
+      ],
+      "reels": [
+        "0:being:beX",
+        "0:being:beY"
+      ],
+      "fanout": true
+    },
+    {
+      "name": "seal-single-noord",
+      "ord": null,
+      "specs": [
+        {
+          "history": "0",
+          "kind": "being",
+          "id": "beZ",
+          "spec": {
+            "through": "beZ",
+            "verb": "do",
+            "act": "set-being",
+            "of": {
+              "kind": "being",
+              "id": "beZ"
+            },
+            "params": {
+              "v": 1
+            }
+          }
+        }
+      ],
+      "facts": [
+        {
+          "history": "0",
+          "kind": "being",
+          "id": "beZ",
+          "doc": {
+            "_id": "f70b8dab7ab7efd0ac11d3b84733fa453afb6ed11d99c6ba19fcd53b3ad2b807",
+            "p": "0000000000000000000000000000000000000000000000000000000000000000",
+            "seq": 1,
+            "through": "beZ",
+            "verb": "do",
+            "act": "set-being",
+            "of": {
+              "kind": "being",
+              "id": "beZ"
+            },
+            "params": {
+              "v": 1
+            },
+            "history": "0"
+          }
+        }
+      ],
+      "reels": [
+        "0:being:beZ"
+      ],
+      "fanout": false
+    }
+  ]
+}

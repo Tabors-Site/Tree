@@ -456,7 +456,12 @@ async function _dispatchCall({
   // scheduled wakes, genesis scaffolding), the summoner is I.
   const summonerBeingId = identity?.beingId ? String(identity.beingId) : I;
   const messageId = randomUUID();
-  const sentAt = new Date().toISOString();
+  // No envelope/fact wall-clock here. The call fact gets its lone inert display
+  // witness from the stamp itself (fact.date, set in past/fact/facts.js), and
+  // the inbox fold orders rows on the fact's clock-free append ordinal (ord),
+  // never on a sentAt. A second wall-clock stamped into params would be the
+  // duplicate the doctrine forbids ("ONE inert display witness"), so the
+  // params.sentAt / message.sentAt fields are dropped.
 
   // Orientation gate (INNER-FOLD §4). Only self-summons — where the
   // summoner IS the recipient — may carry an orientation other than
@@ -519,7 +524,8 @@ async function _dispatchCall({
         orientation,
         attachments: validatedMessage.attachments,
         inboxSpaceId: inboxNodeId,
-        sentAt,
+        // (no sentAt: the fact's own `date` is the inert witness; the inbox
+        //  fold orders on fact.ord, never a timestamp.)
         // Cross-history provenance for MOMENT-LESS summons. In-moment
         // summons get crossOrigin derived by emitFact from
         // moment.actorAct; a wire summon has no moment (the summon
@@ -555,7 +561,8 @@ async function _dispatchCall({
     message: {
       ...validatedMessage,
       correlation: messageId,
-      sentAt,
+      // No injected wall-clock. Any caller-supplied validatedMessage.sentAt
+      // rides the spread as inert display; the fold orders on fact.ord.
       activeAble,
     },
     resolved,

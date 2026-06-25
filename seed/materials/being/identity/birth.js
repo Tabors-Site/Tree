@@ -818,9 +818,9 @@ async function _inheritParentAbles({
   // moment / act / fact, signed THROUGH the grantor (the parent who held it). Not pooled with the
   // birth (a run-on the stamper now refuses); a SENTENCE of grants run one at a time on the child's
   // reel. (Called from birthBeing's afterSeal, so the child already exists on-chain.)
-  const { withBeingAct } = await import("../../../sprout.js");
+  const { withBeingFact } = await import("../../../sprout.js");
   for (const { grant, grantor } of composed) {
-    await withBeingAct(
+    await withBeingFact(
       String(grantor),
       `grant ${grant.able} to ${String(childId).slice(0, 8)}`,
       history,

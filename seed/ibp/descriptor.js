@@ -1393,8 +1393,10 @@ async function listBeingChildren(
     await import("../materials/being/identity/lookups.js");
   // Curated children-by-parent (findByParent handles the history-lineage
   // shadow + tombstone semantics). It returns occupant shape only, so load
-  // each child's slot for the state fields, then sort by createdAt + cap —
-  // matching the old Being.find({parentBeingId}).sort({createdAt}).limit(200).
+  // each child's slot for the state fields, then sort by birth order + cap.
+  // Clock-free: bornOrd (the birth fact's append ordinal) IS the order, the
+  // same key beingsCatalog sorts on. Replaces the legacy createdAt-asc sort
+  // (a folded wall-clock); the doctrine orders by sequence, never a timestamp.
   const { findByParent, loadProjection } =
     await import("../materials/projections.js");
   let br = history;
@@ -1415,17 +1417,15 @@ async function listBeingChildren(
       defaultAble: st.defaultAble,
       homeSpace: st.homeSpace,
       qualities: st.qualities,
+      // Clock-free birth-order key (the birth fact's append ordinal). createdAt
+      // is kept only as an inert display witness on the projected row below.
+      bornOrd: st.bornOrd ?? null,
       createdAt: st.createdAt,
     });
   }
   const rows = loaded
-    .sort((a, b) => {
-      const ca = a.createdAt ?? 0;
-      const cb = b.createdAt ?? 0;
-      if (ca < cb) return -1;
-      if (ca > cb) return 1;
-      return 0;
-    })
+    // Birth order, first-created first . bornOrd IS the order (no wall-clock).
+    .sort((a, b) => (a.bornOrd ?? 0) - (b.bornOrd ?? 0))
     .slice(0, 200);
 
   // Live path: project from the rows as-is.

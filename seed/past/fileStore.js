@@ -52,7 +52,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // sibling folders, no renaming. Each holds its own chain (reels/ + journal/). CAS (store/cas) is
 // shared across stories — content-addressed, so cross-story dedup is correct.
 // From seed/past/ → ../../ is <story>, then store.
-const STORE_BASE = process.env.TREEOS_STORE_BASE || resolve(__dirname, "../../store");
+const STORE_BASE =
+  process.env.TREEOS_STORE_BASE || resolve(__dirname, "../../store");
 const DEFAULT_STORY = "past"; // the main story's folder is literally `past`
 
 let ROOT = process.env.TREEOS_STORE_ROOT || join(STORE_BASE, DEFAULT_STORY);
@@ -103,13 +104,9 @@ export function currentOrd() {
   return _ordCounter;
 }
 
-// Run-on fan-out census: acts that lay facts across >1 reel (the journal's old reason to exist). The
-// no-journal floor's tail-truncation recovery is only atomic with ONE reel per act, so these must be
-// decomposed to one-word; until then commitMoment warns + records them here. Read via fanOutRunOns().
-const _fanOutRunOns = new Set();
-export function fanOutRunOns() {
-  return [..._fanOutRunOns];
-}
+// Run-ons (acts that fan facts across >1 reel — `do do do do` crammed into one act) are BANNED.
+// commitMoment refuses them outright; there is no census and no tolerance. One word = one do = one
+// fact = one moment; a word CALLS more words, each its own act. (Was a warn-and-count census.)
 
 // Point the engine at a story (no mongod, no URI):
 //   { root }   explicit dir override (tests use a temp dir) — wins over story.
@@ -220,10 +217,15 @@ function computeFactDoc(history, kind, id, spec, head) {
   const seq = head.head + 1;
   const p = head.headHash;
   const factHistory =
-    typeof spec.history === "string" && spec.history.length ? spec.history : String(history);
+    typeof spec.history === "string" && spec.history.length
+      ? spec.history
+      : String(history);
   const full = { ...spec, history: factHistory, seq, p };
   const _id = computeHash(p, contentOf(full));
-  return { doc: { _id, p, seq, ...full }, nextHead: { head: seq, headHash: _id } };
+  return {
+    doc: { _id, p, seq, ...full },
+    nextHead: { head: seq, headHash: _id },
+  };
 }
 
 // Write a FULLY-IDENTIFIED fact doc to its reel. The reel-line APPEND is THE STAMP — the act of
@@ -233,7 +235,8 @@ function computeFactDoc(history, kind, id, spec, head) {
 // replay a no-op for already-applied records and an append for un-applied ones.
 function writeFactDoc(history, kind, id, doc) {
   const cur = readReelHead(history, kind, id);
-  if (cur.head >= doc.seq) return { _id: doc._id, seq: doc.seq, replayed: true };
+  if (cur.head >= doc.seq)
+    return { _id: doc._id, seq: doc.seq, replayed: true };
   durableAppend(reelPath(history, kind, id), JSON.stringify(doc) + "\n"); // ← the stamp (lay the fact)
   writeReelHead(history, kind, id, doc.seq, doc._id); // advance the derived head pointer
   return { _id: doc._id, seq: doc.seq, replayed: false };
@@ -363,7 +366,12 @@ export function readReelWhere(history, kind, id, predicate) {
 //   factsByActId(history, actorBeingId, actId) -> fact[]
 export function factsByActId(history, actorBeingId, actId) {
   if (actId == null) return [];
-  return readReelWhere(history, "being", actorBeingId, (f) => f.actId === actId);
+  return readReelWhere(
+    history,
+    "being",
+    actorBeingId,
+    (f) => f.actId === actId,
+  );
 }
 
 // ── BRANCH-AWARE read: union a story's lineage (Tabor: "past splits by branches") ───────────
@@ -383,7 +391,14 @@ export function factsByActId(history, actorBeingId, actId) {
 //   (2) for that first divergent fact, set p to the PARENT's fact at the branchPoint, not this
 //       history's empty head — the cross-fork link verifyReelFile checks (facts.js prevHashAt). Both
 //       want the same (lineage, floors) inputs as this read; resolve once, thread to computeFactDoc.
-export function readReelLineage(lineage, floors, kind, id, afterSeq = null, untilSeq = null) {
+export function readReelLineage(
+  lineage,
+  floors,
+  kind,
+  id,
+  afterSeq = null,
+  untilSeq = null,
+) {
   const out = [];
   for (let i = 0; i < lineage.length; i++) {
     const h = String(lineage[i]);
@@ -392,7 +407,11 @@ export function readReelLineage(lineage, floors, kind, id, afterSeq = null, unti
     const hi = nextH && Number.isFinite(floors?.[nextH]) ? floors[nextH] : null;
     const lower = afterSeq != null ? Math.max(lo, afterSeq) : lo;
     const upper =
-      untilSeq != null && hi != null ? Math.min(hi, untilSeq) : untilSeq != null ? untilSeq : hi;
+      untilSeq != null && hi != null
+        ? Math.min(hi, untilSeq)
+        : untilSeq != null
+          ? untilSeq
+          : hi;
     for (const f of readReel(h, kind, id, lower, upper)) out.push(f);
   }
   return out;
@@ -405,10 +424,12 @@ function verifyFactChain(facts) {
   let prev = GENESIS_PREV;
   for (let i = 0; i < facts.length; i++) {
     const f = facts[i];
-    if (f.p !== prev) return { ok: false, length: facts.length, brokenAt: i, reason: "p-link" };
+    if (f.p !== prev)
+      return { ok: false, length: facts.length, brokenAt: i, reason: "p-link" };
     if (computeHash(f.p, contentOf(f)) !== f._id)
       return { ok: false, length: facts.length, brokenAt: i, reason: "hash" };
-    if (f.seq !== i + 1) return { ok: false, length: facts.length, brokenAt: i, reason: "seq" };
+    if (f.seq !== i + 1)
+      return { ok: false, length: facts.length, brokenAt: i, reason: "seq" };
     prev = f._id;
   }
   return { ok: true, length: facts.length, brokenAt: -1 };
@@ -458,7 +479,13 @@ export function loadSnapshot(history, kind, id) {
 // CAS-guarded write: when expectedFoldedSeq is given, only advance if the on-disk foldedSeq matches
 // (mirrors projections.saveProjection's compare-and-set — a stale concurrent fold loses, the next
 // fold catches up). Returns true if written.
-export function saveSnapshot(history, kind, id, slot, expectedFoldedSeq = undefined) {
+export function saveSnapshot(
+  history,
+  kind,
+  id,
+  slot,
+  expectedFoldedSeq = undefined,
+) {
   const old = loadSnapshot(history, kind, id);
   if (expectedFoldedSeq !== undefined) {
     if (old && old.foldedSeq !== expectedFoldedSeq) return false;
@@ -494,7 +521,13 @@ function pathSafe(s) {
   return String(s).replace(/[^A-Za-z0-9._-]/g, "_") || "_";
 }
 function actDir(story, history, being) {
-  return join(ROOT, "acts", pathSafe(story), pathSafe(history), shard(pathSafe(being)));
+  return join(
+    ROOT,
+    "acts",
+    pathSafe(story),
+    pathSafe(history),
+    shard(pathSafe(being)),
+  );
 }
 function actLogPath(story, history, being) {
   return join(actDir(story, history, being), `${pathSafe(being)}.acts`);
@@ -560,7 +593,13 @@ export function advanceActHeadFile(story, history, being, actId, expectPrev) {
 // actId, and the head set is the tip regardless. The caller (plantGraft) runs the freshness gate and
 // the post-plant chain walk; this is the raw verbatim write.
 //   actDocs  the being's acts (chain-ordered); headHash  the chain tip to pin (null ⇒ leave at last).
-export function instateActsVerbatim(story, history, being, actDocs = [], headHash = null) {
+export function instateActsVerbatim(
+  story,
+  history,
+  being,
+  actDocs = [],
+  headHash = null,
+) {
   for (const a of actDocs) {
     if (a && a._id != null) appendActLine(story, history, being, a);
   }
@@ -576,7 +615,10 @@ export function instateActsVerbatim(story, history, being, actDocs = [], headHas
       closeSync(fd);
     }
   }
-  return { count: actDocs.length, head: readActHeadFile(story, history, being) };
+  return {
+    count: actDocs.length,
+    head: readActHeadFile(story, history, being),
+  };
 }
 
 // ── the derived ACT INDEX (rebuildable — backs actChain.js act-query layer) ──
@@ -652,7 +694,14 @@ export function indexActDoc(story, history, being, actDoc) {
 // is present, a fact is past). The former writers (status, innerFace, the thread-cut severedAt) were
 // all retired; the overlay machinery is kept generic for any future closure field that earns one.
 function actPatchPath(story, actId) {
-  return join(ROOT, "acts", pathSafe(story), "_patches", shard(pathSafe(actId)), `${pathSafe(actId)}.json`);
+  return join(
+    ROOT,
+    "acts",
+    pathSafe(story),
+    "_patches",
+    shard(pathSafe(actId)),
+    `${pathSafe(actId)}.json`,
+  );
 }
 function loadActPatch(story, actId) {
   const p = actPatchPath(story, actId);
@@ -769,7 +818,11 @@ export function actCount(story, filter = {}) {
   let n = 0;
   for (const id of ids) {
     const a = readActById(story, id);
-    if (a && keys.every((kk) => kk === k || String(a[kk]) === String(filter[kk]))) n++;
+    if (
+      a &&
+      keys.every((kk) => kk === k || String(a[kk]) === String(filter[kk]))
+    )
+      n++;
   }
   return n;
 }
@@ -802,7 +855,9 @@ export function rebuildActIndex(story) {
       for (const f of files) {
         if (!f.endsWith(".acts")) continue;
         const being = f.slice(0, -".acts".length);
-        for (const line of readFileSync(join(shardDir, f), "utf8").split("\n")) {
+        for (const line of readFileSync(join(shardDir, f), "utf8").split(
+          "\n",
+        )) {
           if (!line) continue;
           let a;
           try {
@@ -860,9 +915,9 @@ function saveIndex(history, kind, facet, map) {
 // global per history; spaces are scoped by their parent space; matter is scoped by (spaceId,
 // parentMatterId) folder. The key folds the scope in so two folders may both hold a "config".
 function nameKey(kind, state) {
-  if (kind === "space") return `${state?.parent ?? ""} ${state?.name}`;
+  if (kind === "space") return `${state?.parent ?? ""}\0${state?.name}`;
   if (kind === "matter")
-    return `${state?.spaceId ?? ""} ${state?.parentMatterId ?? ""} ${state?.name}`;
+    return `${state?.spaceId ?? ""}\0${state?.parentMatterId ?? ""}\0${state?.name}`;
   return String(state?.name);
 }
 // The parent key per kind (being→parentBeingId, space→parent, matter→parentMatterId).
@@ -930,7 +985,11 @@ export function updateIndexFromSlot(history, kind, id, oldSlot, newSlot) {
   // heavenSpace (state.heavenSpace → the one space id; singleton per kind/key)
   {
     const m = loadIndex(history, kind, "heavenSpace");
-    if (!oldDead && oldState.heavenSpace != null && m[oldState.heavenSpace] === id)
+    if (
+      !oldDead &&
+      oldState.heavenSpace != null &&
+      m[oldState.heavenSpace] === id
+    )
       delete m[oldState.heavenSpace];
     if (!newDead && newState.heavenSpace != null) m[newState.heavenSpace] = id;
     saveIndex(history, kind, "heavenSpace", m);
@@ -957,10 +1016,13 @@ export function findByName(history, kind, name, scope = {}) {
   // When the scoped + bare probes both miss, scan for the first key whose trailing name segment is
   // `name` (sibling-unique means at most one per parent; a globally unique name resolves cleanly).
   if (id === undefined && kind !== "being") {
-    // nameKey joins the scope segments with a NUL byte ("<parent> <name>" for a space), so the
+    // nameKey joins the scope segments with a NUL byte ("<parent>\0<name>" for a space), so the
     // bare name is the final NUL-delimited segment. First hit wins (sibling-unique → one per parent).
     for (const k of Object.keys(m)) {
-      if (k.split(" ").pop() === String(name)) { id = m[k]; break; }
+      if (k.split("\0").pop() === String(name)) {
+        id = m[k];
+        break;
+      }
     }
   }
   if (id === undefined) return null;
@@ -1067,7 +1129,11 @@ export function listHistories() {
   if (!existsSync(reelsRoot)) return [];
   try {
     return readdirSync(reelsRoot).filter((h) => {
-      try { return statSync(join(reelsRoot, h)).isDirectory(); } catch { return false; }
+      try {
+        return statSync(join(reelsRoot, h)).isDirectory();
+      } catch {
+        return false;
+      }
     });
   } catch {
     return [];
@@ -1122,7 +1188,14 @@ export function listReelHeads(history = null) {
   const out = [];
   eachReel(history, ".head", (h, kind, id) => {
     const { head, headHash } = readReelHead(h, kind, id);
-    out.push({ _id: reelKeyOf(h, kind, id), history: h, type: kind, id, head, headHash });
+    out.push({
+      _id: reelKeyOf(h, kind, id),
+      history: h,
+      type: kind,
+      id,
+      head,
+      headHash,
+    });
   });
   return out;
 }
@@ -1139,7 +1212,11 @@ export function listAllFacts() {
     const sa = a.seq ?? 0;
     const sb = b.seq ?? 0;
     if (sa !== sb) return sa - sb;
-    return String(a._id) < String(b._id) ? -1 : String(a._id) > String(b._id) ? 1 : 0;
+    return String(a._id) < String(b._id)
+      ? -1
+      : String(a._id) > String(b._id)
+        ? 1
+        : 0;
   });
   return out;
 }
@@ -1244,12 +1321,31 @@ function applyRecord(record) {
   return { factIds, actId: record.act?._id ?? record.actId ?? null };
 }
 
-
 /**
  * Commit one moment atomically: WAL-append (the commit point) → apply to reels → ack.
  * @param {{recId?:string, act?:object, actId?:string, facts: Array<{history:string,kind:string,id:string,spec:object}>}} record
  * @returns {Promise<{factIds:string[], actId:string|null}>}
  */
+// Commit observers — a generic post-commit fan-out. Higher layers ride the LOCAL
+// fact count through this (the CAS retention sweep fires every N facts, never on a
+// wall-clock timer). fileStore stays generic: it emits "N facts committed" and
+// knows nothing about who listens. Side effect only — NOT part of the deterministic
+// fold, so the Rust store need not replicate it (host orchestration, foldAfterCommit's kind).
+const _commitObservers = new Set();
+export function onCommit(cb) {
+  if (typeof cb === "function") _commitObservers.add(cb);
+  return () => _commitObservers.delete(cb);
+}
+function notifyCommitObservers(factCount) {
+  for (const cb of _commitObservers) {
+    try {
+      cb(factCount);
+    } catch {
+      // An observer must never break a commit.
+    }
+  }
+}
+
 export function commitMoment(record) {
   return withCommitLock(() => {
     // The append ordinal (clock-free cross-reel order; see the _ordCounter note above) is assigned
@@ -1264,7 +1360,13 @@ export function commitMoment(record) {
     const facts = (record.facts || []).map((f) => {
       const key = `${f.history}:${f.kind}:${f.id}`;
       const head = heads.get(key) || readReelHead(f.history, f.kind, f.id);
-      const { doc, nextHead } = computeFactDoc(f.history, f.kind, f.id, f.spec, head);
+      const { doc, nextHead } = computeFactDoc(
+        f.history,
+        f.kind,
+        f.id,
+        f.spec,
+        head,
+      );
       // The moment's append ordinal also rides each FACT (= its act's ord): the clock-free GLOBAL order
       // the fact sits at across reels (per-reel `seq` is only local). Non-digest — contentOf excludes
       // it, so it never affects _id or verifyReel, exactly like `date`. Lets the fold read a birth
@@ -1279,22 +1381,33 @@ export function commitMoment(record) {
     // facts must all land on a SINGLE reel (0 facts is fine — a factless act, e.g. a cross-world attempt).
     const reels = new Set(facts.map((f) => `${f.history}:${f.kind}:${f.id}`));
     if (reels.size > 1) {
-      // The act fans across reels — a run-on. Surfaced loudly (and counted) so the remaining run-ons
-      // get decomposed to one-word; once they're gone this becomes a hard throw (the invariant the
-      // no-journal floor rests on). For now we warn-and-proceed so the in-flight conversion still boots.
-      _fanOutRunOns.add(`${record.actId || record.act?._id || "?"}→${[...reels].join("+")}`);
-      // eslint-disable-next-line no-console
-      console.warn(
-        `commitMoment FAN-OUT (run-on): act lays facts on ${reels.size} reels (${[...reels].join(", ")}). ` +
-          `One act = one fact = one reel; decompose into one word per reel.`,
+      // BANNED. A multi-reel act is a RUN-ON — `do do do do` crammed into one act. The no-journal
+      // floor's tail-truncation recovery is only atomic with ONE reel per act, and the doctrine is
+      // one word = one do = one fact = one moment: a word CALLS more words, each its own act. So a
+      // fan-out is REFUSED at the commit boundary, never tolerated. Decompose into one word per reel.
+      throw new Error(
+        `commitMoment: RUN-ON BANNED — act ${record.actId || record.act?._id || "?"} lays facts on ` +
+          `${reels.size} reels (${[...reels].join(", ")}). One act = one do = one fact = one reel; ` +
+          `a word calls more words (each its own act). Decompose into one word per reel.`,
       );
     }
-    const persisted = { recId: record.recId, act: record.act, actId: record.actId, facts };
+    const persisted = {
+      recId: record.recId,
+      act: record.act,
+      actId: record.actId,
+      facts,
+    };
     // WRITE-THROUGH — no journal. The fact-line append IS the stamp: writeFactDoc fsyncs the reel, and
     // the fact's _id IS the finished-and-whole check (a torn append leaves a line the .head never
     // advanced past, which readReel skips). With no fan-out there is no multi-reel "all-or-none" to
     // protect, so there is no WAL, no ack, no replay — the act/fact divide is the stamp itself.
-    return applyRecord(persisted);
+    const result = applyRecord(persisted);
+    // Fact-count triggers (the CAS retention sweep) ride this LOCAL count, never a
+    // wall-clock. facts.length is 0 for a factless act (a SEE / cross-world attempt),
+    // so only real facts advance the cadence — and only LOCAL ones (an outside Name's
+    // act never reaches here), which is why it counts facts, not acts.
+    notifyCommitObservers(facts.length);
+    return result;
   });
 }
 
@@ -1344,16 +1457,4 @@ export function advanceReelHead(history, kind, id, head, headHash) {
     return { head, headHash };
   }
   return cur;
-}
-
-/**
- * Boot recovery. There is NO journal to replay — the WAL was retired. One act lays ONE fact on ONE
- * reel; the reel-line append IS the stamp (fsync'd), and the fact's _id is the finished-and-whole
- * check, so a torn mid-append leaves a line the .head never advanced past and readReel skips. There is
- * no multi-reel "all-or-none" to recover (commitMoment refuses a fan-out). Kept as a no-op so the boot
- * caller (dbConfig) is unchanged; the drop-unfinished-act recovery (act-first/fact-last) is the next layer.
- * @returns {{replayed:number, torn:boolean}}
- */
-export function replayJournal() {
-  return { replayed: 0, torn: false };
 }

@@ -45,22 +45,32 @@ async function handleSummonForThreads(fact /*, type, id*/) {
     participants.add(String(fact.of.id));
   }
 
-  const lastAct = params.sentAt
-    ? new Date(params.sentAt)
-    : (fact.date || new Date());
+  // ORDER KEY (clock-free). The append ordinal of the latest fact that touched
+  // this thread. The thread reader (materials/space/threads.js) sorts threads
+  // most-recently-active-first on this, NOT on a wall-clock. Prefer the fact's
+  // own ord (stamped by commitMoment when the call rides a moment); fall back to
+  // params.ord (the moment-less writers thread it). $set overwrites, so the
+  // newest touching fact's ord wins, which is exactly "most recently active."
+  const ord = fact.ord ?? params.ord ?? null;
+  // INERT display witness only. The fact's seal-time, kept so a UI can show
+  // "last active at"; NEVER sorted/compared/folded (ord above is the order).
+  // null when the fact has no date . no fresh new Date() is ever folded.
+  const lastActWitness = fact.date ?? null;
 
   await ThreadsProjection.updateOne(
     { _id: root },
     {
       $set: {
-        lastAct,
-        updatedAt: fact.date || new Date(),
+        // Order key (the sort field) + its inert display witness.
+        ord,
+        lastAct: lastActWitness,
+        updatedAt: lastActWitness,
         ...(params.parentThread ? { parentThread: String(params.parentThread) } : {}),
       },
       $setOnInsert: {
         _id:       root,
-        startedAt: lastAct,
-        createdAt: fact.date || new Date(),
+        startedAt: lastActWitness,
+        createdAt: lastActWitness,
       },
       $addToSet: {
         participants: { $each: [...participants] },
@@ -81,18 +91,31 @@ registerCrossCuttingHandler(handleSummonForThreads);
  * fold engine's per-fact dispatch. This is the explicit hook the
  * seal path calls, paired with closeInboxOnAnswer.
  *
- * `lastAct` is the ThreadsProjection cache's own bookkeeping field (the
- * call-fact handler writes it from fact.date; this bumps it on seal). It is
- * NOT an act clock and nothing orders truth by it; the seal passes no time, so
- * the bump is stamped here. (Order across threads is the chain, not this field.)
+ * The thread's ORDER key is `ord` (the clock-free append ordinal). The thread
+ * reader sorts most-recently-active-first on it, so a seal must bump it to the
+ * answering act's ord (the act re-activates the thread at its append position).
+ * `lastAct`/`updatedAt` are inert DISPLAY witnesses only (the act's seal-time
+ * `at`); never sorted/compared/folded. The seal passes no wall-clock . a fresh
+ * new Date() here would be folded-then-sorted (the bug the inbox/threads sweep
+ * killed). When the caller has no ord (a legacy seal), the bump is a no-op on
+ * ord, leaving the thread's last fact-derived ord in place.
  *
  * @param {string|null} rootCorrelation
+ * @param {{ord?:number|null, at?:Date|string|null}} [seal]  the answering act's
+ *        append ordinal (the order key) and its inert seal-time witness.
  */
-export async function noteActSealOnThread(rootCorrelation) {
+export async function noteActSealOnThread(rootCorrelation, seal = {}) {
   if (!rootCorrelation) return;
-  const now = new Date();
+  const ord = seal?.ord ?? null;
+  const at = seal?.at ?? null;
+  const set = {};
+  // Only bump the order key when the seal carried one (no synthetic fallback).
+  if (ord != null) set.ord = ord;
+  // Inert display witnesses (the act's own seal-time), never an ordering key.
+  if (at != null) { set.lastAct = at; set.updatedAt = at; }
+  if (Object.keys(set).length === 0) return;
   await ThreadsProjection.updateOne(
     { _id: String(rootCorrelation) },
-    { $set: { lastAct: now, updatedAt: now } },
+    { $set: set },
   );
 }

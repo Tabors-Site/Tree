@@ -52,3 +52,6 @@ cli/
 *.mp3
 *.ogg
 *.wav
+# Rust napi addon build artifact (platform-specific; rebuild via cargo)
+rust/treehash-node/*.node
+rust/treehash-node/target/

@@ -21,7 +21,7 @@ mod hash;
 mod json;
 mod sha256;
 
-pub use canon::{canonicalize, to_canonical};
+pub use canon::{canonicalize, stringify, to_canonical};
 pub use hash::{act_id, compute_hash, content_of, content_of_act, fact_id, GENESIS_PREV};
 pub use json::{parse, Json};
 pub use sha256::sha256_hex;

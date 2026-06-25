@@ -199,7 +199,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
       `sealAct: Act ${String(plannedAct._id).slice(0, 8)} (${plannedAct.to?.slice?.(0, 8) || "?"}) ` +
       `would seal ${opCount} top-level operations (${deltaF.length} facts). ` +
       `Doctrine (philosophy/MOMENT.md): one moment = one DO/BE/SUMMON. ` +
-      `Split into separate moments — open each in its own withIAmAct / withBeingAct.`,
+      `Split into separate moments — open each in its own withIAmAct / withBeingFact.`,
     );
   }
 
@@ -381,7 +381,15 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
     try { await closeInboxOnAnswer(inserted.answers); } catch {}
   }
   if (inserted.rootCorrelation) {
-    try { await noteActSealOnThread(inserted.rootCorrelation); } catch {}
+    // Pass the answering act's clock-free append ordinal as the thread's order
+    // key bump (the act re-activates the thread at its append position), plus
+    // its inert seal-time witness `at` for display. No wall-clock is folded.
+    try {
+      await noteActSealOnThread(inserted.rootCorrelation, {
+        ord: inserted.ord ?? null,
+        at:  inserted.at ?? null,
+      });
+    } catch {}
   }
 
   // Fire afterQualityWrite for every committed qualities set/merge fact.

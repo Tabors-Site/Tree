@@ -57,36 +57,35 @@ export async function resolveModelMatter(modelMatterId, history) {
   return matter;
 }
 
-/** Self / author / owner gate per target kind. */
-export async function assertMaySetModel(kind, targetId, identity, history) {
+/** Per-kind self / author / owner auth READ. Returns true iff the actor may set this target's
+ *  model, false otherwise (a missing target folds to false). NO throw — the decision is the
+ *  .word's gate (mirrors owner's may-set-owner): the word refuses (forbidden) on false. */
+export async function maySetModel(kind, targetId, identity, history) {
   const actor = String(identity.beingId);
   const { loadOrFold } = await import("../../../materials/projections.js");
 
   if (kind === "being") {
-    if (String(targetId) === actor) return; // your body is yours
+    if (String(targetId) === actor) return true; // your body is yours
     const slot = await loadOrFold("being", String(targetId), history);
     const homeSpace = slot?.state?.homeSpace || null;
-    if (homeSpace && await isRootOwner(homeSpace, actor)) return;
-    throw new IbpError(IBP_ERR.FORBIDDEN, "set-model: only the being itself (or the tree owner) sets a being's model");
+    return Boolean(homeSpace && (await isRootOwner(homeSpace, actor)));
   }
 
   if (kind === "matter") {
     const slot = await loadOrFold("matter", String(targetId), history);
-    if (!slot) throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: target matter not found");
-    if (String(slot.state?.beingId) === actor) return; // author
-    if (slot.state?.spaceId && await isRootOwner(slot.state.spaceId, actor)) return;
-    throw new IbpError(IBP_ERR.FORBIDDEN, "set-model: only the matter's author (or the tree owner) sets its model");
+    if (!slot) return false;
+    if (String(slot.state?.beingId) === actor) return true; // author
+    return Boolean(slot.state?.spaceId && (await isRootOwner(slot.state.spaceId, actor)));
   }
 
   if (kind === "space") {
     const slot = await loadOrFold("space", String(targetId), history);
-    if (!slot) throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: target space not found");
-    if (String(slot.state?.owner || "") === actor) return; // space owner
-    if (await isRootOwner(String(targetId), actor)) return;
-    throw new IbpError(IBP_ERR.FORBIDDEN, "set-model: only the space's owner (or the tree owner) sets its model");
+    if (!slot) return false;
+    if (String(slot.state?.owner || "") === actor) return true; // space owner
+    return await isRootOwner(String(targetId), actor);
   }
 
-  throw new IbpError(IBP_ERR.INVALID_INPUT, `set-model: target must be being, space, or matter (got "${kind || "untyped"}")`);
+  return false; // untyped target
 }
 
 async function isRootOwner(spaceId, actorId) {
@@ -114,13 +113,12 @@ function normalizeForMatterType(forMatterType) {
 // runOpWord calls hostEnv() with none).
 export function modelHostEnv() {
   return {
-    // The per-kind self/author/owner gate. Reads the moment's history, calls the SAME
-    // assertMaySetModel the old handler called (throws IbpError on deny). Returns true on pass.
-    "assert-may-set-model": async ({ args: [kind, target, caller] }, ctx) => {
+    // The per-kind self/author/owner auth READ. Returns true iff the actor may set this target's
+    // model; the .word refuses (forbidden) on false. No throw — the decision is the word's gate.
+    "may-set-model": async ({ args: [kind, target, caller] }, ctx) => {
       const targetId = targetIdOf(target);
       const history = historyOf(ctx);
-      await assertMaySetModel(kind, targetId, { beingId: caller }, history);
-      return true;
+      return await maySetModel(kind, targetId, { beingId: caller }, history);
     },
 
     // resolve-model-block — the ONE see (reusing the SEE_FLOOR name; the door is a closed set)

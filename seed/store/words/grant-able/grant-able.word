@@ -1,7 +1,3 @@
-# grant-able.word — grant a able to a being. The grantor's capability is gated at the verb;
-# this validates the request. The grant is the fact's own params (able + anchor); its signer
-# is the grantor; its place in the chain is when (no clock).
-
 When a being grants a able to a being:
   If no caller, refuse with "grant-able: identity required (the grantor's beingId)" as unauthorized.
   If no able, refuse with "grant-able: able is required" as invalid-input.

@@ -310,14 +310,14 @@ export async function reviveTree(treeId, beingId, history) {
   if (!circuit?.tripped) return; // already alive, no-op
 
   // Wrap the revive Fact in the operator's own moment via
-  // withBeingAct so it rides their Act-chain. "Every fact comes from
+  // withBeingFact so it rides their Act-chain. "Every fact comes from
   // an act" (MOMENT.md) — the operator's intentional revive is a
   // moment in their biography. The revive lands on the SAME history
   // the trip was on (the operator only sees the tripped state for
   // the history they're inhabiting); cross-history revives would
   // accidentally clear other histories' circuits.
-  const { withBeingAct } = await import("../../sprout.js");
-  await withBeingAct(
+  const { withBeingFact } = await import("../../sprout.js");
+  await withBeingFact(
     String(beingId),
     `Circuit: revive tree ${String(treeId).slice(0, 8)} on #${history}`,
     history,

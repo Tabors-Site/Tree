@@ -15,13 +15,13 @@
 //
 //   1. The scheduler's moments — already serial per being (one
 //      moment at a time), and NOT wrapped here: a moment's handler
-//      may legitimately call withBeingAct for the SAME being (graft
+//      may legitimately call withBeingFact for the SAME being (graft
 //      steps inside an operator's moment), which would self-deadlock
 //      on a held lock. Their guard is the seal-time CAS in
 //      advanceActHead — a stale seal aborts loudly and the moment
 //      retries from the new head.
 //
-//   2. The direct helpers (withIAmAct / withBeingAct) — genesis
+//   2. The direct helpers (withIAmAct / withBeingFact) — genesis
 //      steps, position persists, manifest writes, circuit trips,
 //      graft steps, host lanes. These are short (code cognition, no
 //      LLM wait) and DO race each other on the I-Am's chain today.

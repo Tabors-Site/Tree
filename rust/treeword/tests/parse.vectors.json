@@ -1,0 +1,250 @@
+{
+  "format": "treeos-parse-vectors",
+  "version": 1,
+  "vectors": [
+    {
+      "name": "case-0",
+      "src": "A garden is a space.",
+      "ir": [
+        {
+          "kind": "is",
+          "subject": "garden",
+          "isA": "space"
+        }
+      ]
+    },
+    {
+      "name": "case-1",
+      "src": "A gardener is a able for a space.",
+      "ir": [
+        {
+          "kind": "is",
+          "subject": "gardener",
+          "isA": "able",
+          "scope": "space"
+        }
+      ]
+    },
+    {
+      "name": "case-2",
+      "src": "A member can back a proposal.",
+      "ir": [
+        {
+          "kind": "can",
+          "able": "member",
+          "verb": "back",
+          "of": "proposal"
+        }
+      ]
+    },
+    {
+      "name": "case-3",
+      "src": "A member cannot back a proposal.",
+      "ir": [
+        {
+          "kind": "cannot",
+          "subject": "member",
+          "verb": "back",
+          "of": "proposal"
+        }
+      ]
+    },
+    {
+      "name": "case-4",
+      "src": "No member can back it.",
+      "ir": [
+        {
+          "kind": "cannot",
+          "subject": "member",
+          "verb": "back",
+          "of": "it"
+        }
+      ]
+    },
+    {
+      "name": "case-5",
+      "src": "Alice owns garden.",
+      "ir": [
+        {
+          "kind": "owns",
+          "subject": "Alice",
+          "of": "garden"
+        }
+      ]
+    },
+    {
+      "name": "case-6",
+      "src": "I own root.",
+      "ir": [
+        {
+          "kind": "owns",
+          "subject": "I",
+          "of": "root"
+        }
+      ]
+    },
+    {
+      "name": "case-7",
+      "src": "A editor extends viewer.",
+      "ir": [
+        {
+          "kind": "extends",
+          "able": "editor",
+          "parent": "viewer"
+        }
+      ]
+    },
+    {
+      "name": "case-8",
+      "src": "A space has an owner, a being.",
+      "ir": [
+        {
+          "kind": "has",
+          "subject": "space",
+          "optional": false,
+          "property": "owner",
+          "gloss": "a being"
+        }
+      ]
+    },
+    {
+      "name": "case-9",
+      "src": "A model may have a parent.",
+      "ir": [
+        {
+          "kind": "has",
+          "subject": "model",
+          "optional": true,
+          "property": "parent",
+          "gloss": null
+        }
+      ]
+    },
+    {
+      "name": "case-10",
+      "src": "I am \"what?\" I am.",
+      "ir": [
+        {
+          "kind": "act",
+          "verb": "name",
+          "act": "i-am",
+          "by": "I"
+        }
+      ]
+    },
+    {
+      "name": "case-11",
+      "src": "I make Gardener.",
+      "ir": [
+        {
+          "kind": "act",
+          "verb": "be",
+          "act": "birth",
+          "by": "I",
+          "of": {
+            "kind": "being",
+            "id": "Gardener"
+          },
+          "params": {
+            "able": "gardener"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case-12",
+      "src": "I make Keeper, the watcher.",
+      "ir": [
+        {
+          "kind": "act",
+          "verb": "be",
+          "act": "birth",
+          "by": "I",
+          "of": {
+            "kind": "being",
+            "id": "Keeper"
+          },
+          "params": {
+            "able": "keeper",
+            "description": "the watcher"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case-13",
+      "src": "I make garden.",
+      "ir": [
+        {
+          "kind": "act",
+          "verb": "do",
+          "act": "create-space",
+          "by": "I",
+          "of": {
+            "kind": "space",
+            "id": "garden"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case-14",
+      "src": "I make the meadow, a green place.",
+      "ir": [
+        {
+          "kind": "act",
+          "verb": "do",
+          "act": "create-space",
+          "by": "I",
+          "of": {
+            "kind": "space",
+            "id": "meadow"
+          },
+          "params": {
+            "gloss": "a green place"
+          }
+        }
+      ]
+    },
+    {
+      "name": "case-15",
+      "src": "A widget is a matter type.",
+      "ir": [
+        {
+          "kind": "is",
+          "subject": "widget",
+          "isA": "matter type"
+        }
+      ]
+    },
+    {
+      "name": "case-16",
+      "src": "A garden is a space.\nAlice owns garden.\nI make Gardener.",
+      "ir": [
+        {
+          "kind": "is",
+          "subject": "garden",
+          "isA": "space"
+        },
+        {
+          "kind": "owns",
+          "subject": "Alice",
+          "of": "garden"
+        },
+        {
+          "kind": "act",
+          "verb": "be",
+          "act": "birth",
+          "by": "I",
+          "of": {
+            "kind": "being",
+            "id": "Gardener"
+          },
+          "params": {
+            "able": "gardener"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -43,11 +43,19 @@ import { getInternalConfigValue } from "../../internalConfig.js";
 import { getStoryConfigValue } from "../../storyConfig.js";
 import log from "../../seedStory/log.js";
 import { listHashes, deleteContent, statContent } from "./contentStore.js";
+import { onCommit } from "../../past/fileStore.js";
 
-let sweepTimer = null;
+// Fact-count trigger (NOT a wall-clock timer): the sweep fires once every
+// _factsPerSweep LOCAL facts. Counting FACTS, not acts, keeps the cadence purely
+// local — an outside Name's act would never reach commitMoment, so it never
+// advances the count. A quiet story never sweeps; a busy one sweeps on its own
+// activity. _sweeping guards re-entrancy if a sweep outlasts the next threshold.
+let _factsSinceSweep = 0;
+let _sweeping = false;
+let _unsubscribe = null;
 
-const DEFAULT_GRACE_MS = 60 * 60 * 1000;        // 1 hour
-const DEFAULT_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const DEFAULT_GRACE_MS = 60 * 60 * 1000; // 1 hour
+const DEFAULT_FACTS_PER_SWEEP = 1000;    // every ~1000 facts (was a 6h timer)
 function maxDeletionsPerCycle() {
   return Math.max(10, Math.min(Number(getInternalConfigValue("uploadCleanupBatchSize")) || 1000, 50000));
 }
@@ -213,25 +221,43 @@ export async function sweepCas({ graceMs = DEFAULT_GRACE_MS } = {}) {
   return { scanned, deleted, freedKB, capped, policy };
 }
 
-/** Start the periodic sweep. */
-export function startCasSweep({
-  intervalMs = Number(getInternalConfigValue("uploadCleanupInterval")) || DEFAULT_INTERVAL_MS,
-  graceMs    = Number(getInternalConfigValue("uploadGracePeriodMs"))   || DEFAULT_GRACE_MS,
+/**
+ * Arm the retention sweep on a FACT-COUNT trigger (no wall-clock timer). The sweep
+ * runs once every `factsPerSweep` local facts, driven by fileStore's commit
+ * observer. Idempotent — re-arming re-subscribes with fresh settings.
+ */
+export function armCasSweep({
+  factsPerSweep = Number(getInternalConfigValue("contentSweepEveryFacts")) || DEFAULT_FACTS_PER_SWEEP,
+  graceMs       = Number(getInternalConfigValue("uploadGracePeriodMs"))    || DEFAULT_GRACE_MS,
 } = {}) {
-  if (sweepTimer) clearInterval(sweepTimer);
-  sweepTimer = setInterval(() => {
-    sweepCas({ graceMs }).catch((err) =>
-      log.error("CAS", `Sweep error: ${err.message}`),
-    );
-  }, intervalMs);
-  if (sweepTimer.unref) sweepTimer.unref();
-  log.verbose("CAS", `Retention sweep started (every ${Math.round(intervalMs / 60000)}m, grace ${Math.round(graceMs / 60000)}m)`);
+  if (_unsubscribe) _unsubscribe();
+  _factsSinceSweep = 0;
+  _unsubscribe = onCommit((factCount) => {
+    _factsSinceSweep += factCount;
+    if (_factsSinceSweep < factsPerSweep || _sweeping) return;
+    _factsSinceSweep = 0;
+    _sweeping = true;
+    // Fire-and-forget — the sweep must never block a commit. The grace period
+    // (an OS file mtime check, not a world clock) still spares a blob whose fact
+    // has not sealed yet (the write path puts the blob BEFORE the fact).
+    Promise.resolve()
+      .then(() => sweepCas({ graceMs }))
+      .catch((err) => log.error("CAS", `Sweep error: ${err.message}`))
+      .finally(() => {
+        _sweeping = false;
+      });
+  });
+  log.verbose(
+    "CAS",
+    `Retention sweep armed (every ${factsPerSweep} facts, grace ${Math.round(graceMs / 60000)}m)`,
+  );
 }
 
-/** Stop the periodic sweep. */
+/** Disarm the retention sweep (unsubscribe from commits). */
 export function stopCasSweep() {
-  if (sweepTimer) {
-    clearInterval(sweepTimer);
-    sweepTimer = null;
+  if (_unsubscribe) {
+    _unsubscribe();
+    _unsubscribe = null;
   }
+  _factsSinceSweep = 0;
 }

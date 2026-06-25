@@ -1,24 +1,3 @@
-# able-manager.word — set-world-signal: publish a world signal to the story root
-# (able-manager/ops.js, the set-world-signal op).
-#
-# The WORLD effect is a do:set-space on the story root at the field path
-# `qualities.world.<namespace>.<key>` = value. The CONTROL strand (the two
-# kebab-case gates + the not-initialized guard) is `.word`. The genuine computes
-# read as `see`-ops (bottoming out in host fns, but spoken as see-ops, never
-# `host:` escapes):
-#   - valid-namespace / valid-key: regex validation (pure computation, not a read).
-#   - parse-signal-value: the JSON / type coercion of the raw value (computation).
-#   - signal-fact: the dynamic dotted field-path qualities.world.<ns>.<key>.
-#   - story-root: the story-root space id (a read, refuses INTERNAL on absence).
-# There is NO host: emit and NO `set the space root's ...` write sentence — the
-# word lays no fact of its own. It returns the set-space params (field, value) as
-# `factParams` (the cut promotes them to the dispatcher's _factParams) plus the
-# story-root id; the ONE auto-Fact path in do.js then lays the caller-attributed
-# do:set-space fact (factAction = "set-space", target forced to the story root).
-# Every gate stays a `see` (a read, not an escape).
-#
-# The bridge binds `namespace`, `key`, `value`, and the actor identity.
-
 When a being publishes a world signal:
   If not valid-namespace(namespace), refuse with "set-world-signal: namespace must be kebab-case" as invalid-input.
   If not valid-key(key), refuse with "set-world-signal: key segments must be kebab-case" as invalid-input.

@@ -389,7 +389,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   if (!opts.moment?.actId) {
     throw new IbpError(
       IBP_ERR.INTERNAL,
-      `DO ${operation}: missing ambient actId. Every act rides an open Act. Thread opts.moment from the caller's moment, or open one via withIAmAct(...) / withBeingAct(...).`,
+      `DO ${operation}: missing ambient actId. Every act rides an open Act. Thread opts.moment from the caller's moment, or open one via withIAmAct(...) / withBeingFact(...).`,
       { operation },
     );
   }

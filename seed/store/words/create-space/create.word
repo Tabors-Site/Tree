@@ -1,28 +1,3 @@
-# space.word — create-space: bring a new space into a place (space/ops.js, the
-# create-space DO op). Mirrors create-matter.word.
-#
-# A being brings new space into a place — under a parent space, or as a tree root when
-# the parent is the space root (resolveBirthSpace promotes it). The genuine COMPUTE stays
-# host in ONE see, resolve-birth-space: name/type/size validation, coord auto-assign
-# inside the parent, the beforeSpaceCreate hook, sibling-name uniqueness, the heaven-
-# parent gate, the max-children check UNDER the parent-lock, and the uuid mint. It reuses
-# the SAME primitives the JS createSpace kernel calls (materials/space/spaces.js
-# resolveBirthSpace) — NO reimplementation — and lays NO fact (a read of the floor).
-#
-# THE CONTROL strand is .word: the actor gate (refuse when no identified actor) and the
-# return. There is NO host: emit — the word lays no fact of its own. It returns the
-# enriched birth spec as `factParams` (the cut promotes it to the dispatcher's
-# _factParams) plus the spaceId; the ONE auto-Fact path in do.js then lays the caller-
-# attributed do:create-space fact, target forced to the new space. The parent-lock that
-# resolve-birth-space holds is released on the moment's afterSeal so it brackets the stamp.
-#
-# OWNER and heaven are NOT here — they are the NEXT word, the NEXT moment (the spacebar:
-# one word, one fact). A tree root carries its owner inside this one birth spec
-# (resolveBirthSpace sets owner when the create is a root); make-heaven is a separate do.
-#
-# The bridge binds `target`, `targetKind`, the create `params` (name, type, size),
-# `caller` (the acting being), and `branch`.
-
 When a being brings a space into a place:
   If no caller, refuse with "create-space requires an identified actor".
   see resolve-birth-space(target, targetKind, params, caller, branch) as birth.

@@ -1,35 +1,3 @@
-# move.word — do:move: pick up a space or matter and put it somewhere else
-# (move/index.js, the move op; per doctrine do:move is the position change, not be).
-#
-# Two modes discriminated by which param the caller passes: coord-mode (move the
-# target to a new cell inside its current container) and container-mode (carry the
-# target across a doorway into a different space). The word is a GATE + READ + RETURN
-# strand: it validates the request, reads the source space (so the live-SEE layer can
-# invalidate both ends), and RETURNS the move fact — its params (moved/mode/fromSpaceId)
-# and its factTarget (the moved subject {kind,id}). The ONE world fact (do:move) is the
-# op's OWN audit fact, stamped by the dispatcher (do.js runOpWord → stampsWordFact) from
-# the returned factParams/factTarget and attributed to the CALLER. The word does NOT
-# emit it (that would double-lay); it AUTHORS the fact and returns it.
-#
-# WORD-SOLE: every VALIDATION gate is NATIVE Word — presence (`no coord`), kind
-# (`is a space`), and the type primitives (`is a finite number`, `is a string`) the
-# grammar speaks (parser §1 + cond.js isFinite/isString). The ONLY host escape left is
-# `resolve-source`, the genuine multi-step projection READ: loadOrFold over space/matter
-# for the target's parent / containing space, the destination-exists check, and the coord
-# bounds check against the container's size — multi-step projection lookups (slot.state
-# .parent / .spaceId / .size) the see forms cannot shape, reached as ONE see-op calling
-# the SAME Space.exists / loadOrFold (no reimplementation). It returns the fromSpaceId the
-# move fact records, or refuses on a missing dest / missing subject / out-of-bounds.
-#
-# DYNAMIC fact kind: the moved subject is a space OR a matter, so the fact reel varies.
-# The word names BOTH via factTarget: { kind: $target.kind, id: $targetId } — stampsWordFact
-# honors the {kind,id} object directly (not forced to the op's noun), so one word, one
-# moment, covers both reels. fromSpaceId rides factParams (it was the adapter's params
-# mutation); the moved subject is the factTarget (it was the adapter's targetsFact).
-#
-# The STANDARD trigger binds `target` ({kind,id} of the moved thing — the dispatch
-# target), `targetId` (its extracted id), `coord`, `to`, and `branch`.
-
 When a being brings matter into a space:
   # exactly one mode — coord (in-space) xor to (cross-space). Two native presence gates,
   # the same split and the same two messages. The trigger binds an absent param to null,

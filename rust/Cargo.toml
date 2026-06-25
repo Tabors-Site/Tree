@@ -1,6 +1,14 @@
 # TreeOS Rust port workspace. Bottom-up along the determinism spine:
-#   treehash  — Tier 1: content-addressed identity (canonical JSON + SHA-256)
-#   treefold  — Tier 2: the fold engine (per-kind reducers + the pure fold loop)
+#   treehash   — Tier 1: content-addressed identity (canonical JSON + SHA-256)
+#   treefold   — Tier 2: the fold engine (per-kind reducers + the pure fold loop)
+#   treeverify — Tier 3: chain verification (re-hash each fact/act, walk the p-links)
+#   treestore  — Tier 4: the append-only store + the stamp (act -> fact), real std::fs reels
+#   treeproj   — Tier 5: the projection cache (.proj snapshots — fold a reel, cache the folded state)
+#   treeos     — the standalone boot: read+fold+verify the on-disk chain, no Node (the OS entry seed)
+#   treeword   — the Word engine port (the parser first): Word text -> IR, vector-proven vs parser.js
 [workspace]
 resolver = "2"
-members = ["treehash", "treefold"]
+members = ["treehash", "treefold", "treeverify", "treestore", "treeproj", "treeos", "treeword"]
+# treehash-node (the napi FFI wrapper) is EXCLUDED: it pulls napi from crates.io and builds a cdylib,
+# so it stays out of the zero-dependency determinism-spine workspace. Build it on its own.
+exclude = ["treehash-node"]

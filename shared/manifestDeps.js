@@ -191,7 +191,7 @@ export async function runNpmInstall(extDir, npmDeps, extName, opts = {}) {
       shell: true,
     });
     log.verbose(
-      "Extensions",
+      "Books",
       `${extName}: npm install complete (${npmDeps.length} packages)`,
     );
   } catch (err) {

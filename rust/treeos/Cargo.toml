@@ -1,0 +1,16 @@
+[package]
+name = "treeos"
+version = "0.1.0"
+edition = "2021"
+description = "Standalone Rust boot of the TreeOS chain: read (treestore) + fold (treefold) + verify (treeverify) the on-disk reels, with NO Node, NO napi, NO FFI. The determinism spine as one bootable program — the 'anyone can boot' entry point seed. http/ws + the Word runtime are the remaining layers."
+license = "AGPL-3.0"
+
+[[bin]]
+name = "treeos"
+path = "src/main.rs"
+
+[dependencies]
+treehash = { path = "../treehash" }
+treefold = { path = "../treefold" }
+treeverify = { path = "../treeverify" }
+treestore = { path = "../treestore" }

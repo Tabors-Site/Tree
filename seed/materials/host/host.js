@@ -28,7 +28,7 @@
 // attributed to a host being rides that being's single lane.
 
 import log from "../../seedStory/log.js";
-import { withBeingAct } from "../../sprout.js";
+import { withBeingFact } from "../../sprout.js";
 import { HEAVEN_SPACE } from "../space/heavenSpaces.js";
 import { isDbHealthy } from "../../seedStory/dbConfig.js";
 import { getStoryConfigValue } from "../../storyConfig.js";
@@ -58,7 +58,7 @@ export function enqueueBeingAct(beingId, label, fn) {
   const prev = lanes.get(beingId) || Promise.resolve();
   const next = prev
     .catch(() => {})
-    .then(() => withBeingAct(beingId, label, "0", fn))
+    .then(() => withBeingFact(beingId, label, "0", fn))
     .catch((err) => log.warn("Host", `${label}: ${err.message}`));
   lanes.set(beingId, next);
   return next;

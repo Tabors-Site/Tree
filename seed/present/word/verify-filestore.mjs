@@ -22,7 +22,6 @@ import {
   forkReel,
   loadSnapshot,
   saveSnapshot,
-  replayJournal,
   appendActLine,
   readActHeadFile,
   advanceActHeadFile,
@@ -108,27 +107,15 @@ try {
     ? ok(".head = {head:3, headHash: last fact's _id}")
     : bad("head", head);
 
-  // 5. REBOOT-SURVIVAL: a fresh process (new store instance over the SAME dir) replays the journal.
-  //    Re-applying the 3 committed records is a pure no-op (idempotent by _id) — the reel stays 3.
+  // 5. REBOOT-SURVIVAL: a fresh store instance over the SAME dir reads the reel back. Write-through
+  //    means the on-disk reel IS the truth (no journal to replay) — reopening sees all 3 committed
+  //    facts, chain intact. A torn mid-append leaves an unparseable trailing line that readReel skips
+  //    and the .head never advanced past, so a crashed moment leaves zero trace without any WAL.
   configureStore({ root });
-  const rep = replayJournal();
   const reel2 = readReel(H, "being", B);
   reel2.length === 3 && verifyReelFile(H, "being", B).ok
-    ? ok(`reboot replay is idempotent — reel still 3, chain intact (replayed ${rep.replayed} records)`)
-    : bad("idempotent replay", { len: reel2.length });
-
-  // 6. TORN TRAILING WRITE: append a half-written (no newline, bad crc) record to the WAL, replay,
-  //    and assert it's discarded — the never-committed moment leaves ZERO trace on the reel.
-  const wal = join(storeRoot(), "journal", "moment.wal");
-  const before = readReel(H, "being", B).length;
-  // A half-written record: bad crc + no terminating newline = the shape a crash mid-append leaves.
-  // Replay resumes from the natural ack (end of the 3 committed records) and meets only this.
-  writeFileSync(wal, readFileSync(wal, "utf8") + 'deadbeef\t{"recId":"torn","facts":[{');
-  const rep2 = replayJournal();
-  const after = readReel(H, "being", B).length;
-  rep2.torn && after === before
-    ? ok("torn trailing WAL record detected + discarded — zero trace on the reel")
-    : bad("torn-write", { torn: rep2.torn, before, after });
+    ? ok(`reboot-survival — reel still 3 after reopen, chain intact`)
+    : bad("reboot survival", { len: reel2.length });
 
   // 8. BRANCHING (Tabor: "past splits by branches, they branch from each other at points"): a branch
   //    stores only its divergent tail; a read UNIONS parent-prefix + branch-tail, and the branch's

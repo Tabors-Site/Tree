@@ -162,12 +162,8 @@ pub fn apply_connection_state(state: &Json, fact: &Json) -> Json {
     let connection = if a == "connect" {
         let p = params(fact);
         let inhabited_by = v::or_truthy(v::get(&p, "inhabitedBy"), Json::Null);
-        // since = fact.date || params.since || null
-        let since = if v::truthy(&date(fact)) {
-            date(fact)
-        } else {
-            v::or_truthy(v::get(&p, "since"), Json::Null)
-        };
+        // no clock: since = params.since ?? null (no fact.date — WHEN is the fact's chain position).
+        let since = v::nullish(v::get(&p, "since"), Json::Null);
         let c = v::set(&prev, "inhabitedBy", inhabited_by);
         v::set(&c, "since", since)
     } else {
@@ -218,13 +214,8 @@ pub fn apply_true_name(state: &Json, fact: &Json) -> Json {
     if matches!(v::get(state, "trueName"), Some(Json::Str(s)) if *s == true_name) {
         return state.clone();
     }
-    let upd = if v::truthy(&date(fact)) {
-        date(fact)
-    } else {
-        v::get(state, "updatedAt").cloned().unwrap_or(Json::Null)
-    };
-    let s = v::set(state, "trueName", v::jstr(&true_name));
-    v::set(&s, "updatedAt", upd)
+    // no clock: no updatedAt — just the trueName.
+    v::set(state, "trueName", v::jstr(&true_name))
 }
 
 pub fn apply_able_grants(state: &Json, fact: &Json) -> Json {
@@ -346,10 +337,13 @@ pub fn apply_create_being(state: &Json, fact: &Json) -> Json {
     s = v::set(&s, "homeStory", v::nullish(v::get(&spec, "homeStory"), Json::Null));
     s = v::set(&s, "qualities", v::nullish(v::get(&spec, "qualities"), v::empty_obj()));
     s = v::set(&s, "position", position);
-    s = v::set(&s, "coord", v::nullish(v::get(&spec, "coord"), Json::Null));
-    // No clock: createdAt was dropped in the "WHEN is chain position" cleanup. updatedAt is
-    // re-added by the reducer-level bump (bump_updated) on any state change.
-    v::set(&s, "updatedAt", date(fact))
+    // No clock: createdAt + updatedAt both dropped. bornOrd (the birth fact's
+    // append ordinal) IS the clock-free creation order the catalog sorts by.
+    // Present-or-omit, matching JS `bornOrd: fact.ord` (undefined -> dropped).
+    if let Some(ord) = v::get(fact, "ord") {
+        s = v::set(&s, "bornOrd", ord.clone());
+    }
+    v::set(&s, "coord", v::nullish(v::get(&spec, "coord"), Json::Null))
 }
 
 // ── space / matter lifecycle ────────────────────────────────────────────────
@@ -388,8 +382,12 @@ pub fn apply_create_space(state: &Json, fact: &Json) -> Json {
     s = v::set(&s, "size", v::nullish(v::get(&spec, "size"), Json::Null));
     s = v::set(&s, "coord", v::nullish(v::get(&spec, "coord"), Json::Null));
     s = v::set(&s, "qualities", v::nullish(v::get(&spec, "qualities"), v::empty_obj()));
-    // No clock: createdAt dropped ("WHEN is chain position"); updatedAt via the reducer bump.
-    s = v::set(&s, "updatedAt", date(fact));
+    // No clock: createdAt + updatedAt dropped. bornOrd (the birth fact's append
+    // ordinal) is the clock-free creation order. Present-or-omit, matching JS
+    // `bornOrd: fact.ord`.
+    if let Some(ord) = v::get(fact, "ord") {
+        s = v::set(&s, "bornOrd", ord.clone());
+    }
     // position: spec.parent ?? spec.parentId ?? null
     v::set(&s, "position", parent)
 }
@@ -423,20 +421,18 @@ pub fn apply_move(state: &Json, fact: &Json) -> Json {
             if let Some(z) = finite(v::get(c, "z")) {
                 nc = v::set(&nc, "z", Json::Num(z));
             }
-            let s = v::set(state, "coord", nc);
-            return v::set(&s, "updatedAt", date(fact));
+            // no clock: no updatedAt on a move.
+            return v::set(state, "coord", nc);
         }
     }
     match v::get(&p, "to") {
         Some(Json::Str(to)) if !to.is_empty() => {
             if kind == "space" {
                 let s = v::set(state, "parent", v::jstr(to));
-                let s = v::set(&s, "position", v::jstr(to));
-                v::set(&s, "updatedAt", date(fact))
+                v::set(&s, "position", v::jstr(to))
             } else {
                 let s = v::set(state, "spaceId", v::jstr(to));
-                let s = v::set(&s, "position", v::jstr(to));
-                v::set(&s, "updatedAt", date(fact))
+                v::set(&s, "position", v::jstr(to))
             }
         }
         _ => state.clone(),
@@ -459,9 +455,13 @@ pub fn apply_create_matter(state: &Json, fact: &Json) -> Json {
     s = v::set(&s, "parentMatterId", v::nullish(v::get(&spec, "parentMatterId"), Json::Null));
     s = v::set(&s, "qualities", v::nullish(v::get(&spec, "qualities"), v::empty_obj()));
     s = v::set(&s, "children", Json::Arr(Vec::new()));
-    s = v::set(&s, "position", v::nullish(v::get(&spec, "spaceId"), Json::Null));
-    // No clock: createdAt dropped ("WHEN is chain position"); updatedAt via the reducer bump.
-    v::set(&s, "updatedAt", date(fact))
+    // No clock: createdAt + updatedAt dropped. bornOrd (the birth fact's append
+    // ordinal) is the clock-free creation order. Present-or-omit, matching JS
+    // `bornOrd: fact.ord`.
+    if let Some(ord) = v::get(fact, "ord") {
+        s = v::set(&s, "bornOrd", ord.clone());
+    }
+    v::set(&s, "position", v::nullish(v::get(&spec, "spaceId"), Json::Null))
 }
 
 pub fn apply_purge_content(state: &Json, fact: &Json) -> Json {
@@ -604,27 +604,30 @@ fn fold_name(s: &Json, fact: &Json) -> Json {
             o = v::set(&o, "identity", v::nullish(v::get(spec, "identity"), Json::Null));
             o = v::set(&o, "soulType", v::nullish(v::get(spec, "soulType"), Json::Null));
             o = v::set(&o, "name", v::nullish(v::get(spec, "name"), Json::Null));
-            o = v::set(&o, "createdAt", created);
-            v::set(&o, "updatedAt", date(fact))
+            // createdAt: keep an existing one else the fact's date, but OMIT it when neither exists (a
+            // clock-free genesis declare has no `date`; JS `s.createdAt ?? fact.date` yields undefined →
+            // the key is dropped, NOT null). One inert display witness; no updatedAt either.
+            if v::is_null(&created) {
+                o
+            } else {
+                v::set(&o, "createdAt", created)
+            }
         }
         "banish" | "close" => {
             if v::truthy(&v::get(s, "closed").cloned().unwrap_or(Json::Null)) {
                 return s.clone();
             }
-            let o = v::set(s, "closed", Json::Bool(true));
-            v::set(&o, "updatedAt", date(fact))
+            v::set(s, "closed", Json::Bool(true))
         }
-        "connect" => v::set(&v::set(s, "connected", Json::Bool(true)), "updatedAt", date(fact)),
-        "release" => v::set(&v::set(s, "connected", Json::Bool(false)), "updatedAt", date(fact)),
+        "connect" => v::set(s, "connected", Json::Bool(true)),
+        "release" => v::set(s, "connected", Json::Bool(false)),
         "set-password" => {
             let spec = match spec {
                 Some(x) => x,
                 None => return s.clone(),
             };
             match v::get(spec, "privateKeyEnc") {
-                Some(pk) if !v::is_null(pk) => {
-                    v::set(&v::set(s, "privateKeyEnc", pk.clone()), "updatedAt", date(fact))
-                }
+                Some(pk) if !v::is_null(pk) => v::set(s, "privateKeyEnc", pk.clone()),
                 _ => s.clone(),
             }
         }
@@ -634,14 +637,13 @@ fn fold_name(s: &Json, fact: &Json) -> Json {
 
 // ── composed reducers (one per kind) ────────────────────────────────────────
 
-fn bump_updated(prev: &Json, next: Json, fact: &Json) -> Json {
-    // `if (next !== state) next = {...next, updatedAt: fact.date}`, then
-    // `return next === state ? {...state} : next`. Value-wise: if changed, set
-    // updatedAt; else return unchanged. (Identity-only clones are invisible to canonicalize.)
+fn bump_updated(prev: &Json, next: Json, _fact: &Json) -> Json {
+    // The reducer's final step: `return next === state ? {...state} : next`. No clock — updatedAt was
+    // dropped (a folded updatedAt is a clock read for truth; WHEN is the fact's chain position).
     if v::json_eq(prev, &next) {
         prev.clone()
     } else {
-        v::set(&next, "updatedAt", date(fact))
+        next
     }
 }
 

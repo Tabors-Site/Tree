@@ -1,16 +1,3 @@
-# history-manager.word — set a named history pointer (ops.js, the set-pointer op).
-#
-# A named pointer (#main, #prod, #release-v2) maps a label to a canonical history path.
-# The CONTROL strand (the gate chain: a caller, a valid pointer name, a structural
-# canonical path, a resolved .histories space) is .word; the genuine computation (the two
-# validation regexes, the map merge) and the HEAVEN reads (read-pointers /
-# find-pointers-space-id — MAIN-pinned heaven projections) read as `see`-ops, and the lone
-# WORLD fact (the do:set-space onto the .histories space's qualities.pointers) is a native
-# write sentence. The see-ops bottom out in host fns wired by historyManagerHost.js (the
-# SAME isPointerName / readPointers / findPointersSpaceId the JS handler calls — no
-# reimplementation), but the body speaks them as see-ops, not `host:` escapes. The bridge
-# binds `caller` (the acting being id), `name` (the pointer label), `canonical` (the path).
-
 When a being sets a history pointer:
   If no caller, refuse with "set-pointer requires an authenticated being" as unauthorized.
   see valid-pointer-name(name) as validName.

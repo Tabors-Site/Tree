@@ -1,0 +1,14 @@
+[package]
+name = "treeword"
+version = "0.1.0"
+edition = "2021"
+description = "TreeOS Word engine port (Rust). FIRST SLICE: the parser front — Word text -> IR node array. Ports seed/present/word/parser.js's line-based, regex-driven recursive descent, rule by rule, vector-proven byte-identical against the JS parser. (Word text -> data shape, which the Rust fold + stamp then carry — the 'stamp as it passes through' pipe.)"
+license = "AGPL-3.0"
+
+[dependencies]
+regex = "1"
+treehash = { path = "../treehash" }
+
+[lib]
+name = "treeword"
+path = "src/lib.rs"

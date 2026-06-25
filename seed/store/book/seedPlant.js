@@ -34,7 +34,7 @@ import { isSentinelRef, isAggregateRef, refKind, refId } from "../../materials/r
 import { remapRefs } from "../../materials/refWalker.js";
 import { assertValidBundle } from "./bundle.js";
 import { emitFact } from "../../past/fact/facts.js";
-import { withBeingAct } from "../../sprout.js";
+import { withBeingFact } from "../../sprout.js";
 import { generateNameKeypair } from "../../materials/name/keys.js";
 import { encryptCredential } from "../../materials/being/identity/credentials.js";
 import { matterContentId } from "../../materials/matter/matterId.js";
@@ -471,7 +471,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     // a single ΔF triggers nonlinear fold/append-lock back-pressure
     // (40 qualities writes inside one moment serialize on the same
     // per-reel lock and choke); per-fact small acts fold independently.
-    await withBeingAct(opts.operatorBeingId, `graft:create-space ${s.name}`, history, async (ctx) => {
+    await withBeingFact(opts.operatorBeingId, `graft:create-space ${s.name}`, history, async (ctx) => {
       await emitFact({
         verb:    "do",
         act:     "create-space",
@@ -522,7 +522,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     // So the operator (the grafter, the one birthing it here) signs the
     // act that covers the birth; the being's own self-signed acts begin
     // when it first acts. Same one-fact-per-act discipline.
-    await withBeingAct(opts.operatorBeingId, `graft:birth ${spec.name}`, history, async (ctx) => {
+    await withBeingFact(opts.operatorBeingId, `graft:birth ${spec.name}`, history, async (ctx) => {
       await emitFact({
         verb:    "be",
         act:     "birth",
@@ -545,7 +545,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
   for (const m of orderedMatter) {
     const newId = remapTable.get(m.sourceId);
     const spec = matterSpecs.get(m.sourceId);
-    await withBeingAct(opts.operatorBeingId, `graft:create-matter ${spec.name}`, history, async (ctx) => {
+    await withBeingFact(opts.operatorBeingId, `graft:create-matter ${spec.name}`, history, async (ctx) => {
       await emitFact({
         verb:    "do",
         act:     "create-matter",
@@ -578,7 +578,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     const actorBeingId = f.through
       ? remapInBundleField(f.through)
       : opts.operatorBeingId;
-    await withBeingAct(actorBeingId, `graft:${f.act}`, history, async (ctx) => {
+    await withBeingFact(actorBeingId, `graft:${f.act}`, history, async (ctx) => {
       await emitFact({
         verb:    f.verb,
         act:     f.act,
@@ -638,7 +638,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
       history: history,
     }, opts.moment);
   } else {
-    await withBeingAct(opts.operatorBeingId, "graft:completed", history, async (ctx) => {
+    await withBeingFact(opts.operatorBeingId, "graft:completed", history, async (ctx) => {
       await emitFact({
         verb:    "do",
         act:     "template-planted",
@@ -676,7 +676,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     for (let i = committed.length - 1; i >= 0; i--) {
       const { kind, id } = committed[i];
       try {
-        await withBeingAct(opts.operatorBeingId, `graft:rollback ${endAction[kind]}`, history, async (ctx) => {
+        await withBeingFact(opts.operatorBeingId, `graft:rollback ${endAction[kind]}`, history, async (ctx) => {
           await emitFact({
             verb:    "do",
             act:     endAction[kind],
@@ -711,7 +711,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
           history: history,
         }, opts.moment);
       } else {
-        await withBeingAct(opts.operatorBeingId, "graft:failed", history, async (ctx) => {
+        await withBeingFact(opts.operatorBeingId, "graft:failed", history, async (ctx) => {
           await emitFact({
             verb:    "do",
             act:     "graft-failed",

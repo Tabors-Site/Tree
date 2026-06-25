@@ -35,7 +35,7 @@ await import(`${R}/begin.js`);
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
-const { withIAmAct, withBeingAct } = await import(`${R}/seed/sprout.js`);
+const { withIAmAct, withBeingFact } = await import(`${R}/seed/sprout.js`);
 const { I } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { birthBeing } = await import(
   `${R}/seed/materials/being/identity/birth.js`
@@ -187,7 +187,7 @@ try {
 
   // 6. the VERDICT — recall + a published conclusion + the declared why → ONE do:verdict memory fact
   let verdict = null;
-  await withBeingAct(String(sageId), "verdict", "0", async (m) => {
+  await withBeingFact(String(sageId), "verdict", "0", async (m) => {
     const cv = {
       dryRun: false,
       history: "0",

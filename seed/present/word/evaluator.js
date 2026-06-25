@@ -1150,7 +1150,7 @@ async function evalAct(act, ctx) {
       if (ctx.position) target = { kind: "space", id: String(ctx.position) };
     }
     // One act, one moment, one commit (the spacebar). In per-act-moment mode this do opens its
-    // OWN moment (a withBeingAct cycle) and seals exactly one fact to store; in legacy mode it
+    // OWN moment (a withBeingFact cycle) and seals exactly one fact to store; in legacy mode it
     // runs on the shared ctx.moment that the caller seals.
     const res = await stampOneAct(ctx, `do:${act.act}`, async (m) => {
       const { doVerb } = await import("../../ibp/verbs/do.js");
@@ -1210,7 +1210,7 @@ async function evalClosure(node, ctx) {
 // ── primitive dispatch ────────────────────────────────────────────────────────
 
 // stampOneAct — the spacebar at the act level. In per-act-moment mode (ctx.perActMoment.open
-// set), every fact-laying deed opens its OWN moment: a withBeingAct cycle that opens the act,
+// set), every fact-laying deed opens its OWN moment: a withBeingFact cycle that opens the act,
 // runs THIS one deed onto a fresh moment, and seals it to store (advancing the chain). So a Word
 // of N acts lays N acts/facts on the chain — one fact each — not N facts crammed into one moment
 // (the _inOp/opCount run-on). ctx.moment is swapped to the fresh moment for the duration so

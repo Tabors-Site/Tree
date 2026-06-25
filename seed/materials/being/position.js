@@ -103,14 +103,14 @@ function persistBeingPosition(beingId, spaceId, moment = null) {
   }
   // Outside the accumulating moment (system housekeeping): the being
   // acts as ITSELF, on its own chain, signed by its own Name — via
-  // withBeingAct. (Previously wrapped in withIAmAct, which mis-attributed
+  // withBeingFact. (Previously wrapped in withIAmAct, which mis-attributed
   // the position change to I even though the being is the one moving.)
   // emitFact derives nameId from the being's act context. "Every fact
   // comes from an act" (MOMENT.md) — no orphan facts.
   (async () => {
     try {
-      const { withBeingAct } = await import("../../sprout.js");
-      await withBeingAct(
+      const { withBeingFact } = await import("../../sprout.js");
+      await withBeingFact(
         String(beingId),
         `Position: persist @${String(beingId).slice(0, 8)}`,
         spec.history,

@@ -32,7 +32,8 @@
           },
           "seq": 1,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 1
         },
         {
           "verb": "do",
@@ -49,7 +50,8 @@
           },
           "seq": 2,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be1"
+          "through": "be1",
+          "ord": 2
         },
         {
           "verb": "do",
@@ -64,7 +66,8 @@
           },
           "seq": 3,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be1"
+          "through": "be1",
+          "ord": 3
         },
         {
           "verb": "do",
@@ -83,7 +86,8 @@
           },
           "seq": 4,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be1"
+          "through": "be1",
+          "ord": 4
         },
         {
           "verb": "be",
@@ -97,7 +101,8 @@
           },
           "seq": 5,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 5
         },
         {
           "verb": "do",
@@ -113,7 +118,8 @@
           },
           "seq": 6,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 6
         },
         {
           "verb": "do",
@@ -129,7 +135,8 @@
           },
           "seq": 7,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 7
         },
         {
           "verb": "do",
@@ -145,7 +152,8 @@
           },
           "seq": 8,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 8
         },
         {
           "verb": "do",
@@ -161,7 +169,8 @@
           },
           "seq": 9,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 9
         },
         {
           "verb": "do",
@@ -180,7 +189,8 @@
           },
           "seq": 10,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be1"
+          "through": "be1",
+          "ord": 10
         },
         {
           "verb": "be",
@@ -192,7 +202,8 @@
           "params": {},
           "seq": 11,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 11
         },
         {
           "verb": "be",
@@ -206,7 +217,8 @@
           },
           "seq": 12,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 12
         },
         {
           "verb": "do",
@@ -221,10 +233,11 @@
           },
           "seq": 13,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be1"
+          "through": "be1",
+          "ord": 13
         }
       ],
-      "canonical": "{\"coord\":{\"x\":9,\"y\":9,\"z\":1},\"defaultAble\":\"gardener\",\"homeHistory\":null,\"homeSpace\":\"sp1\",\"homeStory\":null,\"isRemote\":false,\"name\":\"Alice\",\"parentBeingId\":\"be0\",\"password\":\"h\",\"position\":\"sp2\",\"qualities\":{\"ablesGranted\":[{\"able\":\"viewer\",\"anchorBeingId\":\"be9\",\"anchorSpaceId\":null,\"grantedBy\":\"be0\"}],\"cognition\":{\"defaultKind\":\"llm\"},\"connection\":{\"inhabitedBy\":null,\"since\":\"2026-06-25T00:00:00.000Z\"},\"flow\":[\"a\",\"b\"],\"mood\":{\"happy\":true,\"level\":5}},\"trueName\":\"name123\",\"updatedAt\":\"2026-06-25T00:00:00.000Z\"}"
+      "canonical": "{\"bornOrd\":1,\"coord\":{\"x\":9,\"y\":9,\"z\":1},\"defaultAble\":\"gardener\",\"homeHistory\":null,\"homeSpace\":\"sp1\",\"homeStory\":null,\"isRemote\":false,\"name\":\"Alice\",\"parentBeingId\":\"be0\",\"password\":\"h\",\"position\":\"sp2\",\"qualities\":{\"ablesGranted\":[{\"able\":\"viewer\",\"anchorBeingId\":\"be9\",\"anchorSpaceId\":null,\"grantedBy\":\"be0\"}],\"cognition\":{\"defaultKind\":\"llm\"},\"connection\":{\"inhabitedBy\":null,\"since\":null},\"flow\":[\"a\",\"b\"],\"mood\":{\"happy\":true,\"level\":5}},\"trueName\":\"name123\"}"
     },
     {
       "kind": "being",
@@ -247,7 +260,8 @@
           },
           "seq": 1,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 14
         },
         {
           "verb": "be",
@@ -261,7 +275,8 @@
           },
           "seq": 2,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 15
         },
         {
           "verb": "be",
@@ -275,7 +290,8 @@
           },
           "seq": 3,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 16
         },
         {
           "verb": "be",
@@ -289,10 +305,11 @@
           },
           "seq": 4,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 17
         }
       ],
-      "canonical": "{\"coord\":null,\"defaultAble\":null,\"homeHistory\":null,\"homeSpace\":null,\"homeStory\":null,\"isRemote\":false,\"name\":\"Dead\",\"parentBeingId\":null,\"position\":null,\"qualities\":{\"connection\":{\"inhabitedBy\":null,\"since\":\"2026-06-25T00:00:00.000Z\"},\"death\":{\"byActor\":\"be0\"}},\"trueName\":null,\"updatedAt\":\"2026-06-25T00:00:00.000Z\"}"
+      "canonical": "{\"bornOrd\":14,\"coord\":null,\"defaultAble\":null,\"homeHistory\":null,\"homeSpace\":null,\"homeStory\":null,\"isRemote\":false,\"name\":\"Dead\",\"parentBeingId\":null,\"position\":null,\"qualities\":{\"connection\":{\"inhabitedBy\":null,\"since\":null},\"death\":{\"byActor\":\"be0\"}},\"trueName\":null}"
     },
     {
       "kind": "being",
@@ -311,7 +328,8 @@
           },
           "seq": 1,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 18
         },
         {
           "verb": "be",
@@ -325,10 +343,11 @@
           },
           "seq": 2,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 19
         }
       ],
-      "canonical": "{\"coord\":null,\"defaultAble\":null,\"homeHistory\":null,\"homeSpace\":null,\"homeStory\":null,\"isRemote\":false,\"name\":\"P\",\"parentBeingId\":null,\"position\":\"spX\",\"trueName\":null,\"updatedAt\":\"2026-06-25T00:00:00.000Z\"}"
+      "canonical": "{\"bornOrd\":18,\"coord\":null,\"defaultAble\":null,\"homeHistory\":null,\"homeSpace\":null,\"homeStory\":null,\"isRemote\":false,\"name\":\"P\",\"parentBeingId\":null,\"position\":\"spX\",\"trueName\":null}"
     },
     {
       "kind": "space",
@@ -357,7 +376,8 @@
           },
           "seq": 1,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 20
         },
         {
           "verb": "do",
@@ -371,7 +391,8 @@
           },
           "seq": 2,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 21
         },
         {
           "verb": "do",
@@ -386,7 +407,8 @@
           },
           "seq": 3,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 22
         },
         {
           "verb": "do",
@@ -401,7 +423,8 @@
           },
           "seq": 4,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 23
         },
         {
           "verb": "do",
@@ -418,7 +441,8 @@
           },
           "seq": 5,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 24
         },
         {
           "verb": "do",
@@ -432,7 +456,8 @@
           },
           "seq": 6,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 25
         },
         {
           "verb": "do",
@@ -449,10 +474,11 @@
           },
           "seq": 7,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 26
         }
       ],
-      "canonical": "{\"coord\":{\"x\":3,\"y\":4},\"heavenSpace\":\"histories\",\"name\":\"Garden2\",\"owner\":\"be0\",\"parent\":\"root3\",\"position\":\"root3\",\"qualities\":{\"tag\":{\"x\":1}},\"size\":{\"x\":10,\"y\":10},\"type\":\"room\",\"updatedAt\":\"2026-06-25T00:00:00.000Z\"}"
+      "canonical": "{\"bornOrd\":20,\"coord\":{\"x\":3,\"y\":4},\"heavenSpace\":\"histories\",\"name\":\"Garden2\",\"owner\":\"be0\",\"parent\":\"root3\",\"position\":\"root3\",\"qualities\":{\"tag\":{\"x\":1}},\"size\":{\"x\":10,\"y\":10},\"type\":\"room\"}"
     },
     {
       "kind": "space",
@@ -472,7 +498,8 @@
           },
           "seq": 1,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 27
         },
         {
           "verb": "do",
@@ -484,10 +511,11 @@
           "params": {},
           "seq": 2,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "beDeleter"
+          "through": "beDeleter",
+          "ord": 28
         }
       ],
-      "canonical": "{\"coord\":null,\"heavenSpace\":null,\"name\":\"Doomed\",\"owner\":\"beDeleter\",\"parent\":\"deleted\",\"position\":\"deleted\",\"size\":null,\"type\":null,\"updatedAt\":\"2026-06-25T00:00:00.000Z\"}"
+      "canonical": "{\"bornOrd\":27,\"coord\":null,\"heavenSpace\":null,\"name\":\"Doomed\",\"owner\":\"beDeleter\",\"parent\":\"deleted\",\"position\":\"deleted\",\"size\":null,\"type\":null}"
     },
     {
       "kind": "matter",
@@ -517,7 +545,8 @@
           },
           "seq": 1,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 29
         },
         {
           "verb": "do",
@@ -536,7 +565,8 @@
           },
           "seq": 2,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 30
         },
         {
           "verb": "do",
@@ -550,7 +580,8 @@
           },
           "seq": 3,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 31
         },
         {
           "verb": "do",
@@ -564,7 +595,8 @@
           },
           "seq": 4,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 32
         },
         {
           "verb": "do",
@@ -578,7 +610,8 @@
           },
           "seq": 5,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 33
         },
         {
           "verb": "do",
@@ -593,10 +626,11 @@
           },
           "seq": 6,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 34
         }
       ],
-      "canonical": "{\"beingId\":\"be1\",\"children\":[],\"content\":{\"hash\":\"def\",\"kind\":\"cas\",\"preview\":null,\"purged\":true},\"coord\":{\"x\":1,\"y\":1},\"name\":\"Note\",\"parentMatterId\":null,\"position\":\"sp2\",\"spaceId\":\"sp2\",\"type\":\"doc\",\"updatedAt\":\"2026-06-25T00:00:00.000Z\"}",
+      "canonical": "{\"beingId\":\"be1\",\"bornOrd\":29,\"children\":[],\"content\":{\"hash\":\"def\",\"kind\":\"cas\",\"preview\":null,\"purged\":true},\"coord\":{\"x\":1,\"y\":1},\"name\":\"Note\",\"parentMatterId\":null,\"position\":\"sp2\",\"spaceId\":\"sp2\",\"type\":\"doc\"}",
       "isGone": false
     },
     {
@@ -620,7 +654,8 @@
           },
           "seq": 1,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 35
         },
         {
           "verb": "do",
@@ -632,10 +667,11 @@
           "params": {},
           "seq": 2,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 36
         }
       ],
-      "canonical": "{\"beingId\":\"deleted\",\"children\":[],\"content\":{\"hash\":\"z\",\"kind\":\"cas\"},\"coord\":null,\"name\":\"Bye\",\"parentMatterId\":null,\"position\":\"sp1\",\"spaceId\":\"deleted\",\"type\":\"generic\",\"updatedAt\":\"2026-06-25T00:00:00.000Z\"}",
+      "canonical": "{\"beingId\":\"deleted\",\"bornOrd\":35,\"children\":[],\"content\":{\"hash\":\"z\",\"kind\":\"cas\"},\"coord\":null,\"name\":\"Bye\",\"parentMatterId\":null,\"position\":\"sp1\",\"spaceId\":\"deleted\",\"type\":\"generic\"}",
       "isGone": true
     },
     {
@@ -663,7 +699,8 @@
           },
           "seq": 1,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 37
         },
         {
           "verb": "name",
@@ -677,7 +714,8 @@
           },
           "seq": 2,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 38
         },
         {
           "verb": "name",
@@ -694,7 +732,8 @@
           },
           "seq": 3,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 39
         },
         {
           "verb": "name",
@@ -708,7 +747,8 @@
           },
           "seq": 4,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 40
         },
         {
           "verb": "name",
@@ -725,7 +765,8 @@
           },
           "seq": 5,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 41
         },
         {
           "verb": "name",
@@ -739,7 +780,8 @@
           },
           "seq": 6,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 42
         },
         {
           "verb": "name",
@@ -753,7 +795,8 @@
           },
           "seq": 7,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 43
         },
         {
           "verb": "name",
@@ -772,7 +815,8 @@
           },
           "seq": 8,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 44
         },
         {
           "verb": "name",
@@ -787,7 +831,8 @@
           },
           "seq": 9,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 45
         },
         {
           "verb": "name",
@@ -802,7 +847,8 @@
           },
           "seq": 10,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 46
         },
         {
           "verb": "name",
@@ -817,7 +863,8 @@
           },
           "seq": 11,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 47
         },
         {
           "verb": "name",
@@ -831,7 +878,8 @@
           },
           "seq": 12,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 48
         },
         {
           "verb": "name",
@@ -845,10 +893,11 @@
           },
           "seq": 13,
           "date": "2026-06-25T00:00:00.000Z",
-          "through": "be0"
+          "through": "be0",
+          "ord": 49
         }
       ],
-      "canonical": "{\"books\":{\"r1\":{\"at\":\"2026-06-25T00:00:00.000Z\",\"author\":\"A\",\"bodyRef\":\"ref1\",\"kind\":\"doc\",\"root\":\"r1\",\"sharedBy\":\"be1\",\"title\":\"T\"}},\"config\":{\"STORY_NAME\":\"My Story\"},\"names\":{\"nmA\":{\"closed\":true,\"connected\":false,\"createdAt\":\"2026-06-25T00:00:00.000Z\",\"identity\":{\"domain\":\"x\"},\"name\":\"alice\",\"parentNameId\":\"nm0\",\"privateKeyEnc\":\"enc2\",\"soulType\":\"llm\",\"updatedAt\":\"2026-06-25T00:00:00.000Z\"},\"nmB\":{\"createdAt\":\"2026-06-25T00:00:00.000Z\",\"identity\":null,\"name\":null,\"parentNameId\":null,\"privateKeyEnc\":null,\"soulType\":\"scripted\",\"updatedAt\":\"2026-06-25T00:00:00.000Z\"}}}"
+      "canonical": "{\"books\":{\"r1\":{\"at\":\"2026-06-25T00:00:00.000Z\",\"author\":\"A\",\"bodyRef\":\"ref1\",\"kind\":\"doc\",\"root\":\"r1\",\"sharedBy\":\"be1\",\"title\":\"T\"}},\"config\":{\"STORY_NAME\":\"My Story\"},\"names\":{\"nmA\":{\"closed\":true,\"connected\":false,\"createdAt\":\"2026-06-25T00:00:00.000Z\",\"identity\":{\"domain\":\"x\"},\"name\":\"alice\",\"parentNameId\":\"nm0\",\"privateKeyEnc\":\"enc2\",\"soulType\":\"llm\"},\"nmB\":{\"createdAt\":\"2026-06-25T00:00:00.000Z\",\"identity\":null,\"name\":null,\"parentNameId\":null,\"privateKeyEnc\":null,\"soulType\":\"scripted\"}}}"
     }
   ]
 }
