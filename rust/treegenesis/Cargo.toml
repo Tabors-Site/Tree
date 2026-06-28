@@ -2,15 +2,15 @@
 name = "treegenesis"
 version = "0.1.0"
 edition = "2021"
-description = "TreeOS genesis planter (Rust), headless. Plants a fresh Story's self-grounding parentless root birth (the lone sanctioned 2-fact fusion: name:declare on the library reel + be:birth on the being reel, one signed clock-free moment) with NO Node. Mirrors seed/sprout.js ensureIAm + seed/storyIdentity.js first-boot key mint, over the determinism spine (treestore + treesign). STANDALONE: not wired into treeos; see NOTES.md for the genesis-subcommand handoff."
+description = "TreeOS genesis planter (Rust), headless. Plants a fresh Story's self-grounding parentless root birth as TWO separate one-word moments (name:declare \"I\" on the library reel, then be:birth \"am\" on the being reel), each a signed clock-free moment via the general commit_moment_signed, with NO Node. NO fusion: the Spacebar Law (one word = one fact = one moment) holds at genesis. Mirrors seed/sprout.js ensureIAm + seed/storyIdentity.js first-boot key mint, over the determinism spine (treestore + treesign). STANDALONE: not wired into treeos; see NOTES.md for the genesis-subcommand handoff."
 license = "AGPL-3.0"
 
-# treegenesis is the ONE place the genesis fusion (2 facts / 2 reels in one act)
-# is allowed: a genesis-local writer that reuses treestore's stamp building
-# blocks (compute_act_doc / seal_moment / write_fact_doc) but bypasses the
-# fanout REFUSAL that commit_moment_signed enforces on every NON-genesis act.
-# Genesis is fact #0 of a fresh chain (no prior, no torn-write tail), so the
-# exemption is contained here and the general seal stays one-word-one-fact.
+# treegenesis plants genesis as TWO ordinary one-word moments via the GENERAL
+# seal (commit_moment_signed), called twice: name:declare "I" then be:birth "am".
+# Each is one act -> one fact -> one reel, so there is NO fusion and NO genesis
+# exemption - the Spacebar Law (one word = one fact = one moment) holds at genesis.
+# An earlier version hand-wrote 2 facts under 1 act (bypassing the seal's fanout
+# refusal); that was a DRIFT and has been removed.
 [dependencies]
 treehash = { path = "../treehash" }
 treestore = { path = "../treestore" }

@@ -7,12 +7,17 @@
 // cache fileStore.js loadSnapshot/saveSnapshot + projections.js fold orchestration back.
 
 mod index;
+pub mod lineage;
 mod snapshot;
 pub use index::{
     find_by_heaven_space, find_by_name, find_by_parent, find_by_position, index_path, list_by_type,
     load_index, save_index, update_index_from_slot,
 };
 pub use snapshot::{folded_seq, load_snapshot, save_snapshot};
+// The cross-history (lineage-inheritance) walk lives in `treeproj::lineage` ABOVE the own-history leaves
+// (which stay UNCHANGED). It re-exports `list_live_histories` (the live-history enumerator) so the read
+// side reaches the enumerator the cross-history queries are built on through one crate.
+pub use treestore::list_live_histories;
 pub use treehash::{canonicalize, Json};
 
 use std::path::Path;

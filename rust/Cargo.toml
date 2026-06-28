@@ -3,7 +3,15 @@
 #   treefold   — Tier 2: the fold engine (per-kind reducers + the pure fold loop)
 #   treeverify — Tier 3: chain verification (re-hash each fact/act, walk the p-links)
 #   treestore  — Tier 4: the append-only store + the stamp (act -> fact), real std::fs reels
+#   treecas    — the CAS content-byte store: matter's content bytes addressed by SHA-256, the sharded
+#                cas/<hash[0..2]>/<hash> layout + .meta.json sidecar, atomic tmp+rename+fsync, hash-
+#                validated reads, the retention sweep (reference set is an INPUT), disk-file anchor.
+#                Ports contentStore.js + casSweep.js + anchor.js; byte-compatible so JS + Rust share one CAS.
 #   treeproj   — Tier 5: the projection cache (.proj snapshots — fold a reel, cache the folded state)
+#   treesecondary — the SECONDARY cross-cutting projections' PURE FOLD: inbox (summon -> row, answer ->
+#                evict), threads (rootCorrelation -> lastAct bump), position-coord (do:set-being coord ->
+#                (beingId,spaceId) coord row). fact -> row state, byte-compatible with the JS projStore
+#                rows; the I/O wiring (when they fire, the cross-fact guards) stays in JS for now.
 #   treeos     — the standalone boot: read+fold+verify the on-disk chain, no Node (the OS entry seed)
 #   treeword   — the Word engine port (the parser first): Word text -> IR, vector-proven vs parser.js
 #   treeval    — the Word evaluator's rasterize: act IR + ctx -> the fact spec, vector-proven vs evaluator.js
@@ -13,7 +21,7 @@
 #                not wired into treeos (see treegenesis/NOTES.md for the genesis-subcommand handoff).
 [workspace]
 resolver = "2"
-members = ["treehash", "treefold", "treeverify", "treestore", "treeproj", "treeos", "treeword", "treeval", "treeibp", "treesign", "treegenesis"]
+members = ["treehash", "treefold", "treeverify", "treestore", "treecas", "treeproj", "treesecondary", "treeos", "treeword", "treeval", "treeibp", "treesign", "treegenesis"]
 # treehash-node (the napi FFI wrapper) is EXCLUDED: it pulls napi from crates.io and builds a cdylib,
 # so it stays out of the zero-dependency determinism-spine workspace. Build it on its own.
 exclude = ["treehash-node"]

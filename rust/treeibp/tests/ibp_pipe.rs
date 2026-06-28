@@ -46,7 +46,7 @@ fn ibp_act_then_moment() {
     let stranger = pj(r#"{"beingId":"b2","nameId":"stranger"}"#).unwrap();
 
     // ACT — b1 speaks "I make garden." → authorized → stamped on the chain
-    let out = act("I make garden.", &b1, &dir, "0", builder_spec_of, None);
+    let out = act("I make garden.", &b1, &dir, "0", builder_spec_of, None, None);
     assert_eq!(out.len(), 1, "one act in the Word");
     match &out[0] {
         Outcome::Authorized(fact) => assert_eq!(get_str(fact, "act"), Some("create-space"), "the act stamped"),
@@ -54,7 +54,7 @@ fn ibp_act_then_moment() {
     }
 
     // ACT — a stranger with no grant is DENIED; nothing stamped
-    let out2 = act("I make garden.", &stranger, &dir, "0", builder_spec_of, None);
+    let out2 = act("I make garden.", &stranger, &dir, "0", builder_spec_of, None, None);
     assert!(matches!(out2[0], Outcome::Denied(_)), "stranger denied the act");
 
     // MOMENT — b1 perceives the garden it just made (gated by see; read + verify + fold)
@@ -172,7 +172,7 @@ fn ibp_act_runs_a_flow_word() {
     // act() on a FLOW Word: the declaration is skipped, the flow's effect targets a declared space,
     // run as I (bypass) -> authorized -> stamped. (One entry, `act`, handles acts AND flows.)
     let i = pj(r#"{"beingId":"I","nameId":"I"}"#).unwrap();
-    let out = treeibp::act("A garden is a space.\nWhen it is noon:\n  the gardener waters the garden.", &i, &dir, "0", no_spec, None);
+    let out = treeibp::act("A garden is a space.\nWhen it is noon:\n  the gardener waters the garden.", &i, &dir, "0", no_spec, None, None);
     assert_eq!(out.len(), 1, "one targeted flow effect stamped");
     match &out[0] {
         Outcome::Authorized(fact) => assert_eq!(get_str(fact, "act"), Some("water"), "the flow's act stamped"),
@@ -191,7 +191,7 @@ fn ibp_moment_seal_writes_act_then_fact() {
     let no_spec = |_n: &str| None;
     let i = pj(r#"{"beingId":"I","nameId":"I"}"#).unwrap();
 
-    let out = treeibp::act("I make garden.", &i, &dir, "0", no_spec, None);
+    let out = treeibp::act("I make garden.", &i, &dir, "0", no_spec, None, None);
     assert!(matches!(out[0], Outcome::Authorized(_)), "authorized");
 
     // the FACT stamped on (space, garden) + verifies — the fact carries the act content (create-space)
@@ -322,7 +322,7 @@ fn ibp_act_signs_with_story_key() {
     };
 
     let i = pj(r#"{"beingId":"I","nameId":"I"}"#).unwrap();
-    let out = treeibp::act("I make garden.", &i, &dir, "0", no_spec, Some(&sign as &dyn Fn(&Json, &[String]) -> Json));
+    let out = treeibp::act("I make garden.", &i, &dir, "0", no_spec, None, Some(&sign as &dyn Fn(&Json, &[String]) -> Json));
     let fact = match &out[0] {
         Outcome::Authorized(f) => f,
         Outcome::Denied(r) => panic!("signed act denied: {r}"),
@@ -352,4 +352,112 @@ fn ibp_act_signs_with_story_key() {
 
     let _ = std::fs::remove_dir_all(&dir);
     println!("  treeibp: act() signs via the injected story key — the act lands ed25519-signed + verifies against the story pubkey  OK");
+}
+
+fn num(v: &Json, k: &str) -> f64 {
+    match get(v, k) {
+        Some(Json::Num(n)) => *n,
+        _ => f64::NAN,
+    }
+}
+
+#[test]
+fn ibp_act_stamps_global_ord_and_basis() {
+    // the act stamps a REAL global ord on the fact (the first allocation in a fresh store = 1, not the
+    // old per-reel stand-in), and records the perceive `basis` on the act-log line (non-digest).
+    let dir = std::env::temp_dir().join("treeos-ibp-ord-basis");
+    let _ = std::fs::remove_dir_all(&dir);
+    let no_spec = |_n: &str| None;
+    let i = pj(r#"{"beingId":"I","nameId":"I"}"#).unwrap();
+
+    let out = treeibp::act("I make garden.", &i, &dir, "0", no_spec, Some(7.0), None);
+    let fact = match &out[0] {
+        Outcome::Authorized(f) => f,
+        Outcome::Denied(r) => panic!("denied: {r}"),
+    };
+    assert_eq!(num(fact, "ord"), 1.0, "the fact stamped the first GLOBAL ord (fresh store)");
+
+    let acts = treestore::read_act_chain_file(&dir, "localhost", "0", "I");
+    assert_eq!(num(&acts[0], "basis"), 7.0, "the act records the perceive basis it was decided against");
+
+    let _ = std::fs::remove_dir_all(&dir);
+    println!("  treeibp: act stamps a real global ord on the fact + the perceive basis on the act  OK");
+}
+
+#[test]
+fn ibp_moment_returns_world_ord() {
+    // the moment returns the world's "now" (the global ord) at perception — 0 before anything happens,
+    // then it advances as acts land. This is the ord a being carries as its next act's basis.
+    let dir = std::env::temp_dir().join("treeos-ibp-moment-ord");
+    let _ = std::fs::remove_dir_all(&dir);
+    let no_spec = |_n: &str| None;
+    let i = pj(r#"{"beingId":"I","nameId":"I"}"#).unwrap();
+
+    let m0 = treeibp::moment(&i, "space", "garden", &dir, "0", no_spec);
+    assert_eq!(num(&m0, "ord"), 0.0, "the world starts at ord 0");
+
+    let _ = treeibp::act("I make garden.", &i, &dir, "0", no_spec, None, None);
+    let m1 = treeibp::moment(&i, "space", "garden", &dir, "0", no_spec);
+    assert!(ok_true(&m1), "I perceives garden");
+    assert_eq!(num(&m1, "ord"), 1.0, "the moment reads the world's now after one act landed (1)");
+
+    let _ = std::fs::remove_dir_all(&dir);
+    println!("  treeibp: moment returns the world's now (the global ord) at perception  OK");
+}
+
+#[test]
+fn ibp_concurrent_acts_same_reel_no_drop() {
+    // The per-reel STRIPE LOCK under heavy contention: many NAMES writing the SAME reel at once must ALL
+    // land (the bare reel write would false-replay-drop a same-seq collision). N threads each create-space
+    // on "garden" as a DIFFERENT name (so the act-chains don't contend) → all N facts land, the chain
+    // verifies, and every fact carries a DISTINCT global ord.
+    const N: usize = 12;
+    let dir = std::env::temp_dir().join("treeos-ibp-concurrent");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // grant each writer b{n} the "builder" able (canDo create-space, reach /**, anchored at root)
+    let append = |kind: &str, id: &str, spec: &Json| {
+        let head = read_reel_head(&dir, "0", kind, id);
+        let st = compute_fact_doc("0", spec, &head, None);
+        write_fact_doc(&dir, "0", kind, id, &st.doc).expect("append");
+    };
+    for n in 0..N {
+        let g = format!(
+            r#"{{"verb":"do","act":"set-being","by":"b{n}","of":{{"kind":"being","id":"b{n}"}},"params":{{"field":"qualities.ablesGranted","value":[{{"able":"builder","anchorSpaceId":"root"}}],"merge":false}}}}"#
+        );
+        append("being", &format!("b{n}"), &pj(&g).unwrap());
+    }
+
+    let dir_ref: &std::path::Path = &dir;
+    std::thread::scope(|s| {
+        let handles: Vec<_> = (0..N)
+            .map(|n| {
+                s.spawn(move || {
+                    let actor = pj(&format!(r#"{{"beingId":"b{n}","nameId":"name{n}"}}"#)).unwrap();
+                    treeibp::act("I make garden.", &actor, dir_ref, "0", builder_spec_of, None, None)
+                })
+            })
+            .collect();
+        for h in handles {
+            let r = h.join().unwrap();
+            assert!(matches!(r.first(), Some(Outcome::Authorized(_))), "each concurrent writer authorized + sealed");
+        }
+    });
+
+    let facts = treestore::read_reel_file(&dir, "0", "space", "garden", None, None);
+    assert_eq!(facts.len(), N, "all {N} concurrent same-reel writers landed (the stripe lock killed the false-replay drop)");
+    assert!(ok_true(&treestore::verify_fact_chain(&facts)), "the concurrently-built reel chain verifies");
+    let mut ords: Vec<f64> = facts
+        .iter()
+        .filter_map(|f| match get(f, "ord") {
+            Some(Json::Num(n)) => Some(*n),
+            _ => None,
+        })
+        .collect();
+    ords.sort_by(f64::total_cmp);
+    ords.dedup();
+    assert_eq!(ords.len(), N, "every fact got a DISTINCT global ord");
+
+    let _ = std::fs::remove_dir_all(&dir);
+    println!("  treeibp: {N} names write one reel at once — all land, chain verifies, distinct ords (the stripe lock)  OK");
 }

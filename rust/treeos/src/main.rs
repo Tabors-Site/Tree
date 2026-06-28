@@ -110,7 +110,7 @@ fn serve(addr: &str, root: &Path) {
     println!("   GET  /health                          boot summary (counts + verify)");
     println!("   GET  /reels                           reel index");
     println!("   GET  /reel/<history>/<kind>/<id>      read + verify + fold one reel");
-    println!("   POST /word  {{word,actor,history}}        WRITE -> runs the Word in Rust (treeibp::act), no Node");
+    println!("   POST /word  {{word,actor,history,basis?}}  WRITE -> runs the Word in Rust (treeibp::act), no Node");
     println!("   WS   /ws                              send 'history/kind/id' or 'reels', get JSON back");
     for stream in listener.incoming().flatten() {
         let root = root.to_path_buf();
@@ -170,6 +170,7 @@ fn word_seam(body: &[u8], root: &Path) -> (&'static str, &'static str, String) {
     };
     let actor = get(&req, "actor").cloned().unwrap_or(Json::Null);
     let history = get_str(&req, "history").unwrap_or("0");
+    let basis = num_field(&req, "basis"); // the global ord the client perceived from (its last moment)
 
     // able SPECS fold from the seed .word vocabulary via treeibp::fold_word_able (foldAbleNoun, in
     // Rust) — so GRANTED ables authorize, not just i-am + owner. The vocabulary is read from
@@ -200,13 +201,16 @@ fn word_seam(body: &[u8], root: &Path) -> (&'static str, &'static str, String) {
         }
     });
     let sign_ref = signer.as_ref().map(|f| f as &dyn Fn(&Json, &[String]) -> Json);
-    let outcomes = treeibp::act(word, &actor, root, history, |name| treeibp::fold_word_able(name, ables_dir), sign_ref);
+    let outcomes = treeibp::act(word, &actor, root, history, |name| treeibp::fold_word_able(name, ables_dir), basis, sign_ref);
     let results: Vec<Json> = outcomes
         .iter()
         .map(|o| match o {
             treeibp::Outcome::Authorized(fact) => Json::Obj(vec![
                 ("ok".to_string(), Json::Bool(true)),
                 ("fact".to_string(), fact.clone()),
+                // the fact carries its landing `ord`; echo the declared `basis` so the client reads the
+                // causal-staleness gap (ord - basis) straight off the response.
+                ("basis".to_string(), basis.map(Json::Num).unwrap_or(Json::Null)),
             ]),
             treeibp::Outcome::Denied(reason) => Json::Obj(vec![
                 ("ok".to_string(), Json::Bool(false)),

@@ -41,11 +41,11 @@
 // compatible). See NOTES.md "the i-am vs I fork" + Planted.i_name.
 //
 // THE I-IMMUTABILITY (project_iam_genesis_immutable: genesis facts are never
-// overwritten). The seal's never-overwrite-committed covers it: write_fact_doc
-// is idempotent by per-reel seq (a re-plant of the SAME genesis is a pure no-op,
-// it never rewrites the committed fact #0) and advance_act_head_file's CAS
-// refuses a stale author. plant_genesis adds the guard at the door (an already-
-// planted being reel -> AlreadyPlanted, no second write).
+// overwritten). The general seal's never-overwrite-committed covers it:
+// commit_moment_signed is idempotent by per-reel seq (a re-plant of the SAME
+// genesis is a pure no-op, it never rewrites a committed fact #0) and the
+// .acthead CAS refuses a stale author. plant_genesis adds the guard at the door
+// (an already-planted being reel -> AlreadyPlanted, no second write).
 
 mod keymint;
 

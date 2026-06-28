@@ -17,9 +17,10 @@
 // SPEC SHAPE { canSee, canDo, canCall, canBe, reach } is the stable contract.
 
 use std::path::Path;
+use std::sync::Mutex;
 use treehash::Json;
 use treestore::{
-    commit_moment, commit_moment_signed, read_reel_file, read_reel_head, verify_fact_chain,
+    commit_moment, commit_moment_signed, next_ord, read_ord, read_reel_file, verify_fact_chain,
 };
 use treeval::able::{able_walk, Grant, PermitReq, WalkArgs};
 use treeval::auth::{authorize_decide, DecideArgs};
@@ -30,6 +31,23 @@ const I_AM: &str = "I"; // the bootstrap Name IS the sign "I"; `am` is its secon
 /// The on-disk store keys act-chains under it AND the act-sig commits to it, so it must be stable. A
 /// config follow-up (env STORY_NAME / the domain); "localhost" matches the dev store on disk.
 const STORY: &str = "localhost";
+
+/// Per-reel STRIPE LOCKS (256). A reel is a hash chain: writes to ONE reel MUST serialize (no fork, no
+/// silent same-seq drop), but different reels are independent. So same-reel writers hash to the same
+/// stripe and serialize, while different reels almost always differ → fully parallel — the "heavy by
+/// many names at once" case. The lock is held across `next_ord` + `commit_moment` so a hot reel's ords
+/// match its seq (landing) order. In-process only (one forest = one process = one store).
+const STRIPES: usize = 256;
+static REEL_LOCKS: [Mutex<()>; STRIPES] = [const { Mutex::new(()) }; STRIPES];
+
+fn reel_stripe(history: &str, kind: &str, id: &str) -> usize {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    history.hash(&mut h);
+    kind.hash(&mut h);
+    id.hash(&mut h);
+    (h.finish() % STRIPES as u64) as usize
+}
 
 fn get<'a>(v: &'a Json, k: &str) -> Option<&'a Json> {
     match v {
@@ -340,6 +358,7 @@ fn seal_one(
     kind: &str,
     id: &str,
     spec: &Json,
+    basis: Option<f64>,
     sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
 ) -> Option<Json> {
     let by = get_str(spec, "by").unwrap_or(I_AM);
@@ -353,21 +372,33 @@ fn seal_one(
         }
         _ => spec.clone(),
     };
-    let act_doc = obj(vec![
+    let mut fields: Vec<(&str, Json)> = vec![
         ("by", jstr(by)),
         ("through", get(spec, "through").cloned().unwrap_or(Json::Null)),
         ("to", get(spec, "to").cloned().unwrap_or(Json::Null)),
         ("story", jstr(STORY)),
         ("history", jstr(history)),
         ("deltaF", Json::Arr(vec![fact])),
-    ]);
-    // ord = the global append ordinal (bornOrd). No global counter is sourced yet (a follow-up); a
-    // per-reel monotonic stand-in keeps it deterministic + non-decreasing. ord is NON-DIGEST (excluded
-    // from every _id), so the chain integrity AND the act-sig are unaffected by the stand-in.
-    let ord = read_reel_head(dir, history, kind, id).head + 1.0;
-    let committed = match sign {
-        Some(s) => commit_moment_signed(dir, &act_doc, ord, s),
-        None => commit_moment(dir, &act_doc, ord),
+    ];
+    // basis = the global ord this act was DECIDED against (the moment the being perceived). It rides the
+    // act opening as a NON-DIGEST annotation (auto-excluded by the content_of_act + sig-payload
+    // allowlists), so the gap `ord - basis` = causal staleness in EVENTS. Advisory telemetry, never a gate.
+    if let Some(b) = basis {
+        fields.push(("basis", Json::Num(b)));
+    }
+    let act_doc = obj(fields);
+    // Allocate the global ord + commit UNDER the per-reel stripe lock: same reel serializes (a hash chain
+    // requires it — no fork, no silent same-seq drop), different reels stay parallel, and `ord` (claimed
+    // inside) matches the landing (seq) order. ord is NON-DIGEST — it never moves an _id or the act-sig.
+    let committed = {
+        let _guard = REEL_LOCKS[reel_stripe(history, kind, id)]
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let ord = next_ord(dir);
+        match sign {
+            Some(s) => commit_moment_signed(dir, &act_doc, ord, s),
+            None => commit_moment(dir, &act_doc, ord),
+        }
     }
     .ok()?;
     // read the stamped fact back off its reel (the moment's durable record) for the outcome.
@@ -395,6 +426,7 @@ pub fn act(
     dir: &Path,
     history: &str,
     able_spec_of: impl Fn(&str) -> Option<Json>,
+    basis: Option<f64>,
     sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
 ) -> Vec<Outcome> {
     let mut ctx = obj(vec![
@@ -406,6 +438,7 @@ pub fn act(
     let nodes = treeword::parse(word);
     let fail_closed = |_: &str, _: &[Json]| false; // domain predicates fail closed (no host wired)
     let specs = run_body(&nodes, &mut ctx, &fail_closed);
+    let basis = basis.or_else(|| Some(read_ord(dir))); // the moment-ord this Word was decided against
     let mut out = Vec::new();
     for spec in &specs {
         let (k, i) = match get(spec, "of") {
@@ -425,7 +458,7 @@ pub fn act(
             out.push(Outcome::Denied(format!("not authorized: {verb}:{}", op.unwrap_or(""))));
             continue;
         }
-        match seal_one(dir, history, &k, &i, spec, sign) {
+        match seal_one(dir, history, &k, &i, spec, basis, sign) {
             Some(fact) => out.push(Outcome::Authorized(fact)),
             None => out.push(Outcome::Denied(format!("seal failed: {verb}:{}", op.unwrap_or("")))),
         }
@@ -558,7 +591,9 @@ pub fn run_body(body: &[Json], ctx: &mut Json, host: &dyn Fn(&str, &[Json]) -> b
 }
 
 /// The MOMENT primitive — a being perceives (left stance): authorize the see, then read + verify +
-/// fold the target. Returns {ok, kind, id, verify, state} or {ok:false, reason}.
+/// fold the target. Returns {ok, kind, id, ord, verify, state} or {ok:false, reason}. `ord` is the
+/// world's "now" at perception (the global ord) — the being carries it as the `basis` of any act it
+/// then speaks, so the gap reads as causal staleness. (A future live loop re-perceives for a fresh ord.)
 pub fn moment(
     reader: &Json,
     kind: &str,
@@ -581,6 +616,7 @@ pub fn moment(
         ("ok", Json::Bool(true)),
         ("kind", jstr(kind)),
         ("id", jstr(id)),
+        ("ord", Json::Num(read_ord(dir))), // the world's now at perception → the act's basis
         ("verify", verify),
         ("state", state),
     ])

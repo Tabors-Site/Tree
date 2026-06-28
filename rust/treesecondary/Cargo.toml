@@ -1,0 +1,13 @@
+[package]
+name = "treesecondary"
+version = "0.1.0"
+edition = "2021"
+description = "TreeOS secondary cross-cutting projections (the PURE FOLD): inbox (summon -> row, answer -> evict), threads (rootCorrelation -> lastAct bump), position-coord (do:set-being coord -> (beingId,spaceId) coord row). Ported from seed/past/projections/{inbox,threads,position}/*.js. Each is fact -> row state, byte-compatible with the JS projStore row shapes. The I/O wiring (when they fire) stays in JS for now; only the fold moves here."
+license = "AGPL-3.0"
+
+[dependencies]
+treehash = { path = "../treehash" }
+
+[lib]
+name = "treesecondary"
+path = "src/lib.rs"

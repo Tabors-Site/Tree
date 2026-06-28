@@ -19,7 +19,9 @@
 
 mod act_log;
 mod commit;
+mod history;
 mod moment;
+mod ord;
 mod recover;
 mod reel;
 mod stamp;
@@ -32,7 +34,13 @@ pub use act_log::{
     AdvanceError, HeadAdvance,
 };
 pub use commit::{seal_moment, FactSpec, Seal, SealedFact};
+pub use history::{
+    branch_point, create_history, fork_reel, fork_reel_fs, is_main, lineage_and_floors,
+    list_live_histories, load_history, reel_floors, resolve_history_lineage, write_history_row,
+    HistoryError, NewHistory, MAIN,
+};
 pub use moment::{commit_moment, commit_moment_signed, CommitError, Committed};
+pub use ord::{moment_order, next_ord, read_ord};
 pub use recover::{
     recover_act_before_commit, recover_reel_before_commit, walked_act_head, walked_reel_head,
 };

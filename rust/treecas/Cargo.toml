@@ -1,0 +1,17 @@
+[package]
+name = "treecas"
+version = "0.1.0"
+edition = "2021"
+description = "TreeOS CAS content-byte store: matter's content bytes addressed by SHA-256, sharded cas/<hash[0..2]>/<hash> + .meta.json sidecar, atomic tmp+rename+fsync writes, hash-validated reads, retention sweep (ref-set is an input), disk-file anchor. Ports seed/materials/matter/contentStore.js + casSweep.js + anchor.js. Byte-compatible on-disk layout so a Rust runtime and the JS share one CAS. Built on treehash (SHA-256); std only otherwise."
+license = "AGPL-3.0"
+
+[dependencies]
+treehash = { path = "../treehash" }
+
+[lib]
+name = "treecas"
+path = "src/lib.rs"
+
+# std only besides treehash (which is itself zero-dependency). The CAS is a
+# byte store on the filesystem: SHA-256 comes from treehash, everything else
+# (sharded paths, atomic tmp+rename+fsync, the meta sidecar, the sweep) is std::fs.
