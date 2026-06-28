@@ -46,6 +46,7 @@
 
 import { getFactsOnReelWhere } from "../../../past/fact/facts.js";
 import * as reducers from "../../../materials/reducers.js";
+import { native } from "../../../past/fact/native.js";
 import { readReelBetween } from "./foldEngine.js";
 import { assertHistoryOrThrow } from "../../../materials/projections.js";
 
@@ -218,12 +219,15 @@ export async function foldAt(type, id, until, opts = {}) {
   // rebuild() — start from the reducer's initial state, apply each
   // fact in seq order — but bounded at untilSeq and NEVER calling
   // applyProjection or dispatchCrossCutting. Pure function of
-  // (chain prefix, reducer).
+  // (chain prefix, reducer). PURE RUST FOLD: the per-fact reduce loop
+  // is the Rust `treefold` crate via native.foldFrom (ONE marshal:
+  // reducer.initial() seed + the bounded reel in, the folded state out),
+  // byte-identical to the retired JS reduce-loop (same fold the boot
+  // proves "world IDENTICAL" on). No side effects, repeat-stable.
   const reducer = reducers.get(type);
-  let state = reducer.initial();
-  for (const f of facts) {
-    state = reducer.reduce(state, f);
-  }
+  const state = JSON.parse(
+    native.foldFrom(type, JSON.stringify(reducer.initial()), JSON.stringify(facts)),
+  );
 
   // Phantom guard parity. The live rebuild path treats "walked every
   // fact and produced empty state" as a malformed reel and refuses

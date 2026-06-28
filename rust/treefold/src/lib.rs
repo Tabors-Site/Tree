@@ -11,7 +11,7 @@ mod fold;
 mod reducers;
 mod value;
 
-pub use fold::{fold, initial, reduce};
+pub use fold::{fold, fold_from, initial, reduce};
 pub use reducers::is_gone_matter;
 pub use value::Json;
 

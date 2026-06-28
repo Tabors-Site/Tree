@@ -90,8 +90,8 @@ fn authorize_decide_control_flow() {
         want: Json,
     }
     let cases = vec![
-        Case { name: "I-Am bypass (name)", identity: j(r#"{"name":"I_AM"}"#), verb: "do", target: Json::Null, audit: None, ext: None, able: j(r#"{"ok":false}"#), inh: false, want: j(r#"{"ok":true,"actor":"I_AM"}"#) },
-        Case { name: "I-Am bypass (beingId)", identity: j(r#"{"beingId":"I_AM"}"#), verb: "do", target: Json::Null, audit: None, ext: None, able: j(r#"{"ok":false}"#), inh: false, want: j(r#"{"ok":true,"actor":"I_AM"}"#) },
+        Case { name: "I-Am bypass (name)", identity: j(r#"{"name":"I"}"#), verb: "do", target: Json::Null, audit: None, ext: None, able: j(r#"{"ok":false}"#), inh: false, want: j(r#"{"ok":true,"actor":"I"}"#) },
+        Case { name: "I-Am bypass (beingId)", identity: j(r#"{"beingId":"I"}"#), verb: "do", target: Json::Null, audit: None, ext: None, able: j(r#"{"ok":false}"#), inh: false, want: j(r#"{"ok":true,"actor":"I"}"#) },
         Case { name: "discovery-see", identity: j(r#"{"name":"alice"}"#), verb: "see", target: j(r#"{"isDiscovery":true}"#), audit: None, ext: None, able: j(r#"{"ok":false}"#), inh: false, want: j(r#"{"ok":true,"actor":"discovery"}"#) },
         Case { name: "ext-scope blocked", identity: j(r#"{"name":"alice"}"#), verb: "do", target: Json::Null, audit: None, ext: Some("weather"), able: j(r#"{"ok":false}"#), inh: false, want: j(r#"{"ok":false,"actor":"extension-blocked","reason":"Extension \"weather\" is blocked at this position"}"#) },
         Case { name: "able grant (named able)", identity: j(r#"{"name":"alice"}"#), verb: "do", target: Json::Null, audit: None, ext: None, able: j(r#"{"ok":true,"able":"editor"}"#), inh: false, want: j(r#"{"ok":true,"actor":"editor","reason":null}"#) },
@@ -110,7 +110,7 @@ fn authorize_decide_control_flow() {
             verb: c.verb,
             target: if matches!(c.target, Json::Null) { None } else { Some(&c.target) },
             audit_being_id: c.audit,
-            i_am: "I_AM",
+            i_am: "I",
             ext_blocked: c.ext,
             able_result: &c.able,
             inheritation_ok: c.inh,

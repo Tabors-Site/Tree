@@ -1,0 +1,37 @@
+[package]
+name = "treesign"
+version = "0.1.0"
+edition = "2021"
+description = "TreeOS crypto, isolated. ed25519 signing + the Name-id codec (did:key z-multibase) + the canonical act-sig payload, ported byte-for-byte from seed/materials/name/keys.js and seed/past/act/actSig.js. The ONE place crypto lives, so the determinism spine (treehash/treefold/treeverify/treestore/treeproj) stays zero-dependency."
+license = "AGPL-3.0"
+
+[lib]
+name = "treesign"
+path = "src/lib.rs"
+
+# Crypto deps live ONLY here. The Name's id IS its ed25519 public key, so a name
+# signature is self-certifying; signing/verifying is raw ed25519 (RFC 8032, no
+# pre-hash) to match Node `crypto.sign(null, msg, ed25519key)`. The sig is over
+# treehash::canonicalize(payload), so the canonicalizer MUST be the shared one
+# (path dep, zero-dep itself) for the bytes to match the JS signer.
+[dependencies]
+treehash = { path = "../treehash" }
+# Pure-Rust ed25519 (curve25519-dalek + sha2 transitively). v2 SigningKey::from_bytes
+# takes the 32-byte seed and sign() is raw ed25519 (no pre-hash) = the Node null-alg path.
+ed25519-dalek = "2.2.0"
+# base58btc (the Bitcoin/IPFS alphabet) for the did:key multibase id body.
+bs58 = "0.5.1"
+# standard base64 for the signature value (matches Buffer.toString("base64")).
+base64 = "0.22.1"
+# BIP39 codebook + checksum, for the paper form of a Name seed. The JS
+# (seed/materials/name/mnemonic.js) uses the canonical 2048-word English list
+# and the sha256(entropy)[0] checksum, and treats the raw 32-byte ENTROPY as the
+# ed25519 seed directly (NO PBKDF2 to-seed, NO passphrase, NO BIP32). So we use
+# this crate ONLY for to_entropy / from_entropy (the wordlist + checksum) and
+# NEVER its to_seed() (that is the PBKDF2 path the JS deliberately omits).
+# English is the always-on built-in wordlist (it IS bip39Words.js byte-for-byte);
+# "alloc" gives from_entropy / to_string (the entropy<->words codec we use).
+bip39 = { version = "2.2.2", default-features = false, features = ["alloc"] }
+# OS entropy for generate_mnemonic (fresh 32 bytes). 0.2.x is already in the
+# lock graph (transitive); pinning it keeps generate_mnemonic on the same crate.
+getrandom = "0.2.17"

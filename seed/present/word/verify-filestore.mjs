@@ -1,10 +1,16 @@
-// verify-filestore.mjs — boot-free proof of the append-only-file storage core
-// (plan elegant-cooking-teapot Phase 1). Runs against a temp dir.
+// verify-filestore.mjs — boot-free proof of the append-only-file storage core. Runs against a temp dir.
 //
-// Proves: (1) a moment's facts append to per-reel files with a valid hash-chain (the canonical
-// fact shape, via the shared hash.js); (2) readReel reads them back in seq order;
-// (3) the journal makes commits crash-recoverable — replay is idempotent (re-applying a committed
-// record is a no-op) and a torn trailing WAL record is discarded with zero trace.
+// The reel/.acts WRITE PATH + the reel reads now run in RUST (treestore, reached through the napi addon
+// as native.store*): commitMoment/commitVerbatim -> native.storeCommitMoment/storeCommitVerbatim,
+// readReel/readReelLineage/readReelHead -> native.storeReadReel*, appendActLine/advanceActHeadFile/
+// readActHeadFile/readActChain -> native.store*. The fileStore.js callers below are thin storeRoot()-
+// threaded bindings to those, so these assertions exercise the Rust stamp directly (byte wire-compatible,
+// proven by the step-B parity diff + the boot "world IDENTICAL" gate).
+//
+// Proves: (1) a moment's facts append to per-reel files with a valid hash-chain (the canonical fact
+// shape, via the shared hash.js); (2) readReel reads them back in seq order; (3) write-through (no
+// journal) — the on-disk reel IS the truth, reopening sees every committed fact, a torn append leaves
+// a line the .head never advanced past (readReel skips it), so a crashed moment leaves zero trace.
 
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,8 +26,6 @@ import {
   verifyReelFile,
   verifyReelLineage,
   forkReel,
-  loadSnapshot,
-  saveSnapshot,
   appendActLine,
   readActHeadFile,
   advanceActHeadFile,
@@ -34,13 +38,40 @@ import {
   patchAct,
   actCount,
   rebuildActIndex,
-  findByName,
-  findByPosition,
-  findByParent,
-  listByType,
-  findByHeavenSpace,
-  rebuildIndex,
 } from "../../past/fileStore.js";
+// The .proj snapshot + derived find* index moved to the Rust `treeproj` crate (reached through the
+// napi addon as native.proj*); the JS fileStore no longer implements them. The store-primitive
+// assertions below (sections 10/12/13) exercise that Rust path directly, threading fileStore's
+// storeRoot() so Rust reads/writes the SAME on-disk files. Thin JS-signature shims keep the asserts
+// readable; they are the same shapes projections.js now routes to.
+import { native } from "../../past/fact/native.js";
+const loadSnapshot = (h, k, id) => {
+  const t = native.projLoadSnapshot(storeRoot(), String(h), String(k), String(id));
+  return t == null ? null : JSON.parse(t);
+};
+const saveSnapshot = (h, k, id, slot, exp = undefined) =>
+  native.projSaveSnapshot(
+    storeRoot(),
+    String(h),
+    String(k),
+    String(id),
+    JSON.stringify(slot),
+    typeof exp === "number" ? exp : undefined,
+  );
+const findByName = (h, k, name) => {
+  const t = native.projFindByName(storeRoot(), String(h), String(k), String(name), "{}");
+  return t == null ? null : JSON.parse(t);
+};
+const findByPosition = (h, sid) =>
+  JSON.parse(native.projFindByPosition(storeRoot(), String(h), String(sid)));
+const findByParent = (h, pid, k) =>
+  JSON.parse(native.projFindByParent(storeRoot(), String(h), String(pid), String(k)));
+const listByType = (h, k) => JSON.parse(native.projListByType(storeRoot(), String(h), String(k)));
+// refold(history, kind, id) is the Rust rebuild: read the reel, fold to the state, re-derive the
+// .proj slot ({state, foldedSeq, position, tombstoned}) AND re-bucket the derived index off it. The
+// rebuildable property (the index is a pure fold of the reels) — replaces fileStore.rebuildIndex.
+const refold = (h, k, id) =>
+  JSON.parse(native.projRefold(storeRoot(), String(h), String(k), String(id)));
 
 let pass = 0,
   fail = 0;
@@ -260,8 +291,10 @@ try {
     ? ok("index tracks .proj snapshots — findByName / findByPosition / findByParent / listByType")
     : bad("index", { byName, byPos: byPos.map((o) => o.id), byParent: byParent.map((o) => o.id), types });
 
-  // 13. TOMBSTONE + REBUILD: tombstoning a slot drops it from every live index; rebuildIndex
-  //     re-derives the index from the .proj snapshots (the rebuildable property).
+  // 13. TOMBSTONE + Rust REFOLD REBUILD: tombstoning a slot drops it from every live index; the Rust
+  //     refold re-derives a slot (+ its index) PURELY from the reel facts — the rebuildable property
+  //     (the .proj/index are a cache, the reel is the truth). The tombstone half uses the synthetic
+  //     ib/ic (snapshot-only); the refold half uses FB (a real reel) so the rebuild has facts to fold.
   saveSnapshot("0", "being", ic, {
     state: { name: "Frodo", parentBeingId: ib },
     foldedSeq: 2,
@@ -271,18 +304,22 @@ try {
   const goneByName = findByName("0", "being", "Frodo");
   const posAfterTomb = findByPosition("0", "space-shire");
   const typesAfterTomb = listByType("0", "being");
-  rebuildIndex("0", "being");
-  const byNameRebuilt = findByName("0", "being", "Gandalf");
-  const typesRebuilt = listByType("0", "being");
+  // Rust refold rebuilds FB's slot + index from its reel facts alone. Nuke FB's index entry first
+  // (drop it from the type facet via a tombstone save) then refold off the reel — the refold's
+  // folded state is NOT tombstoned (the reel has no death fact), so it re-buckets FB back in.
+  saveSnapshot("0", "being", FB, { state: {}, foldedSeq: 0, position: null, tombstoned: true });
+  const fbDroppedByTomb = !listByType("0", "being").includes(FB);
+  const fbSlot = refold("0", "being", FB); // read reel → fold → re-derive .proj + index
+  const fbTypesRebuilt = listByType("0", "being");
   goneByName === null &&
   posAfterTomb.length === 1 &&
   posAfterTomb[0].id === ib &&
   !typesAfterTomb.includes(ic) &&
-  byNameRebuilt?.id === ib &&
-  typesRebuilt.includes(ib) &&
-  !typesRebuilt.includes(ic)
-    ? ok("tombstone drops from live indexes; rebuildIndex re-derives from snapshots (rebuildable)")
-    : bad("tombstone+rebuild", { goneByName, posAfterTomb: posAfterTomb.map((o) => o.id), typesAfterTomb, byNameRebuilt, typesRebuilt });
+  fbDroppedByTomb &&
+  fbSlot?.state?.qualities?.profile?.mood === "calm" &&
+  fbTypesRebuilt.includes(FB)
+    ? ok("tombstone drops from live indexes; Rust refold re-derives the slot + index from the reel (rebuildable)")
+    : bad("tombstone+refold-rebuild", { goneByName, posAfterTomb: posAfterTomb.map((o) => o.id), typesAfterTomb, fbDroppedByTomb, fbState: fbSlot?.state?.qualities, fbTypesRebuilt });
 
   // 14. PREDICATE READ + factsByActId (the curated FACT-query substrate): readReelWhere filters a
   //     reel by predicate (wordStore's coin/retire reads); factsByActId returns the facts one act

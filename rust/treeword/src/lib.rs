@@ -130,9 +130,9 @@ fn rules() -> Vec<(Regex, Builder)> {
             Regex::new(r"(?i)^A ([\w.-]+) is a able for a ([\w.-]+)\.$").unwrap(),
             |m| obj(vec![("kind", jstr("is")), ("subject", jstr(&m[1])), ("isA", jstr("able")), ("scope", jstr(&m[2]))]),
         ),
-        // A <able> can <verb> [the/a/an <of>].
+        // An <able> can <verb> [the/a/an <of>].   (An? article; able names may be hyphenated)
         (
-            Regex::new(r"(?i)^A (\w+) can (\w+)(?: (?:a |an |the )?(.+?))?\.$").unwrap(),
+            Regex::new(r"(?i)^An? ([\w.-]+) can (\w+)(?: (?:a |an |the )?(.+?))?\.$").unwrap(),
             |m| obj(vec![("kind", jstr("can")), ("able", jstr(&m[1])), ("verb", jstr(&verb(&m[2]))), ("of", cap_or_null(m, 3))]),
         ),
         // A <subject> cannot <verb> [the/a/an <of>].
@@ -144,6 +144,27 @@ fn rules() -> Vec<(Regex, Builder)> {
         (
             Regex::new(r"(?i)^No (\w+) can (\w+)(?: (?:a |an |the |it ?)?(.+?))?\.$").unwrap(),
             |m| obj(vec![("kind", jstr("cannot")), ("subject", jstr(&m[1])), ("verb", jstr(&verb(&m[2]))), ("of", cap_or(m, 3, "it"))]),
+        ),
+        // the able-noun declaration + its grant-set vocabulary (foldAbleNoun collects these).
+        // An <able> is an able.
+        (
+            Regex::new(r"(?i)^An? ([\w.-]+) is an? able\.$").unwrap(),
+            |m| obj(vec![("kind", jstr("is")), ("subject", jstr(&m[1])), ("isA", jstr("able"))]),
+        ),
+        // An <able> reaches <pattern>.
+        (
+            Regex::new(r"(?i)^An? ([\w.-]+) reaches (.+?)\.$").unwrap(),
+            |m| obj(vec![("kind", jstr("reach")), ("able", jstr(&m[1])), ("to", jstr(&m[2]))]),
+        ),
+        // An <able> needs <llm|human|scripted> cognition.
+        (
+            Regex::new(r"(?i)^An? ([\w.-]+) needs (llm|human|scripted) cognition\.$").unwrap(),
+            |m| obj(vec![("kind", jstr("cognition")), ("able", jstr(&m[1])), ("mode", jstr(&m[2].to_lowercase()))]),
+        ),
+        // An <able> never wakes.
+        (
+            Regex::new(r"(?i)^An? ([\w.-]+) never wakes\.$").unwrap(),
+            |m| obj(vec![("kind", jstr("wakes")), ("able", jstr(&m[1])), ("when", Json::Arr(vec![]))]),
         ),
         // <I|Capitalized> own(s) [the/a/an] <of>.   (no /i: matches I or a Capitalized name)
         (

@@ -186,6 +186,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "treefold"
+version = "0.1.0"
+dependencies = [
+ "treehash",
+]
+
+[[package]]
 name = "treehash"
 version = "0.1.0"
 
@@ -196,6 +203,26 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "treefold",
+ "treehash",
+ "treeproj",
+ "treestore",
+ "treeverify",
+]
+
+[[package]]
+name = "treeproj"
+version = "0.1.0"
+dependencies = [
+ "treefold",
+ "treehash",
+ "treestore",
+]
+
+[[package]]
+name = "treestore"
+version = "0.1.0"
+dependencies = [
  "treehash",
  "treeverify",
 ]

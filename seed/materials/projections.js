@@ -26,16 +26,76 @@
 // FileStore find* layer is own-history only; the lazy parent walk lives
 // HERE, calling back into FileStore per-history.
 
-import {
-  loadSnapshot,
-  saveSnapshot,
-  initSnapshot,
-  findByName as storeFindByName,
-  findByPosition as storeFindByPosition,
-  findByParent as storeFindByParent,
-  listByType as storeListByType,
-  findByHeavenSpace as storeFindByHeavenSpace,
-} from "../past/fileStore.js";
+// STORAGE LEAF: the .proj snapshot + derived index + find* reads now run in Rust (the `treeproj`
+// crate, reached through the napi addon as native.proj*). projections.js stays the HISTORY-AWARE
+// QUERY layer — the lineage inheritance, tombstone shadowing, branchPoint gating, and name
+// deconfliction below are unchanged; only the leaf storage call moved from fileStore.* to native.*.
+// The store ROOT (fileStore.storeRoot()) is threaded into every native call so Rust writes/reads the
+// SAME on-disk files the JS fileStore did (proven byte-identical by the parity harness + the boot
+// "world IDENTICAL" gate). There is NO JS fallback (a mis-wired addon hard-errors, like native.js).
+import { native } from "../past/fact/native.js";
+import { storeRoot } from "../past/fileStore.js";
+
+// ── the projection-cache storage primitives, routed to Rust treeproj ─────────
+// Thin JS-signature wrappers over native.proj* so the query logic below reads exactly as before. The
+// snapshot ops return the slot OBJECT (native returns JSON text, or null); the find* ops keep the
+// own-history fileStore semantics (a single slot, or an occupant array).
+
+// loadSnapshot(history, kind, id) -> the folded slot object, or null. (fileStore.loadSnapshot)
+function loadSnapshot(history, kind, id) {
+  const text = native.projLoadSnapshot(storeRoot(), String(history), String(kind), String(id));
+  return text == null ? null : JSON.parse(text);
+}
+
+// saveSnapshot(history, kind, id, slot, expectedFoldedSeq?) -> true when written. CAS-guarded when
+// expectedFoldedSeq is a number; absent/undefined arrives at native as None (no CAS, the
+// unconditional upsert). It re-buckets the derived index off the slot. (fileStore.saveSnapshot)
+function saveSnapshot(history, kind, id, slot, expectedFoldedSeq = undefined) {
+  return native.projSaveSnapshot(
+    storeRoot(),
+    String(history),
+    String(kind),
+    String(id),
+    JSON.stringify(slot),
+    typeof expectedFoldedSeq === "number" ? expectedFoldedSeq : undefined,
+  );
+}
+
+// initSnapshot(history, kind, id, slot) -> the unconditional upsert (cold-fold landing).
+function initSnapshot(history, kind, id, slot) {
+  return saveSnapshot(history, kind, id, slot);
+}
+
+// storeFindByName(history, kind, name) -> the live slot (merged with id), or null. Bare-name probe
+// ({} scope) — the curated callers below pass a bare name. (fileStore.findByName)
+function storeFindByName(history, kind, name) {
+  const text = native.projFindByName(storeRoot(), String(history), String(kind), String(name), "{}");
+  return text == null ? null : JSON.parse(text);
+}
+
+// storeFindByPosition(history, spaceId) -> the live occupants across kinds. (fileStore.findByPosition)
+function storeFindByPosition(history, spaceId) {
+  return JSON.parse(native.projFindByPosition(storeRoot(), String(history), String(spaceId)));
+}
+
+// storeFindByParent(history, parentId, kind) -> the live children of parentId in this kind.
+function storeFindByParent(history, parentId, kind) {
+  return JSON.parse(
+    native.projFindByParent(storeRoot(), String(history), String(parentId), String(kind)),
+  );
+}
+
+// storeListByType(history, kind) -> the live ids of this kind (tombstoned excluded).
+function storeListByType(history, kind) {
+  return JSON.parse(native.projListByType(storeRoot(), String(history), String(kind)));
+}
+
+// storeFindByHeavenSpace(history, kind, heavenSpaceKind) -> the singleton seed-space slot, or null.
+// kind is always "space"; heavenSpaceKind is the state.heavenSpace marker value.
+function storeFindByHeavenSpace(history, kind, heavenSpaceKind = kind) {
+  const text = native.projFindByHeavenSpace(storeRoot(), String(history), String(heavenSpaceKind));
+  return text == null ? null : JSON.parse(text);
+}
 
 const MAIN = "0";
 const VALID_TYPES = new Set(["being", "space", "matter", "name", "library"]);

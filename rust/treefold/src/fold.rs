@@ -32,8 +32,20 @@ pub fn reduce(kind: &str, state: &Json, fact: &Json) -> Json {
     }
 }
 
-/// Fold a reel: `initial()` then reduce across the facts in seq order (stable).
+/// Fold a reel from genesis: `initial()` then reduce across the facts in seq order.
+/// Cold path (foldEngine.rebuild folds a whole reel from empty); delegates to `fold_from`
+/// seeded with the kind's initial state so ONE reduce loop serves both the cold and the
+/// catch-up paths.
 pub fn fold(kind: &str, facts: &[Json]) -> Json {
+    fold_from(kind, &initial(kind), facts)
+}
+
+/// Fold a TAIL onto a CACHED state — the foldEngine hot core: seed with `state`, then reduce
+/// across `facts` in seq order (stable). The catch-up path passes the projection slot's state +
+/// the post-marker tail; the cold path passes `initial(kind)` + the whole reel (see `fold`).
+/// `facts` arrives seq-ascending from the store read, but the stable sort makes the reduce order
+/// independent of caller ordering (sorting an already-sorted slice is a no-op).
+pub fn fold_from(kind: &str, state: &Json, facts: &[Json]) -> Json {
     let mut ordered: Vec<&Json> = facts.iter().collect();
     // Stable sort by numeric seq, matching the store's seq-ascending read.
     ordered.sort_by(|a, b| {
@@ -41,7 +53,7 @@ pub fn fold(kind: &str, facts: &[Json]) -> Json {
             .partial_cmp(&seq_of(b))
             .unwrap_or(std::cmp::Ordering::Equal)
     });
-    let mut state = initial(kind);
+    let mut state = state.clone();
     for f in ordered {
         state = reduce(kind, &state, f);
     }

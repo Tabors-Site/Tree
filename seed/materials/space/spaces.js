@@ -216,12 +216,22 @@ export async function assertNameAvailableAt(
   { excludeSpaceId = null, history = "0" } = {},
 ) {
   if (!parentId) return;
-  // Per-history sibling name uniqueness via the file store's scoped
-  // name index. The space name key folds the parent in (parent + name),
-  // so this lookup is exactly the sibling-collision check the old
-  // partial index served. A rename excludes the space being renamed.
-  const { findByName } = await import("../../past/fileStore.js");
-  const conflict = findByName(history, "space", name, { parent: parentId });
+  // Per-history sibling name uniqueness via the projection-cache scoped
+  // name index (Rust treeproj, through the napi addon). The space name key
+  // folds the parent in (parent + name), so this lookup is exactly the
+  // sibling-collision check the old partial index served. A rename excludes
+  // the space being renamed. OWN-HISTORY raw read (the scope is the parent),
+  // deliberately not the curated lineage walk — sibling uniqueness is local.
+  const { native } = await import("../../past/fact/native.js");
+  const { storeRoot } = await import("../../past/fileStore.js");
+  const _conflictText = native.projFindByName(
+    storeRoot(),
+    String(history),
+    "space",
+    String(name),
+    JSON.stringify({ parent: parentId }),
+  );
+  const conflict = _conflictText == null ? null : JSON.parse(_conflictText);
   if (conflict && (!excludeSpaceId || String(conflict.id) !== String(excludeSpaceId))) {
     throw new IbpError(
       IBP_ERR.RESOURCE_CONFLICT,
@@ -365,7 +375,10 @@ export async function resolveBirthSpace({
       getInternalConfigValue("maxChildrenPerSpace") || "1000",
       10,
     );
-    const { findByParent: _fbp } = await import("../../past/fileStore.js");
+    const { native } = await import("../../past/fact/native.js");
+    const { storeRoot } = await import("../../past/fileStore.js");
+    const _fbp = (h, pid, kind) =>
+      JSON.parse(native.projFindByParent(storeRoot(), String(h), String(pid), String(kind)));
     if (isRoot) {
       if (resolvedParentId) {
         const childCount = _fbp(history, resolvedParentId, "space").length;
@@ -578,7 +591,10 @@ export async function createSpace({
       10,
     );
 
-    const { findByParent: _fbp } = await import("../../past/fileStore.js");
+    const { native } = await import("../../past/fact/native.js");
+    const { storeRoot } = await import("../../past/fileStore.js");
+    const _fbp = (h, pid, kind) =>
+      JSON.parse(native.projFindByParent(storeRoot(), String(h), String(pid), String(kind)));
     if (isRoot) {
       if (resolvedParentId) {
         const childCount = _fbp(history, resolvedParentId, "space").length;
@@ -1174,9 +1190,17 @@ export async function listSpaceChildren(
   // LIVE (tombstoned-excluded) child slots at this parent on the given
   // history. The heaven-flag filter, exclude, and bornOrd sort that the
   // old query expressed in the query document are applied in JS here.
-  const { findByParent, loadSnapshot } = await import(
-    "../../past/fileStore.js"
-  );
+  // Projection-cache reads via Rust treeproj (through the napi addon). OWN-HISTORY
+  // raw reads (the branchPoint/shadow union below is this function's own lineage
+  // logic, not the curated projections.js walk).
+  const { native } = await import("../../past/fact/native.js");
+  const { storeRoot } = await import("../../past/fileStore.js");
+  const findByParent = (h, pid, kind) =>
+    JSON.parse(native.projFindByParent(storeRoot(), String(h), String(pid), String(kind)));
+  const loadSnapshot = (h, kind, id) => {
+    const t = native.projLoadSnapshot(storeRoot(), String(h), String(kind), String(id));
+    return t == null ? null : JSON.parse(t);
+  };
   // A child slot from the store → the row shape callers expect, after the
   // heaven-marked + exclude filters.
   const passesFilters = (slot) => {

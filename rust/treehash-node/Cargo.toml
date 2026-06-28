@@ -13,6 +13,9 @@ napi = { version = "2", default-features = false, features = ["napi8"] }
 napi-derive = "2"
 treehash = { path = "../treehash" }
 treeverify = { path = "../treeverify" }
+treefold = { path = "../treefold" }
+treeproj = { path = "../treeproj" }
+treestore = { path = "../treestore" }
 
 [build-dependencies]
 napi-build = "2"

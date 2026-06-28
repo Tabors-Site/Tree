@@ -1,6 +1,18 @@
 #!/usr/bin/env node
 // gen-fold-vectors.mjs . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
+// ── RETIRED (2026-06-28) ─────────────────────────────────────────────────────
+// The FOLD is now PURE RUST: the foldEngine + foldAt reduce-loops were cut to the
+// `treefold` crate via native.foldFrom (seed/past/fact/native.js), and Rust is the
+// single source of truth for the fold. `fold.vectors.json` is therefore FROZEN — the
+// Rust regression baseline (tests/fold_vectors.rs), NOT a JS-tracking output. Do NOT
+// run this generator to "re-baseline" the golden: re-deriving it from JS would let a
+// JS-side change silently rewrite the very file that is supposed to catch a Rust
+// divergence. If the fold semantics intentionally change, edit the reducers AND the
+// frozen vectors together (and prove the boot still re-folds the real chain IDENTICAL).
+// Kept (not deleted) only so the reel scenarios below stay readable.
+//
+// (Historical purpose, no longer the workflow:)
 // Regenerate fold.vectors.json from the LIVE JS reducers (the source of truth for
 // the Rust treefold conformance test). Run this after ANY reducer change so the
 // golden states track the JS exactly:

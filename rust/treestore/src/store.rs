@@ -30,7 +30,7 @@ pub struct FactWrite {
 fn reel_dir(root: &Path, history: &str, kind: &str, id: &str) -> PathBuf {
     root.join("reels").join(history).join(kind).join(shard(id))
 }
-fn reel_path(root: &Path, history: &str, kind: &str, id: &str) -> PathBuf {
+pub(crate) fn reel_path(root: &Path, history: &str, kind: &str, id: &str) -> PathBuf {
     reel_dir(root, history, kind, id).join(format!("{id}.reel"))
 }
 fn head_path(root: &Path, history: &str, kind: &str, id: &str) -> PathBuf {

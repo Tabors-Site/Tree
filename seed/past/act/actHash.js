@@ -118,29 +118,27 @@ export async function advanceActHead(story, history, beingId, actId, { session =
  * to a real act, down to GENESIS_PREV. The act-chain sibling of
  * verifyReel — detection only, no repair.
  *
+ * I/O in JS, REHASH in Rust: the backward head-walk (readActHeadFile +
+ * getActById, the store concern) MATERIALIZES the chain oldest-first and
+ * catches the I/O-only break shapes — `missing-act` (a `p` resolving to no
+ * stored row) and `unaddressed` (an act whose `p` isn't a string). The
+ * recompute-from-(p, opening) + p-link verdict is then the Tier-3
+ * `treeverify` crate, reached through the addon as native.verifyActChain.
+ * There is NO JS rehash here anymore — the per-act re-hash + p-link walk
+ * was deleted; Rust is the single source of truth (proven byte-identical
+ * by the chain golden vectors + the live-chain parity harness). The clean
+ * verdict { ok, count, headHash } is byte-identical to the retired walk.
+ *
  * @returns {{ok:true, count:number, headHash:string|null} |
  *           {ok:false, count:number, brokenAt:string, reason:string}}
  */
 export async function verifyActChain(story, history, beingId) {
-  const { getActById } = await import("./actChain.js");
   const headHashFile = readActHeadFile(story, history, beingId);
-  let h = headHashFile || GENESIS_PREV;
-  let count = 0;
-  while (h !== GENESIS_PREV) {
-    const act = await getActById(h, story);
-    if (!act) {
-      return { ok: false, count, brokenAt: h, reason: "missing-act" };
-    }
-    if (typeof act.p !== "string") {
-      return { ok: false, count, brokenAt: h, reason: "unaddressed" };
-    }
-    if (computeActId(act.p, contentOfAct(act)) !== act._id) {
-      return { ok: false, count, brokenAt: h, reason: "hash-mismatch" };
-    }
-    count++;
-    h = act.p;
-  }
-  return { ok: true, count, headHash: headHashFile !== GENESIS_PREV ? headHashFile : null };
+  const head = headHashFile || GENESIS_PREV;
+  const collected = await collectActChain(story, head, GENESIS_PREV);
+  if (!collected.ok) return collected; // missing-act / unaddressed (I/O shapes, head-relative count)
+  // The recompute + p-link verdict IS Rust now, on the oldest-first materialization.
+  return JSON.parse(native.verifyActChain(JSON.stringify(collected.acts)));
 }
 
 /**
@@ -151,6 +149,14 @@ export async function verifyActChain(story, history, beingId) {
  * is legitimately absent, so the walk halts there rather than reporting a
  * missing-act. Degenerate at stopAtP = GENESIS_PREV this IS verifyActChain.
  *
+ * Same split as verifyActChain: the backward walk (I/O) materializes the
+ * segment and catches missing-act / unaddressed; native.verifyActChain
+ * (Rust) renders the recompute + p-link verdict. Because the segment is
+ * anchored (its oldest act's `p` = stopAtP, legitimately absent), the
+ * Rust kernel verifies the segment's INTERNAL chain — each act's identity
+ * recomputes from its own (p, opening) — which is the integrity the anchor
+ * delegates upward; the cross-anchor link is the caller's graft proof.
+ *
  * @param {string} story
  * @param {string} history
  * @param {string} beingId
@@ -160,22 +166,43 @@ export async function verifyActChain(story, history, beingId) {
  * @returns {{ok:true,count,headHash}|{ok:false,count,brokenAt,reason}}
  */
 export async function verifyActChainFrom(story, history, beingId, { stopAtP = GENESIS_PREV, fromHead } = {}) {
-  const { getActById } = await import("./actChain.js");
-  let h = fromHead;
-  if (h === undefined) {
-    h = readActHeadFile(story, history, beingId) || GENESIS_PREV;
+  let head = fromHead;
+  if (head === undefined) {
+    head = readActHeadFile(story, history, beingId) || GENESIS_PREV;
   }
-  const headHash = (h && h !== GENESIS_PREV) ? h : null;
+  const headHash = (head && head !== GENESIS_PREV) ? head : null;
+  const collected = await collectActChain(story, head, stopAtP);
+  if (!collected.ok) return collected; // missing-act / unaddressed (I/O shapes)
+  // The seeded recompute IS Rust now: the segment's oldest act carries p = stopAtP (the backward walk
+  // stopped there), so the verdict seeds at stopAtP, not genesis. Degenerate at GENESIS this == verifyActChain.
+  const verdict = JSON.parse(native.verifyActChainFrom(JSON.stringify(collected.acts), stopAtP));
+  // The anchored segment's headHash is the live head we walked from, not the
+  // walked-forward tail (an empty segment still reports its declared head).
+  if (verdict.ok) verdict.headHash = headHash;
+  return verdict;
+}
+
+/**
+ * The act-chain I/O: walk backward from `head` until `stop`, resolving each
+ * `p` through the store (getActById), and return the acts OLDEST-FIRST for
+ * the Rust rehash. Catches the store-coupled break shapes inline (head-
+ * relative count, byte-identical to the retired walk):
+ *   - missing-act  — a `p` (or the head) resolves to no stored row.
+ *   - unaddressed  — an act whose `p` field isn't a string.
+ * A clean walk returns { ok:true, acts:[oldest..head] }.
+ */
+async function collectActChain(story, head, stop) {
+  const { getActById } = await import("./actChain.js");
+  const newestFirst = [];
+  let h = head;
   let count = 0;
-  while (h !== GENESIS_PREV && h !== stopAtP) {
+  while (h !== GENESIS_PREV && h !== stop) {
     const act = await getActById(h, story);
     if (!act) return { ok: false, count, brokenAt: h, reason: "missing-act" };
     if (typeof act.p !== "string") return { ok: false, count, brokenAt: h, reason: "unaddressed" };
-    if (computeActId(act.p, contentOfAct(act)) !== act._id) {
-      return { ok: false, count, brokenAt: h, reason: "hash-mismatch" };
-    }
+    newestFirst.push(act);
     count++;
     h = act.p;
   }
-  return { ok: true, count, headHash };
+  return { ok: true, acts: newestFirst.reverse() };
 }

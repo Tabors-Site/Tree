@@ -21,6 +21,7 @@
 // shouldn't roll it back.
 
 import * as reducers from "../../../materials/reducers.js";
+import { native } from "../../../past/fact/native.js";
 import { loadProjection, saveProjection, initProjection, tombstoneProjection } from "../../../materials/projections.js";
 import {
   resolveHistoryLineage,
@@ -247,10 +248,14 @@ export async function fold(type, id, opts = {}) {
   }
 
   const reducer = reducers.get(type);
-  let state = slot.state;
-  for (const f of tail) {
-    state = reducer.reduce(state, f);
-    if (!skipCrossCutting) await dispatchCrossCutting(f, type, id);
+  // PURE RUST FOLD: the per-fact reduce loop is the Rust `treefold` crate, reached through the napi
+  // addon as native.foldFrom (ONE marshal: the cached slot.state in, the post-marker tail in, the
+  // folded state out — byte-identical to the retired JS reducer.reduce-loop, proven by the live-chain
+  // boot "world IDENTICAL" line + the fold golden vectors). Cross-cutting dispatch stays JS (I/O
+  // orchestration) and fires per applied fact below, exactly as before.
+  let state = JSON.parse(native.foldFrom(type, JSON.stringify(slot.state), JSON.stringify(tail)));
+  if (!skipCrossCutting) {
+    for (const f of tail) await dispatchCrossCutting(f, type, id);
   }
   const newFoldedSeq = tail[tail.length - 1].seq;
 
@@ -347,10 +352,15 @@ export async function rebuild(type, id, opts = {}) {
   // chain. The reducer doesn't see the lineage; it just sees the
   // ordered facts.
   const facts = await readReelBetween(type, id, null, null, history);
-  let state = reducer.initial();
-  for (const f of facts) {
-    state = reducer.reduce(state, f);
-    if (!skipCrossCutting) await dispatchCrossCutting(f, type, id);
+  // PURE RUST FOLD (cold path): the whole reel folds from the kind's initial() through the Rust
+  // `treefold` crate via native.foldFrom — ONE marshal seeded with reducer.initial() (the library's
+  // {names,books,peers,config}, the empty {} for being/space/matter) instead of the per-fact JS loop.
+  // Byte-identical to the retired reduce-loop (the boot nukes every .proj and re-folds the real
+  // genesis chain through THIS path; "world IDENTICAL" is the proof). Cross-cutting (default OFF on a
+  // rebuild — replay, not arrival) stays JS, per applied fact.
+  let state = JSON.parse(native.foldFrom(type, JSON.stringify(reducer.initial()), JSON.stringify(facts)));
+  if (!skipCrossCutting) {
+    for (const f of facts) await dispatchCrossCutting(f, type, id);
   }
   const lastSeq = facts.length > 0 ? facts[facts.length - 1].seq : 0;
 

@@ -34,7 +34,6 @@ import {
   writeSync,
   readFileSync,
   existsSync,
-  appendFileSync,
   readdirSync,
   statSync,
   rmSync,
@@ -42,6 +41,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { computeHash, contentOf, GENESIS_PREV } from "./fact/hash.js";
+import { native } from "./fact/native.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -162,33 +162,17 @@ function headPath(history, kind, id) {
   return join(reelDir(history, kind, id), `${id}.head`);
 }
 
-// ── durable append helper ──────────────────────────────────────────────────
-// Append bytes to a file and fsync both the file AND its directory (so the entry
-// survives a crash — a fsync'd file in an un-fsync'd dir can vanish on some FS).
-function durableAppend(path, bytes) {
-  mkdirSync(dirname(path), { recursive: true });
-  const fd = openSync(path, "a");
-  try {
-    writeSync(fd, bytes);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-}
+// (durableAppend — the fsync'd file+dir append — moved to Rust treestore::durable_append; the reel
+// stamp + act-log append are Rust now. The remaining JS write primitives below use openSync/fsyncSync
+// directly for the .head + the verbatim-instate paths not yet ported.)
 
-// ── reel head (seq counter + chain root) ────────────────────────────────────
+// ── reel head (seq counter + chain root) — PORTED TO RUST (treestore) ─────────
+// The .head read runs in Rust (native.storeReadReelHead over the SAME on-disk {head, headHash} file);
+// the JS keeps only the storeRoot()-threaded binding. Byte-identical (the step-B parity diff proves it).
 export function readReelHead(history, kind, id) {
-  const p = headPath(history, kind, id);
-  if (!existsSync(p)) return { head: 0, headHash: GENESIS_PREV };
-  try {
-    const h = JSON.parse(readFileSync(p, "utf8"));
-    return {
-      head: Number.isFinite(h.head) ? h.head : 0,
-      headHash: typeof h.headHash === "string" ? h.headHash : GENESIS_PREV,
-    };
-  } catch {
-    return { head: 0, headHash: GENESIS_PREV };
-  }
+  return JSON.parse(
+    native.storeReadReelHead(ROOT, String(history), String(kind), String(id)),
+  );
 }
 // The .head is NOT the stamp (Tabor): STAMPING IS THE ACT — appending the fact line is the act, and
 // the fact (the line) is what's stamped; it's stamped the moment it's a fact on the reel. The head is
@@ -207,40 +191,11 @@ function writeReelHead(history, kind, id, head, headHash) {
   }
 }
 
-// ── compute a fact's full identity (seq + p + _id) from a head snapshot ──────
-// Pure given (spec, head): seq = head.head+1, p = head.headHash (single-writer ⇒ the head IS seq-1's
-// identity; lineage walk across histories is a later phase), _id = computeHash(p, contentOf). Returns
-// the FULL fact doc (what a reel line is) + the next head. The identity is computed ONCE at commit
-// and carried in the WAL record, so replay never re-derives it against a moved head (the bug a
-// recompute-at-replay would cause: a duplicate at a fresh seq).
-function computeFactDoc(history, kind, id, spec, head) {
-  const seq = head.head + 1;
-  const p = head.headHash;
-  const factHistory =
-    typeof spec.history === "string" && spec.history.length
-      ? spec.history
-      : String(history);
-  const full = { ...spec, history: factHistory, seq, p };
-  const _id = computeHash(p, contentOf(full));
-  return {
-    doc: { _id, p, seq, ...full },
-    nextHead: { head: seq, headHash: _id },
-  };
-}
-
-// Write a FULLY-IDENTIFIED fact doc to its reel. The reel-line APPEND is THE STAMP — the act of
-// laying the fact mark; it is stamped the moment it's a line on the reel. The head write that follows
-// just advances the derived pointer. Idempotent by per-reel seq: if the reel already reached this
-// seq, the fact landed on a prior (possibly crashed-then-replayed) pass — skip. That makes journal
-// replay a no-op for already-applied records and an append for un-applied ones.
-function writeFactDoc(history, kind, id, doc) {
-  const cur = readReelHead(history, kind, id);
-  if (cur.head >= doc.seq)
-    return { _id: doc._id, seq: doc.seq, replayed: true };
-  durableAppend(reelPath(history, kind, id), JSON.stringify(doc) + "\n"); // ← the stamp (lay the fact)
-  writeReelHead(history, kind, id, doc.seq, doc._id); // advance the derived head pointer
-  return { _id: doc._id, seq: doc.seq, replayed: false };
-}
+// (computeFactDoc — the act->fact stamp identity — and writeFactDoc — the fsync'd reel-line append =
+// the stamp — moved to Rust treestore (stamp.rs + store.rs), reached through commitMoment/commitVerbatim
+// via native.storeCommitMoment / native.storeCommitVerbatim. They wrote the SAME reel line; Rust owns
+// the bytes now, byte-identical (the step-B parity diff proves it). The JS write path is the stamp no
+// longer — only the .head + verbatim-instate primitives below remain in JS.)
 
 // Truncate a reel back to seq <= keepSeq — the rollback primitive for a verbatim INSTATE that
 // failed partway (book/graft receive). A normal stamp is never undone (the chain only grows), but a
@@ -283,27 +238,21 @@ export function truncateReelTo(history, kind, id, keepSeq) {
   return { head: 0, headHash: GENESIS_PREV };
 }
 
-// ── read a reel back (the readReelBetween substrate) ────────────────────────
-// Returns the facts on (history,kind,id) with afterSeq < seq <= untilSeq, in seq order. Lines are
-// already seq-ascending (single-writer appends in order). Lineage range-union across histories is a
-// later phase (mirrors foldEngine.readReelBetween); this is the own-history read.
+// ── read a reel back (the readReelBetween substrate) — PORTED TO RUST (treestore) ─────────────────
+// The own-history seq-range read (afterSeq < seq <= untilSeq, seq-ascending) runs in Rust
+// (native.storeReadReel); the JS keeps only the storeRoot()-threaded binding. Byte-identical to the
+// retired JS scan (the step-B parity diff proves it). undefined bound = unbounded that side.
 export function readReel(history, kind, id, afterSeq = null, untilSeq = null) {
-  const p = reelPath(history, kind, id);
-  if (!existsSync(p)) return [];
-  const out = [];
-  for (const line of readFileSync(p, "utf8").split("\n")) {
-    if (!line) continue;
-    let f;
-    try {
-      f = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (afterSeq != null && !(f.seq > afterSeq)) continue;
-    if (untilSeq != null && !(f.seq <= untilSeq)) continue;
-    out.push(f);
-  }
-  return out;
+  return JSON.parse(
+    native.storeReadReel(
+      ROOT,
+      String(history),
+      String(kind),
+      String(id),
+      afterSeq == null ? undefined : afterSeq,
+      untilSeq == null ? undefined : untilSeq,
+    ),
+  );
 }
 
 // ── reel enumeration (the cross-reel scan substrate) ─────────────────────────
@@ -399,22 +348,20 @@ export function readReelLineage(
   afterSeq = null,
   untilSeq = null,
 ) {
-  const out = [];
-  for (let i = 0; i < lineage.length; i++) {
-    const h = String(lineage[i]);
-    const lo = Number.isFinite(floors?.[h]) ? floors[h] : 0; // h owns (lo, hi]
-    const nextH = i + 1 < lineage.length ? String(lineage[i + 1]) : null;
-    const hi = nextH && Number.isFinite(floors?.[nextH]) ? floors[nextH] : null;
-    const lower = afterSeq != null ? Math.max(lo, afterSeq) : lo;
-    const upper =
-      untilSeq != null && hi != null
-        ? Math.min(hi, untilSeq)
-        : untilSeq != null
-          ? untilSeq
-          : hi;
-    for (const f of readReel(h, kind, id, lower, upper)) out.push(f);
-  }
-  return out;
+  // PORTED TO RUST (treestore): the OR-of-ranges branch union runs in Rust (native.storeReadReelLineage
+  // over the per-history reel files); the JS keeps only the storeRoot()-threaded binding. The range math
+  // (h owns (floor_h, floor_next]) + the cross-fork chain are Rust now, byte-identical to the retired JS.
+  return JSON.parse(
+    native.storeReadReelLineage(
+      ROOT,
+      JSON.stringify((lineage || []).map(String)),
+      JSON.stringify(floors || {}),
+      String(kind),
+      String(id),
+      afterSeq == null ? undefined : afterSeq,
+      untilSeq == null ? undefined : untilSeq,
+    ),
+  );
 }
 
 // ── verify a reel file's hash-chain (the verifyReel.js peer, on files) ──────
@@ -460,53 +407,17 @@ export function forkReel(branchHistory, parentHistory, kind, id, branchPoint) {
   return { head: branchPoint, headHash: tipHash };
 }
 
-// ── projection snapshots (.proj) — the folded-state CACHE backing projections.js ────────────────
-// A snapshot is the reducer's folded state for a (history,kind,id) — what Mongo's projection doc held
-// (state, foldedSeq, position, tombstoned). It is a CACHE, rebuildable by folding the reel; never
-// truth. Backs projections.loadProjection / saveProjection / initProjection / tombstoneProjection.
-function snapPath(history, kind, id) {
-  return join(reelDir(history, kind, id), `${id}.proj`);
-}
-export function loadSnapshot(history, kind, id) {
-  const p = snapPath(history, kind, id);
-  if (!existsSync(p)) return null;
-  try {
-    return JSON.parse(readFileSync(p, "utf8"));
-  } catch {
-    return null;
-  }
-}
-// CAS-guarded write: when expectedFoldedSeq is given, only advance if the on-disk foldedSeq matches
-// (mirrors projections.saveProjection's compare-and-set — a stale concurrent fold loses, the next
-// fold catches up). Returns true if written.
-export function saveSnapshot(
-  history,
-  kind,
-  id,
-  slot,
-  expectedFoldedSeq = undefined,
-) {
-  const old = loadSnapshot(history, kind, id);
-  if (expectedFoldedSeq !== undefined) {
-    if (old && old.foldedSeq !== expectedFoldedSeq) return false;
-  }
-  const p = snapPath(history, kind, id);
-  mkdirSync(dirname(p), { recursive: true });
-  const fd = openSync(p, "w");
-  try {
-    writeSync(fd, JSON.stringify(slot) + "\n");
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-  // Keep the derived index consistent with the .proj snapshots: diff old→new and
-  // re-bucket this id. The index is rebuildable (rebuildIndex), never truth.
-  updateIndexFromSlot(history, kind, id, old, slot);
-  return true;
-}
-export function initSnapshot(history, kind, id, slot) {
-  return saveSnapshot(history, kind, id, slot); // unconditional upsert (cold-fold landing)
-}
+// ── projection snapshots (.proj) + the derived find* INDEX — PORTED TO RUST (treeproj) ───────────
+// The .proj snapshot store (snapPath/loadSnapshot/saveSnapshot/initSnapshot), the derived inverted
+// INDEX (indexDir/indexPath/loadIndex/saveIndex/updateIndexFromSlot + nameKey/parentOf/setAdd/
+// setRemove), the find* reads (findByName/findByPosition/findByParent/listByType/findByHeavenSpace),
+// and rebuildIndex all moved to the Rust `treeproj` crate, reached through the napi addon as
+// native.proj* (seed/past/fact/native.js). They wrote/read the SAME on-disk format Rust now owns:
+// reels/<history>/<kind>/<shard>/<id>.proj and index/<history>/<kind>.<facet>.json (byte
+// wire-compatible — proven by the boot "world IDENTICAL" gate + a file-diff parity harness).
+// projections.js (the history-aware query facade) and spaces.js (its own-history sibling/child reads)
+// route to native.proj* now; there is NO JS implementation left to fall back to. The reel + act-log
+// + commitMoment WRITE PATH below is unchanged (it is the separate Rust sub-rung).
 
 // ── the act-log (the act-chain, peer of the reel files) ─────────────────────
 // A being's ACTS are their own per-being JSONL chain, a sibling to the reel files. Where the reel
@@ -545,24 +456,29 @@ function actHeadPath(story, history, being) {
 // (the commit mutex) and rebuildable from the .acts logs (rebuildActIndex), so a missing/corrupt
 // index is never a loss of truth.
 export function appendActLine(story, history, being, actDoc) {
-  const line = JSON.stringify(actDoc) + "\n";
-  durableAppend(actLogPath(story, history, being), line);
+  // THE DURABLE APPEND IS RUST (treestore, via native.storeAppendActLine): the FULLY-BUILT signed act
+  // doc (the JS computed _id/p/sig/at/endMessage) is serialized verbatim and fsync-appended to the
+  // Name's act-log — byte-identical to the retired JSON.stringify + durableAppend (the step-B parity
+  // diff proves it). The derived act INDEX stays in JS (indexActDoc): it is a rebuildable cache off the
+  // logs (rebuildActIndex), not the chain itself, so it is not part of the Rust truth floor.
+  const bytes = native.storeAppendActLine(
+    ROOT,
+    String(story),
+    String(history),
+    String(being),
+    JSON.stringify(actDoc),
+  );
   indexActDoc(story, history, being, actDoc);
-  return { bytes: Buffer.byteLength(line, "utf8") };
+  return { bytes };
 }
 
 // Read the being's act-chain head. The head is the last act's id (GENESIS_PREV if the chain is
 // empty) — a DERIVED pointer, rebuildable by scanning the act-log to its end. Persisted + fsync'd
 // (in advanceActHeadFile) only so the CAS read is O(1).
 export function readActHeadFile(story, history, being) {
-  const p = actHeadPath(story, history, being);
-  if (!existsSync(p)) return GENESIS_PREV;
-  try {
-    const h = readFileSync(p, "utf8").trim();
-    return h.length ? h : GENESIS_PREV;
-  } catch {
-    return GENESIS_PREV;
-  }
+  // PORTED TO RUST (treestore): the .acthead read runs in Rust (native.storeReadActHead); GENESIS_PREV
+  // when the chain is empty/absent, exactly as the retired JS read. The JS keeps only the binding.
+  return native.storeReadActHead(ROOT, String(story), String(history), String(being));
 }
 
 // Advance the act-chain head under a compare-and-set: only move the head if the on-disk head equals
@@ -570,19 +486,25 @@ export function readActHeadFile(story, history, being) {
 // ACT_CHAIN_MOVED — the chain can't fork. Idempotent: if the head already IS actId, this is a
 // settled replay (the prior advance landed, the ack just hadn't recorded it) → no-op, no throw.
 export function advanceActHeadFile(story, history, being, actId, expectPrev) {
-  const cur = readActHeadFile(story, history, being);
-  if (cur === actId) return { head: actId, replayed: true }; // settled replay — already advanced
-  if (cur !== expectPrev) throw new Error("ACT_CHAIN_MOVED");
-  const p = actHeadPath(story, history, being);
-  mkdirSync(dirname(p), { recursive: true });
-  const fd = openSync(p, "w");
+  // THE CAS IS RUST (treestore, via native.storeAdvanceActHead): advance the .acthead only if the
+  // on-disk head equals expectPrev. A settled replay (cur === actId) is a no-op (replayed:true); a stale
+  // author (cur !== expectPrev) is refused — Rust raises a napi error whose message is "ACT_CHAIN_MOVED",
+  // which we re-throw as a plain Error so callers' `e.message === "ACT_CHAIN_MOVED"` checks hold.
   try {
-    writeSync(fd, String(actId) + "\n");
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
+    return JSON.parse(
+      native.storeAdvanceActHead(
+        ROOT,
+        String(story),
+        String(history),
+        String(being),
+        String(actId),
+        String(expectPrev),
+      ),
+    );
+  } catch (err) {
+    if (err && /ACT_CHAIN_MOVED/.test(err.message)) throw new Error("ACT_CHAIN_MOVED");
+    throw err;
   }
-  return { head: actId, replayed: false };
 }
 
 // Instate VERBATIM acts — a graft/plant transplant of one being's act-chain on a (story, history),
@@ -639,6 +561,15 @@ const ACT_FACETS = [
   "ibpAddress",
   "answers",
 ];
+// Append id to map[key]'s id-array (creating it, dedup'd). The act-index facets are id-arrays
+// (value → [actId, ...]); indexActDoc buckets with this. Was shared with the now-Rust projection
+// index; kept here for the act-log side (sub-rung 2 owns the act-log write path).
+function setAdd(map, key, id) {
+  if (key == null) return;
+  const arr = Array.isArray(map[key]) ? map[key] : [];
+  if (!arr.includes(id)) arr.push(id);
+  map[key] = arr;
+}
 function actIndexDir(story) {
   return join(ROOT, "acts", pathSafe(story), "_index");
 }
@@ -733,24 +664,19 @@ export function patchAct(story, actId, partial) {
 }
 
 // ── act reads (the file-native peer of Act.find*) ───────────────────────────
-// Scan one being's act-log and return its acts (oldest-first; the log is append-order). Each is the
-// logged line with any patch overlay merged on top (the overlay has no writer today; see above).
+// One being's acts (oldest-first; the log is append-order), each the logged line with any patch overlay
+// merged on top (the overlay has no writer today; see above). The act-log line read is Rust
+// (native.storeReadActChain); the patch merge stays in JS (a store-side overlay, not the chain truth).
 function readActLog(story, history, being) {
-  const p = actLogPath(story, history, being);
-  if (!existsSync(p)) return [];
-  const out = [];
-  for (const line of readFileSync(p, "utf8").split("\n")) {
-    if (!line) continue;
-    let a;
-    try {
-      a = JSON.parse(line);
-    } catch {
-      continue;
-    }
+  const acts = JSON.parse(
+    native.storeReadActChain(ROOT, String(story), String(history), String(being)),
+  );
+  for (let i = 0; i < acts.length; i++) {
+    const a = acts[i];
     const patch = a?._id != null ? loadActPatch(story, String(a._id)) : null;
-    out.push(patch ? { ...a, ...patch } : a);
+    if (patch) acts[i] = { ...a, ...patch };
   }
-  return out;
+  return acts;
 }
 
 // readActById(story, actId) → the act doc (patch-merged), or null. O(1) location via the id index,
@@ -789,6 +715,10 @@ export function actsByCorrelation(story, rootCorrelation) {
 // readActChain(story, history, being) → one being's authored acts on a (story, history), append-
 // order (oldest-first), patch-merged. The own-(story,history) read; the lineage union across parent
 // histories lives in the curated actChain.js layer (like readReel vs readReelLineage).
+//
+// PORTED TO RUST (treestore): the act-log line read runs in Rust (native.storeReadActChain, via
+// readActLog), byte-identical to the retired JS scan. The patch OVERLAY merge stays in JS (a store-side
+// overlay, not the act-chain truth; no patch writer today).
 export function readActChain(story, history, being) {
   return readActLog(story, history, being);
 }
@@ -874,235 +804,11 @@ export function rebuildActIndex(story) {
   return { rebuilt };
 }
 
-// ── the derived INDEX (rebuildable — backs projections.js find* queries) ─────
-// The reels are truth; the .proj snapshots are the folded-state cache; this index is a cache OF that
-// cache — the inverted lookups (name→id, space→occupants, parent→children, kind→ids, heavenSpace→id)
-// that Mongo served from secondary indexes. It is maintained incrementally: every saveSnapshot /
-// initSnapshot diffs old→new slot and re-buckets the id (updateIndexFromSlot). It is fully
-// rebuildable from the reels (rebuildIndex), so a corrupt/missing index is never a loss of truth.
-//
-// One JSON file per (history, kind, facet) at index/<historySafe>/<kind>.<facet>.json. Each is a
-// plain map; values are either a single id (name, heavenSpace — unique per key) or an id-array
-// (position, parent, type — many per key). Single-writer (the commit mutex) ⇒ no lock needed.
-function indexDir(history) {
-  return join(ROOT, "index", pathSafe(history));
-}
-function indexPath(history, kind, facet) {
-  return join(indexDir(history), `${pathSafe(kind)}.${pathSafe(facet)}.json`);
-}
-function loadIndex(history, kind, facet) {
-  const p = indexPath(history, kind, facet);
-  if (!existsSync(p)) return {};
-  try {
-    return JSON.parse(readFileSync(p, "utf8")) || {};
-  } catch {
-    return {};
-  }
-}
-function saveIndex(history, kind, facet, map) {
-  const p = indexPath(history, kind, facet);
-  mkdirSync(dirname(p), { recursive: true });
-  const fd = openSync(p, "w");
-  try {
-    writeSync(fd, JSON.stringify(map) + "\n");
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-}
-
-// Scope the name key so per-kind name uniqueness matches the Mongo partial indexes: beings are
-// global per history; spaces are scoped by their parent space; matter is scoped by (spaceId,
-// parentMatterId) folder. The key folds the scope in so two folders may both hold a "config".
-function nameKey(kind, state) {
-  if (kind === "space") return `${state?.parent ?? ""}\0${state?.name}`;
-  if (kind === "matter")
-    return `${state?.spaceId ?? ""}\0${state?.parentMatterId ?? ""}\0${state?.name}`;
-  return String(state?.name);
-}
-// The parent key per kind (being→parentBeingId, space→parent, matter→parentMatterId).
-function parentOf(kind, state) {
-  if (kind === "being") return state?.parentBeingId ?? null;
-  if (kind === "space") return state?.parent ?? null;
-  if (kind === "matter") return state?.parentMatterId ?? null;
-  return null;
-}
-function setRemove(map, key, id) {
-  if (key == null) return;
-  const arr = map[key];
-  if (!Array.isArray(arr)) return;
-  const next = arr.filter((x) => x !== id);
-  if (next.length) map[key] = next;
-  else delete map[key];
-}
-function setAdd(map, key, id) {
-  if (key == null) return;
-  const arr = Array.isArray(map[key]) ? map[key] : [];
-  if (!arr.includes(id)) arr.push(id);
-  map[key] = arr;
-}
-
-// Diff old→new slot and re-bucket `id` across every facet index. Called by saveSnapshot /
-// initSnapshot so the index tracks the .proj snapshots. A tombstoned slot is REMOVED from every live
-// index (so tombstones never leak into a find); a live slot is (re-)added at its new keys.
-export function updateIndexFromSlot(history, kind, id, oldSlot, newSlot) {
-  const oldState = oldSlot?.state || {};
-  const newState = newSlot?.state || {};
-  const oldDead = !oldSlot || oldSlot.tombstoned;
-  const newDead = !newSlot || newSlot.tombstoned;
-
-  // name (unique per scoped key → single id value)
-  {
-    const m = loadIndex(history, kind, "name");
-    if (!oldDead && oldState.name != null) {
-      const k = nameKey(kind, oldState);
-      if (m[k] === id) delete m[k];
-    }
-    if (!newDead && newState.name != null) m[nameKey(kind, newState)] = id;
-    saveIndex(history, kind, "name", m);
-  }
-  // position (space → many occupants). slot.position is the spaceId.
-  {
-    const m = loadIndex(history, kind, "position");
-    if (!oldDead) setRemove(m, oldSlot?.position ?? null, id);
-    if (!newDead && newSlot?.position != null) setAdd(m, newSlot.position, id);
-    saveIndex(history, kind, "position", m);
-  }
-  // parent (parentBeingId / parent / parentMatterId → many children)
-  {
-    const m = loadIndex(history, kind, "parent");
-    if (!oldDead) setRemove(m, parentOf(kind, oldState), id);
-    if (!newDead) setAdd(m, parentOf(kind, newState), id);
-    saveIndex(history, kind, "parent", m);
-  }
-  // type (kind → all live ids of this kind). Tombstoned ids drop out.
-  {
-    const m = loadIndex(history, kind, "type");
-    if (newDead) setRemove(m, kind, id);
-    else setAdd(m, kind, id);
-    saveIndex(history, kind, "type", m);
-  }
-  // heavenSpace (state.heavenSpace → the one space id; singleton per kind/key)
-  {
-    const m = loadIndex(history, kind, "heavenSpace");
-    if (
-      !oldDead &&
-      oldState.heavenSpace != null &&
-      m[oldState.heavenSpace] === id
-    )
-      delete m[oldState.heavenSpace];
-    if (!newDead && newState.heavenSpace != null) m[newState.heavenSpace] = id;
-    saveIndex(history, kind, "heavenSpace", m);
-  }
-}
-
-// ── find* queries (own-history; lineage inheritance is a follow-up) ──────────
-// These read the inverted index → an id (or ids) → the .proj snapshot(s). Own-history only: the
-// lazy parent-lineage walk projections.js does (findByName/findByParent/listByType recursing into
-// the parent history) is a TODO — resolve (lineage, floors) like readReelLineage and union the
-// per-history index reads. The own-history path is clean now.
-
-// findByName(history, kind, name) → the slot (with id), or null.
-export function findByName(history, kind, name, scope = {}) {
-  if (name == null) return null;
-  const m = loadIndex(history, kind, "name");
-  // Most callers pass a bare name; for scoped kinds we honor an optional scope to disambiguate.
-  const probe =
-    kind === "being" ? String(name) : nameKey(kind, { ...scope, name });
-  let id = m[probe] !== undefined ? m[probe] : m[String(name)];
-  // Parent-agnostic fallback (a Mongo-parity restore): the scoped index key for a space/matter is
-  // "<parent...> <name>", so a BARE-name caller (no scope) misses it. The old Mongo findByName was
-  // `Projection.findOne({ "state.name": name })` — matched by name ALONE, parent-agnostic, first hit.
-  // When the scoped + bare probes both miss, scan for the first key whose trailing name segment is
-  // `name` (sibling-unique means at most one per parent; a globally unique name resolves cleanly).
-  if (id === undefined && kind !== "being") {
-    // nameKey joins the scope segments with a NUL byte ("<parent>\0<name>" for a space), so the
-    // bare name is the final NUL-delimited segment. First hit wins (sibling-unique → one per parent).
-    for (const k of Object.keys(m)) {
-      if (k.split("\0").pop() === String(name)) {
-        id = m[k];
-        break;
-      }
-    }
-  }
-  if (id === undefined) return null;
-  const slot = loadSnapshot(history, kind, id);
-  if (!slot || slot.tombstoned) return null;
-  return { id, ...slot };
-}
-// findByPosition(history, spaceId) → the live occupants across kinds at that space.
-export function findByPosition(history, spaceId) {
-  if (spaceId == null) return [];
-  const out = [];
-  for (const kind of ["being", "space", "matter"]) {
-    const ids = loadIndex(history, kind, "position")[spaceId];
-    if (!Array.isArray(ids)) continue;
-    for (const id of ids) {
-      const slot = loadSnapshot(history, kind, id);
-      if (slot && !slot.tombstoned) out.push({ kind, id, ...slot });
-    }
-  }
-  return out;
-}
-// findByParent(history, parentId, kind) → the live children of parentId in this kind.
-export function findByParent(history, parentId, kind) {
-  if (parentId == null) return [];
-  const ids = loadIndex(history, kind, "parent")[parentId];
-  if (!Array.isArray(ids)) return [];
-  const out = [];
-  for (const id of ids) {
-    const slot = loadSnapshot(history, kind, id);
-    if (slot && !slot.tombstoned) out.push({ kind, id, ...slot });
-  }
-  return out;
-}
-// listByType(history, kind) → the live ids of this kind (tombstoned excluded).
-export function listByType(history, kind) {
-  const ids = loadIndex(history, kind, "type")[kind];
-  return Array.isArray(ids) ? ids.slice() : [];
-}
-// findByHeavenSpace(history, kind) → the singleton seed-space slot, or null. The marker KIND is the
-// state.heavenSpace value (config/heaven/threads/...); pass it as the kind arg's heaven-key.
-export function findByHeavenSpace(history, kind, heavenSpaceKind = kind) {
-  const id = loadIndex(history, "space", "heavenSpace")[heavenSpaceKind];
-  if (id === undefined) return null;
-  const slot = loadSnapshot(history, "space", id);
-  if (!slot || slot.tombstoned) return null;
-  return { id, ...slot };
-}
-
-// rebuildIndex(history, kind) — re-derive the index for a kind by scanning its reels + folding to
-// the current snapshot, then re-bucketing each id. Proves the rebuildable property: the index is a
-// pure function of the snapshots (which are a pure fold of the reels). Wipes the kind's facet files
-// first, then re-adds every live id from its .proj. (Snapshot existence is assumed current; a full
-// reel re-fold belongs to the fold engine, not the store.)
-export function rebuildIndex(history, kind) {
-  for (const facet of ["name", "position", "parent", "type", "heavenSpace"]) {
-    saveIndex(history, kind, facet, {});
-  }
-  const dir = join(ROOT, "reels", String(history), String(kind));
-  if (!existsSync(dir)) return { rebuilt: 0 };
-  let rebuilt = 0;
-  // Walk every shard dir, find each <id>.proj, re-bucket from its slot.
-  for (const shardName of readdirSync(dir)) {
-    const shardDir = join(dir, shardName);
-    let entries;
-    try {
-      entries = readdirSync(shardDir);
-    } catch {
-      continue;
-    }
-    for (const f of entries) {
-      if (!f.endsWith(".proj")) continue;
-      const id = f.slice(0, -".proj".length);
-      const slot = loadSnapshot(history, kind, id);
-      if (!slot) continue;
-      updateIndexFromSlot(history, kind, id, null, slot);
-      rebuilt++;
-    }
-  }
-  return { rebuilt };
-}
+// (The derived find* INDEX — indexDir/indexPath/loadIndex/saveIndex, nameKey/parentOf/setAdd/
+// setRemove, updateIndexFromSlot, findByName/findByPosition/findByParent/listByType/
+// findByHeavenSpace, and rebuildIndex — moved to the Rust `treeproj` crate, reached as
+// native.proj* through the napi addon. See the projection-snapshot note above; the same on-disk
+// index files (index/<history>/<kind>.<facet>.json) are now Rust-owned, byte wire-compatible.)
 
 // ── CROSS-AGGREGATE enumerators (the chain-structure roll-ups + the genome dump) ─────────────────
 // The reels are partitioned per (history, kind, id) and the act-logs per (story, history, being);
@@ -1308,19 +1014,6 @@ function withCommitLock(fn) {
   return run;
 }
 
-// Apply a persisted record (facts carry their FULL pre-computed docs) to the reel files. Idempotent
-// by per-reel seq, so re-applying a committed record on replay is a pure no-op.
-function applyRecord(record) {
-  const factIds = [];
-  for (const f of record.facts || []) {
-    if (!f.doc) continue;
-    const { _id } = writeFactDoc(f.history, f.kind, f.id, f.doc);
-    factIds.push(_id);
-  }
-  // (act-file append + .acthead CAS is the next phase; the record already carries record.act.)
-  return { factIds, actId: record.act?._id ?? record.actId ?? null };
-}
-
 /**
  * Commit one moment atomically: WAL-append (the commit point) → apply to reels → ack.
  * @param {{recId?:string, act?:object, actId?:string, facts: Array<{history:string,kind:string,id:string,spec:object}>}} record
@@ -1349,64 +1042,32 @@ function notifyCommitObservers(factCount) {
 export function commitMoment(record) {
   return withCommitLock(() => {
     // The append ordinal (clock-free cross-reel order; see the _ordCounter note above) is assigned
-    // HERE, under the commit lock and BEFORE the WAL append, so it journals with the act and rides the
-    // act-log verbatim. One act per moment (one-word) → one ord per commit.
+    // HERE, under the commit lock, so it rides the act + every fact verbatim. One act per moment
+    // (one-word) → one ord per commit. The ord allocation reads the act-logs (currentOrd scans them),
+    // so it stays in JS; Rust receives it as a number.
     if (record.act && record.act.ord == null) record.act.ord = nextOrd();
-    const ord = record.act?.ord ?? null;
-    // (1) Compute each fact's identity ONCE, threading per-reel heads (a moment may touch >1 reel
-    //     during the run-on transition). Build the persisted record carrying the FULL fact docs, so
-    //     replay re-applies the EXACT facts (never re-derives a fresh seq against a moved head).
-    const heads = new Map();
-    const facts = (record.facts || []).map((f) => {
-      const key = `${f.history}:${f.kind}:${f.id}`;
-      const head = heads.get(key) || readReelHead(f.history, f.kind, f.id);
-      const { doc, nextHead } = computeFactDoc(
-        f.history,
-        f.kind,
-        f.id,
-        f.spec,
-        head,
-      );
-      // The moment's append ordinal also rides each FACT (= its act's ord): the clock-free GLOBAL order
-      // the fact sits at across reels (per-reel `seq` is only local). Non-digest — contentOf excludes
-      // it, so it never affects _id or verifyReel, exactly like `date`. Lets the fold read a birth
-      // fact's `ord` as the aggregate's birth position (the createdAt replacement), no clock.
-      if (ord != null) doc.ord = ord;
-      heads.set(key, nextHead);
-      return { history: f.history, kind: f.kind, id: f.id, doc };
-    });
-    // ONE ACT, ONE FACT, ONE REEL. Tail-truncation recovery (drop an unfinished act by cutting its
-    // reel's tail) is only atomic if an act never FANS across reels — a multi-reel act is the run-on
-    // that brought the journal back. Enforce it so the no-journal floor stays sound: a live act's
-    // facts must all land on a SINGLE reel (0 facts is fine — a factless act, e.g. a cross-world attempt).
-    const reels = new Set(facts.map((f) => `${f.history}:${f.kind}:${f.id}`));
-    if (reels.size > 1) {
-      // BANNED. A multi-reel act is a RUN-ON — `do do do do` crammed into one act. The no-journal
-      // floor's tail-truncation recovery is only atomic with ONE reel per act, and the doctrine is
-      // one word = one do = one fact = one moment: a word CALLS more words, each its own act. So a
-      // fan-out is REFUSED at the commit boundary, never tolerated. Decompose into one word per reel.
-      throw new Error(
-        `commitMoment: RUN-ON BANNED — act ${record.actId || record.act?._id || "?"} lays facts on ` +
-          `${reels.size} reels (${[...reels].join(", ")}). One act = one do = one fact = one reel; ` +
-          `a word calls more words (each its own act). Decompose into one word per reel.`,
-      );
-    }
-    const persisted = {
-      recId: record.recId,
-      act: record.act,
-      actId: record.actId,
-      facts,
-    };
-    // WRITE-THROUGH — no journal. The fact-line append IS the stamp: writeFactDoc fsyncs the reel, and
-    // the fact's _id IS the finished-and-whole check (a torn append leaves a line the .head never
-    // advanced past, which readReel skips). With no fan-out there is no multi-reel "all-or-none" to
-    // protect, so there is no WAL, no ack, no replay — the act/fact divide is the stamp itself.
-    const result = applyRecord(persisted);
-    // Fact-count triggers (the CAS retention sweep) ride this LOCAL count, never a
-    // wall-clock. facts.length is 0 for a factless act (a SEE / cross-world attempt),
-    // so only real facts advance the cadence — and only LOCAL ones (an outside Name's
-    // act never reaches here), which is why it counts facts, not acts.
-    notifyCommitObservers(facts.length);
+    const ord = record.act?.ord ?? 0;
+    // THE STAMP IS RUST (treestore, via native.storeCommitMoment): seal each fact ONCE (thread the
+    // per-reel heads, attach `ord`), REFUSE a run-on (one act = one fact = one reel), and durably
+    // append each to its reel (the fsync'd line = the stamp, idempotent by per-reel seq). Byte-identical
+    // to the retired JS computeFactDoc + writeFactDoc loop (the step-B parity diff proves it). The
+    // act-log is written SEPARATELY (the signed act lands via storeAppendActLine in 4-stamped), exactly
+    // as before — commitMoment writes FACTS only. There is no JS fallback (a mis-wired addon hard-errors).
+    const result = JSON.parse(
+      native.storeCommitMoment(
+        ROOT,
+        JSON.stringify({
+          recId: record.recId,
+          act: record.act,
+          actId: record.actId ?? record.act?._id ?? null,
+          facts: record.facts || [],
+        }),
+        ord,
+      ),
+    );
+    // Fact-count triggers (the CAS retention sweep) ride this LOCAL count, never a wall-clock. An empty
+    // factIds is a factless act (a SEE / cross-world attempt), so only real facts advance the cadence.
+    notifyCommitObservers((result.factIds || []).length);
     return result;
   });
 }
@@ -1429,13 +1090,12 @@ export function commitMoment(record) {
 export function commitVerbatim(facts) {
   return withCommitLock(() => {
     const list = (facts || []).filter((f) => f && f.doc);
-    const persisted = { verbatim: true, facts: list };
-    // Write-through (no journal). A verbatim transplant is a BULK graft/book instate, not one live
-    // act's stamp, so the one-reel rule does not apply (it lands a whole genome across many reels). Each
-    // fact carries its own pre-built _id, idempotent by per-reel seq; a torn append is skipped by
-    // readReel and the content hash is the whole-check. The receiver's rollback (truncateReelTo) is the
-    // application-level all-or-none for a partial instate — not a storage WAL.
-    return applyRecord(persisted);
+    // THE WRITE IS RUST (treestore, via native.storeCommitVerbatim): each pre-built doc lands
+    // byte-for-byte on its reel (idempotent by per-reel seq, so a re-received book is a no-op). A
+    // verbatim transplant is a BULK graft/book instate, not one live act's stamp, so the one-reel rule
+    // does not apply (it lands a whole genome across many reels). Same writeFactDoc floor commitMoment
+    // uses, so the head advances per reel as each line lands.
+    return JSON.parse(native.storeCommitVerbatim(ROOT, JSON.stringify(list)));
   });
 }
 

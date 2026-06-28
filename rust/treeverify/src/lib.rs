@@ -154,10 +154,21 @@ pub fn verify_fact_chain_from(facts: &[Json], anchor_prev: &str, from_seq: f64) 
 /// in the store. That is an I/O concern; given a materialized oldest-first list, a dangling `p`
 /// surfaces here as `prev-mismatch` at the gap.)
 pub fn verify_act_chain(acts: &[Json]) -> Json {
+    // The genesis-seeded walk IS the anchored walk at { anchor_prev: GENESIS_PREV }.
+    verify_act_chain_from(acts, GENESIS_PREV)
+}
+
+/// verifyActChainFrom's anchored sibling: the same act-chain walk seeded at a DECLARED anchor
+/// (`anchor_prev` = the identity of the act immediately before the segment, legitimately absent in a
+/// partial graft) instead of genesis. The segment's oldest act carries `p = anchor_prev` by
+/// construction (the JS backward walk stopped at it), so seeding there is what licenses the non-genesis
+/// start; an UNANCHORED gap still breaks (prev-mismatch). Degenerate at `GENESIS_PREV` this IS
+/// `verify_act_chain`. Same break shapes, same byte-for-byte recompute (`act_id`); only the seed differs.
+pub fn verify_act_chain_from(acts: &[Json], anchor_prev: &str) -> Json {
     if acts.is_empty() {
         return ok_verdict(0.0, None);
     }
-    let mut expected_prev = GENESIS_PREV.to_string();
+    let mut expected_prev = anchor_prev.to_string();
     let mut count = 0.0_f64;
     for a in acts {
         count += 1.0;

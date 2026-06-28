@@ -110,7 +110,7 @@ fn serve(addr: &str, root: &Path) {
     println!("   GET  /health                          boot summary (counts + verify)");
     println!("   GET  /reels                           reel index");
     println!("   GET  /reel/<history>/<kind>/<id>      read + verify + fold one reel");
-    println!("   POST /word                            WRITE seam -> delegates to the Word runtime (501 today)");
+    println!("   POST /word  {{word,actor,history}}        WRITE -> runs the Word in Rust (treeibp::act), no Node");
     println!("   WS   /ws                              send 'history/kind/id' or 'reels', get JSON back");
     for stream in listener.incoming().flatten() {
         let root = root.to_path_buf();
@@ -155,43 +155,83 @@ fn route(req: &Request, root: &Path) -> (&'static str, &'static str, String) {
     ("404 Not Found", "application/json", json(&err("not found")))
 }
 
-// The WRITE side. POST /word enters the Rust front door; the kernel does NOT run Words — it DELEGATES
-// to the JS Word runtime (seed/present/word/word-worker.mjs): spawn node, pipe the request in, relay
-// the JSON result. The worker does the real JS stamp (commitMoment today; runWordToStore plugs in at
-// the same seam). The kernel owns the store + transport; Word stays a worker. This is the "Rust host,
-// JS Word" microkernel shape — the on-ramp to dropping Node.
+// The WRITE side, PURE RUST. POST /word runs the Word IN the binary — treeibp::act (parse → authorize
+// → rasterize → stamp), NO Node, NO subprocess. The request is { word, actor, history }; each act's
+// outcome (the stamped fact, or a denial) is relayed. Able SPECS fold from the seed .word vocabulary
+// in Rust (foldAbleNoun via treeibp::fold_word_able), so GRANTED ables authorize too — no Node anywhere.
 fn word_seam(body: &[u8], root: &Path) -> (&'static str, &'static str, String) {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
+    let req = match treehash::parse(&String::from_utf8_lossy(body)) {
+        Ok(r) => r,
+        Err(_) => return ("400 Bad Request", "application/json", json(&err("invalid JSON body"))),
+    };
+    let word = match get_str(&req, "word") {
+        Some(w) => w,
+        None => return ("400 Bad Request", "application/json", json(&err("missing 'word'"))),
+    };
+    let actor = get(&req, "actor").cloned().unwrap_or(Json::Null);
+    let history = get_str(&req, "history").unwrap_or("0");
 
-    let worker = "seed/present/word/word-worker.mjs"; // relative to the repo root (the serve cwd)
-    let mut child = match Command::new("node")
-        .arg(worker)
-        .arg(root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-    {
-        Ok(c) => c,
-        Err(e) => {
-            return ("502 Bad Gateway", "application/json", json(&err(&format!("word worker spawn failed ({e}); is node on PATH and the cwd the repo root?"))));
-        }
+    // able SPECS fold from the seed .word vocabulary via treeibp::fold_word_able (foldAbleNoun, in
+    // Rust) — so GRANTED ables authorize, not just i-am + owner. The vocabulary is read from
+    // `seed/store/words/ables` relative to the cwd (the repo root, where `treeos serve` is launched).
+    let ables_dir = std::path::Path::new("seed/store/words/ables");
+
+    // SIGNING (the EDGE holds the key). The STORY signs its own acts (I) with the custodial story key
+    // (.story/story.key, cwd-relative — the canonical key the on-disk acts verify against). A being
+    // signs its OWN acts with ITS key, which the binary does NOT hold (client-side, presented when the
+    // being takes its moment) — so non-story actors stay unsigned here. Key absent -> unsigned. treeibp
+    // stays crypto-free; the closure is injected.
+    let actor_is_story =
+        get_str(&actor, "nameId") == Some("I") || get_str(&actor, "beingId") == Some("I");
+    let story_seed = if actor_is_story {
+        treesign::load_story_seed(std::path::Path::new(".story")).ok()
+    } else {
+        None
     };
-    if let Some(mut sin) = child.stdin.take() {
-        let _ = sin.write_all(body);
-    } // dropped → EOF, the worker reads the full request
-    let out = match child.wait_with_output() {
-        Ok(o) => o,
-        Err(e) => return ("502 Bad Gateway", "application/json", json(&err(&format!("word worker failed: {e}")))),
-    };
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    match stdout.lines().map(str::trim).filter(|l| !l.is_empty()).last() {
-        Some(line) => ("200 OK", "application/json", line.to_string()), // relay the worker's JSON verbatim
-        None => {
-            let serr: String = String::from_utf8_lossy(&out.stderr).chars().take(400).collect();
-            ("502 Bad Gateway", "application/json", json(&err(&format!("word worker produced no output. stderr: {serr}"))))
+    let signer = story_seed.map(|seed| {
+        move |opening: &Json, fids: &[String]| -> Json {
+            let payload = treesign::build_act_sig_payload(opening, fids);
+            let value = treesign::sign_value(&seed, &payload);
+            Json::Obj(vec![
+                ("alg".to_string(), Json::Str("ed25519".to_string())),
+                ("by".to_string(), Json::Str("I".to_string())),
+                ("value".to_string(), Json::Str(value)),
+            ])
         }
+    });
+    let sign_ref = signer.as_ref().map(|f| f as &dyn Fn(&Json, &[String]) -> Json);
+    let outcomes = treeibp::act(word, &actor, root, history, |name| treeibp::fold_word_able(name, ables_dir), sign_ref);
+    let results: Vec<Json> = outcomes
+        .iter()
+        .map(|o| match o {
+            treeibp::Outcome::Authorized(fact) => Json::Obj(vec![
+                ("ok".to_string(), Json::Bool(true)),
+                ("fact".to_string(), fact.clone()),
+            ]),
+            treeibp::Outcome::Denied(reason) => Json::Obj(vec![
+                ("ok".to_string(), Json::Bool(false)),
+                ("reason".to_string(), Json::Str(reason.clone())),
+            ]),
+        })
+        .collect();
+    let resp = Json::Obj(vec![
+        ("ok".to_string(), Json::Bool(true)),
+        ("engine".to_string(), Json::Str("rust".to_string())),
+        ("results".to_string(), Json::Arr(results)),
+    ]);
+    ok(json(&resp))
+}
+
+fn get<'a>(v: &'a Json, k: &str) -> Option<&'a Json> {
+    match v {
+        Json::Obj(e) => e.iter().find(|(kk, _)| kk == k).map(|(_, x)| x),
+        _ => None,
+    }
+}
+fn get_str<'a>(v: &'a Json, k: &str) -> Option<&'a str> {
+    match get(v, k) {
+        Some(Json::Str(s)) => Some(s.as_str()),
+        _ => None,
     }
 }
 

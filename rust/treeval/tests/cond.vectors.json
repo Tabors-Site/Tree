@@ -1,0 +1,319 @@
+{
+  "format": "treeos-cond-vectors",
+  "version": 1,
+  "vectors": [
+    {
+      "name": "equals string",
+      "cond": {
+        "test": {
+          "op": "equals",
+          "path": "x",
+          "value": "foo"
+        }
+      },
+      "ctx": {
+        "bindings": {
+          "x": "foo"
+        }
+      },
+      "want": true
+    },
+    {
+      "name": "equals false",
+      "cond": {
+        "test": {
+          "op": "equals",
+          "path": "x",
+          "value": "foo"
+        }
+      },
+      "ctx": {
+        "bindings": {
+          "x": "bar"
+        }
+      },
+      "want": false
+    },
+    {
+      "name": "equals ref",
+      "cond": {
+        "test": {
+          "op": "equals",
+          "path": "a",
+          "against": {
+            "ref": "b"
+          }
+        }
+      },
+      "ctx": {
+        "bindings": {
+          "a": "1",
+          "b": "1"
+        }
+      },
+      "want": true
+    },
+    {
+      "name": "compare ge true",
+      "cond": {
+        "test": {
+          "op": "compare",
+          "as": "ge",
+          "path": "h",
+          "against": 5
+        }
+      },
+      "ctx": {
+        "bindings": {
+          "h": 7
+        }
+      },
+      "want": true
+    },
+    {
+      "name": "compare lt false",
+      "cond": {
+        "test": {
+          "op": "compare",
+          "as": "lt",
+          "path": "h",
+          "against": 5
+        }
+      },
+      "ctx": {
+        "bindings": {
+          "h": 7
+        }
+      },
+      "want": false
+    },
+    {
+      "name": "isFinite true",
+      "cond": {
+        "test": {
+          "op": "isFinite",
+          "path": "n"
+        }
+      },
+      "ctx": {
+        "bindings": {
+          "n": 3
+        }
+      },
+      "want": true
+    },
+    {
+      "name": "isFinite false string",
+      "cond": {
+        "test": {
+          "op": "isFinite",
+          "path": "n"
+        }
+      },
+      "ctx": {
+        "bindings": {
+          "n": "x"
+        }
+      },
+      "want": false
+    },
+    {
+      "name": "isString true",
+      "cond": {
+        "test": {
+          "op": "isString",
+          "path": "s"
+        }
+      },
+      "ctx": {
+        "bindings": {
+          "s": "hi"
+        }
+      },
+      "want": true
+    },
+    {
+      "name": "reads true",
+      "cond": {
+        "test": {
+          "op": "reads",
+          "path": "f"
+        }
+      },
+      "ctx": {
+        "bindings": {
+          "f": "y"
+        }
+      },
+      "want": true
+    },
+    {
+      "name": "reads false null",
+      "cond": {
+        "test": {
+          "op": "reads",
+          "path": "f"
+        }
+      },
+      "ctx": {
+        "bindings": {
+          "f": null
+        }
+      },
+      "want": false
+    },
+    {
+      "name": "in true",
+      "cond": {
+        "test": {
+          "op": "in",
+          "path": "x",
+          "against": [
+            "a",
+            "b"
+          ]
+        }
+      },
+      "ctx": {
+        "bindings": {
+          "x": "b"
+        }
+      },
+      "want": true
+    },
+    {
+      "name": "flag present",
+      "cond": {
+        "flag": "signedIn"
+      },
+      "ctx": {
+        "bindings": {
+          "signedIn": true
+        }
+      },
+      "want": true
+    },
+    {
+      "name": "flag absent",
+      "cond": {
+        "flag": "caller"
+      },
+      "ctx": {
+        "bindings": {}
+      },
+      "want": false
+    },
+    {
+      "name": "flag empty array absent",
+      "cond": {
+        "flag": "items"
+      },
+      "ctx": {
+        "bindings": {
+          "items": []
+        }
+      },
+      "want": false
+    },
+    {
+      "name": "flag negated absent",
+      "cond": {
+        "flag": "caller",
+        "negated": true
+      },
+      "ctx": {
+        "bindings": {}
+      },
+      "want": true
+    },
+    {
+      "name": "clause $-binding dotted",
+      "cond": {
+        "clause": "$conn.ok"
+      },
+      "ctx": {
+        "bindings": {
+          "conn": {
+            "ok": true
+          }
+        }
+      },
+      "want": true
+    },
+    {
+      "name": "all true",
+      "cond": {
+        "all": [
+          {
+            "flag": "a"
+          },
+          {
+            "flag": "b"
+          }
+        ]
+      },
+      "ctx": {
+        "bindings": {
+          "a": true,
+          "b": true
+        }
+      },
+      "want": true
+    },
+    {
+      "name": "all false",
+      "cond": {
+        "all": [
+          {
+            "flag": "a"
+          },
+          {
+            "flag": "b"
+          }
+        ]
+      },
+      "ctx": {
+        "bindings": {
+          "a": true
+        }
+      },
+      "want": false
+    },
+    {
+      "name": "any true",
+      "cond": {
+        "any": [
+          {
+            "flag": "a"
+          },
+          {
+            "flag": "b"
+          }
+        ]
+      },
+      "ctx": {
+        "bindings": {
+          "b": true
+        }
+      },
+      "want": true
+    },
+    {
+      "name": "negated test flips",
+      "cond": {
+        "test": {
+          "op": "equals",
+          "path": "x",
+          "value": "foo"
+        },
+        "negated": true
+      },
+      "ctx": {
+        "bindings": {
+          "x": "foo"
+        }
+      },
+      "want": false
+    }
+  ]
+}

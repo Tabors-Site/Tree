@@ -20,6 +20,7 @@
 mod act_log;
 mod commit;
 mod moment;
+mod recover;
 mod reel;
 mod stamp;
 mod store;
@@ -31,7 +32,10 @@ pub use act_log::{
     AdvanceError, HeadAdvance,
 };
 pub use commit::{seal_moment, FactSpec, Seal, SealedFact};
-pub use moment::{commit_moment, CommitError, Committed};
+pub use moment::{commit_moment, commit_moment_signed, CommitError, Committed};
+pub use recover::{
+    recover_act_before_commit, recover_reel_before_commit, walked_act_head, walked_reel_head,
+};
 pub use reel::{lineage_ranges, parse_reel, read_reel, read_reel_lineage};
 pub use stamp::{compute_fact_doc, fact_line, Head, Stamped, GENESIS_PREV};
 pub use store::{read_reel_file, read_reel_head, write_fact_doc, write_reel_head, FactWrite};

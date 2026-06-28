@@ -133,6 +133,15 @@ fn act_head_path(root: &Path, story: &str, history: &str, being: &str) -> PathBu
     act_dir(root, story, history, being).join(format!("{}.acthead", path_safe(being)))
 }
 
+/// The act-log + .acthead paths for a Name's chain (the recovery floor rewrites both when it drops an
+/// orphan act tail; the same files `append_act_line`/`advance_act_head_file` write).
+pub(crate) fn act_paths(root: &Path, story: &str, history: &str, being: &str) -> (PathBuf, PathBuf) {
+    (
+        act_log_path(root, story, history, being),
+        act_head_path(root, story, history, being),
+    )
+}
+
 // ── the real fs act-log ─────────────────────────────────────────────────────
 
 /// Append actDoc as one JSONL line to the Name's act-log (durable, fsync'd). The index maintenance the

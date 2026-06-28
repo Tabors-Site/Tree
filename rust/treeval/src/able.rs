@@ -214,8 +214,16 @@ pub fn reach_covers(spec: &Json, target_space: Option<&str>, target_path: Option
 }
 
 // ── the layered able-walk (authorizeViaAbles, the new shape) ──────────────────
-
-const ARRIVAL_ABLE: &str = "arrival";
+//
+// NO special "arrival floor" loophole — that was old logic. Access is CONDITIONAL on holding a being:
+// a reality either offers a PUBLIC being to inhabit (connect → you gain its grants), requires you to
+// BRING a being from your own story (federation), or offers none (private). Those are CONNECT flows,
+// not auth special-cases. So an anonymous caller (no being) simply has no grants and is no owner, and
+// falls through to deny; the instant it holds a being, the normal grant-walk applies.
+//
+// NO law:cannot prohibition register either — that concept was drift (Tabor: "i never had a
+// law:cannot"). A able permits exactly what its spec's can-lists allow; nothing globally overrides a
+// grant. There is no separate "cannot beats can" layer.
 
 fn jstr(s: &str) -> Json {
     Json::Str(s.to_string())
@@ -246,78 +254,45 @@ pub struct Grant<'a> {
     pub base_covered: bool,
 }
 
-/// The arrival floor (the implicit anonymous / cross-story able), resolved from the fold.
-pub struct ArrivalFloor<'a> {
-    pub spec: Option<&'a Json>, // None when no arrival able is registered
-    pub host_space_id: Option<&'a str>,
-    pub base_covered: bool,
-}
-
-/// Everything the able-walk needs, with every FOLD read pre-resolved (prohibition verdict,
-/// owner-claim, grants+specs+base, arrival floor) so the walk itself is pure.
+/// Everything the able-walk needs, with every FOLD read pre-resolved (owner-claim, grants+specs+base)
+/// so the walk itself is pure.
 pub struct WalkArgs<'a> {
-    pub identity: Option<&'a Json>, // { beingId, name, canopyVerifiedSender, story }
+    pub identity: Option<&'a Json>, // { beingId, name }
     pub verb: &'a str,
     pub i_am: &'a str,
-    pub prohibited: bool, // prohibitedByLaw — the folded `cannot` register
     pub owner_claim: Option<&'a Json>, // { ownerIds:[…], spaceId } — nearest owned ancestor
     pub grants: &'a [Grant<'a>],
-    pub arrival: ArrivalFloor<'a>,
     pub target_space: Option<&'a str>,
     pub target_path: Option<&'a str>,
     pub req: PermitReq<'a>,
 }
 
-fn check_arrival_floor(af: &ArrivalFloor, verb: &str, req: &PermitReq, ts: Option<&str>, tp: Option<&str>) -> Json {
-    let Some(spec) = af.spec else {
-        return deny("no arrival able registered; anonymous callers have no floor.");
-    };
-    if !reach_covers(spec, ts, tp, af.base_covered) {
-        return deny("arrival floor does not reach this position.");
-    }
-    if permits(spec, verb, req) {
-        return grant(ARRIVAL_ABLE, af.host_space_id.map(jstr).unwrap_or(Json::Null));
-    }
-    deny("arrival floor does not permit this action; please authenticate.")
-}
-
-/// The full able-walk (authorizeViaAbles): law → i-am → arrival floor → owner → grant-loop →
-/// cross-story fallback → deny. PURE over the pre-resolved fold inputs. Returns {ok, able?, anchor?, reason?}.
+/// The able-walk: i-am → owner → grant-loop → deny. PURE over the pre-resolved fold inputs.
+/// Returns {ok, able?, anchor?, reason?}. No arrival-floor and no law:cannot special cases (both drift).
 pub fn able_walk(a: &WalkArgs) -> Json {
     let field = |k: &str| a.identity.and_then(|i| get(i, k)).and_then(as_str);
 
-    // 1. prohibition wins (rule 14) — a folded `cannot` beats any grant
-    if a.prohibited {
-        return deny("prohibited by law");
-    }
-    // 2. I-Am bootstrap axiom
+    // 1. I-Am bootstrap axiom
     let being_id = field("beingId");
     if being_id == Some(a.i_am) || field("name") == Some(a.i_am) {
         return grant("i-am", Json::Null);
     }
-    // 3. anonymous arrival floor — stateless callers run under the implicit arrival able
-    if !being_id.is_some_and(|s| !s.is_empty()) {
-        return check_arrival_floor(&a.arrival, a.verb, &a.req, a.target_space, a.target_path);
-    }
-    // 4. ownership — nearest-claim-wins; actor in the claim's owners ⇒ allow
-    if let Some(claim) = a.owner_claim {
-        if as_arr(get(claim, "ownerIds")).iter().any(|id| as_str(id) == being_id) {
+    // 2. ownership — nearest-claim-wins; an identified actor in the claim's owners ⇒ allow.
+    //    (Anonymous: no beingId, so never an owner — falls through.)
+    if let (Some(bid), Some(claim)) = (being_id, a.owner_claim) {
+        if as_arr(get(claim, "ownerIds")).iter().any(|id| as_str(id) == Some(bid)) {
             return grant("owner", get(claim, "spaceId").and_then(as_str).map(jstr).unwrap_or(Json::Null));
         }
         // else someone else's claim — fall through to the grant-loop
     }
-    // 5. the grant-walk — the first granted able whose reach covers AND whose spec permits
+    // 3. the grant-walk — the first granted able whose reach covers AND whose spec permits.
+    //    (Anonymous: no being ⇒ no grants ⇒ empty.)
     for g in a.grants {
         if reach_covers(g.spec, a.target_space, a.target_path, g.base_covered) && permits(g.spec, a.verb, &a.req) {
             return grant(g.able, first_anchor(g.host_space_id, g.anchor_space_id));
         }
     }
-    // 6. cross-story fallback — a canopy-verified foreign actor falls to the arrival floor
-    let canopy = matches!(a.identity.and_then(|i| get(i, "canopyVerifiedSender")), Some(Json::Bool(true)));
-    if canopy || field("story").is_some_and(|s| !s.is_empty()) {
-        return check_arrival_floor(&a.arrival, a.verb, &a.req, a.target_space, a.target_path);
-    }
-    // 7. deny
+    // 4. deny
     let op = a.req.action.or(a.req.see_op).or(a.req.operation).or(a.req.intent);
     deny(&format!("no granted able permits {}{}", a.verb, op.map(|o| format!(":{o}")).unwrap_or_default()))
 }
@@ -376,6 +351,41 @@ mod tests {
         // add then exclude, in order
         assert!(!reach_covers(&spec(r#"{"reach":["/a/**","!/a/secret/**"]}"#), None, Some("/a/secret/x"), false));
         assert!(reach_covers(&spec(r#"{"reach":["/a/**","!/a/secret/**"]}"#), None, Some("/a/open"), false));
+    }
+
+    #[test]
+    fn able_walk_layered_flow() {
+        let id = spec(r#"{"beingId":"b1"}"#);
+
+        // 1. I-Am bypass
+        let iam = spec(r#"{"beingId":"I"}"#);
+        let r = able_walk(&WalkArgs { identity: Some(&iam), verb: "do", i_am: "I", owner_claim: None, grants: &[], target_space: None, target_path: None, req: req_do("x") });
+        assert_eq!(as_str(get(&r, "able").unwrap()), Some("i-am"));
+
+        // 2. owner — nearest-claim-wins
+        let claim = spec(r#"{"ownerIds":["b1"],"spaceId":"s1"}"#);
+        let r = able_walk(&WalkArgs { identity: Some(&id), verb: "do", i_am: "I", owner_claim: Some(&claim), grants: &[], target_space: None, target_path: None, req: req_do("x") });
+        assert_eq!(as_str(get(&r, "able").unwrap()), Some("owner"));
+        assert_eq!(as_str(get(&r, "anchor").unwrap()), Some("s1"));
+
+        // 3. a grant whose reach covers (base) AND whose spec permits
+        let gspec = spec(r#"{"canDo":["set-being:*"]}"#);
+        let grants = [Grant { able: "editor", anchor_space_id: None, spec: &gspec, host_space_id: Some("root"), base_covered: true }];
+        let r = able_walk(&WalkArgs { identity: Some(&id), verb: "do", i_am: "I", owner_claim: None, grants: &grants, target_space: Some("sX"), target_path: None, req: req_do("set-being:position") });
+        assert_eq!(as_str(get(&r, "able").unwrap()), Some("editor"));
+        assert_eq!(as_str(get(&r, "anchor").unwrap()), Some("root"));
+
+        // 4. a grant that permits but whose reach EXCLUDES the target -> deny
+        let gspec2 = spec(r#"{"canDo":["*"],"reach":["/garden/**"]}"#);
+        let grants2 = [Grant { able: "editor", anchor_space_id: None, spec: &gspec2, host_space_id: None, base_covered: false }];
+        let r = able_walk(&WalkArgs { identity: Some(&id), verb: "do", i_am: "I", owner_claim: None, grants: &grants2, target_space: None, target_path: Some("/other"), req: req_do("x") });
+        assert!(matches!(get(&r, "ok"), Some(Json::Bool(false))));
+        assert!(as_str(get(&r, "reason").unwrap()).unwrap().starts_with("no granted able permits do:x"));
+
+        // 5. anonymous (no being) -> no grants, no owner -> deny (must connect to a public being first)
+        let anon = spec("{}");
+        let r = able_walk(&WalkArgs { identity: Some(&anon), verb: "see", i_am: "I", owner_claim: None, grants: &[], target_space: None, target_path: None, req: req_see("place") });
+        assert!(matches!(get(&r, "ok"), Some(Json::Bool(false))));
     }
 
     fn req_do(a: &str) -> PermitReq<'_> {

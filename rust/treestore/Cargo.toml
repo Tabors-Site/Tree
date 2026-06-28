@@ -9,6 +9,13 @@ license = "AGPL-3.0"
 treehash = { path = "../treehash" }
 treeverify = { path = "../treeverify" }
 
+# treestore stays ZERO-CRYPTO: treesign is ONLY a dev-dependency, used by the
+# signed-commit round-trip test (tests/signed_commit.rs) to build the sign
+# closure commit_moment_signed takes. The library itself never depends on it;
+# the signing lives entirely in the caller's closure.
+[dev-dependencies]
+treesign = { path = "../treesign" }
+
 [lib]
 name = "treestore"
 path = "src/lib.rs"

@@ -1,0 +1,31 @@
+[package]
+name = "treegenesis"
+version = "0.1.0"
+edition = "2021"
+description = "TreeOS genesis planter (Rust), headless. Plants a fresh Story's self-grounding parentless root birth (the lone sanctioned 2-fact fusion: name:declare on the library reel + be:birth on the being reel, one signed clock-free moment) with NO Node. Mirrors seed/sprout.js ensureIAm + seed/storyIdentity.js first-boot key mint, over the determinism spine (treestore + treesign). STANDALONE: not wired into treeos; see NOTES.md for the genesis-subcommand handoff."
+license = "AGPL-3.0"
+
+# treegenesis is the ONE place the genesis fusion (2 facts / 2 reels in one act)
+# is allowed: a genesis-local writer that reuses treestore's stamp building
+# blocks (compute_act_doc / seal_moment / write_fact_doc) but bypasses the
+# fanout REFUSAL that commit_moment_signed enforces on every NON-genesis act.
+# Genesis is fact #0 of a fresh chain (no prior, no torn-write tail), so the
+# exemption is contained here and the general seal stays one-word-one-fact.
+[dependencies]
+treehash = { path = "../treehash" }
+treestore = { path = "../treestore" }
+treesign = { path = "../treesign" }
+# base64 for writing the minted story key as the Node-compatible PKCS8/SPKI PEMs
+# (the inverse of treesign::seed_from_pkcs8_pem) on first boot. Same crate +
+# version treesign pins, so the lock graph is unchanged.
+base64 = "0.22.1"
+
+[dev-dependencies]
+# The test FOLDS the planted genesis (library + being projections materialize)
+# and VERIFIES the chains. treefold/treeverify reach the test via treestore's
+# re-exports, but the fold entry points (fold) live in treefold directly.
+treefold = { path = "../treefold" }
+
+[lib]
+name = "treegenesis"
+path = "src/lib.rs"

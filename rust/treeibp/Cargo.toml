@@ -1,0 +1,18 @@
+[package]
+name = "treeibp"
+version = "0.1.0"
+edition = "2021"
+description = "The IBP layer: the TWO primitives — moment (perceive, left stance) + act (speak one word) — over the determinism spine. The six-verb collapse, running: act = parse→authorize→rasterize→stamp; moment = authorize(see)→read→verify→fold. Shares ONE gate (treeval authorize, grants folded from the chain)."
+license = "AGPL-3.0"
+
+[dependencies]
+treehash = { path = "../treehash" }
+treeword = { path = "../treeword" }
+treeval = { path = "../treeval" }
+treefold = { path = "../treefold" }
+treestore = { path = "../treestore" }
+
+# treeibp stays crypto-FREE in its lib (the signer is injected); treesign is ONLY a dev-dep, used by
+# the signed-act round-trip test to build the inject closure + verify the ed25519 sig.
+[dev-dependencies]
+treesign = { path = "../treesign" }

@@ -13,6 +13,7 @@ use treehash::Json;
 
 pub mod able;
 pub mod auth;
+pub mod cond;
 
 fn get<'a>(v: &'a Json, k: &str) -> Option<&'a Json> {
     match v {

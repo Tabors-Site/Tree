@@ -16,3 +16,7 @@ treeverify = { path = "../treeverify" }
 treestore = { path = "../treestore" }
 treeword = { path = "../treeword" }
 treeval = { path = "../treeval" }
+treeibp = { path = "../treeibp" }
+# the binary is the EDGE that holds the story key: it loads .story/story.key and signs the story's (I)
+# own acts. Crypto lives here + in treesign, never in the spine/treeibp lib (which takes the closure).
+treesign = { path = "../treesign" }

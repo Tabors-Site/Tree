@@ -562,3 +562,10 @@ read
 
 re-ad
 re-add
+
+---
+
+update
+
+i realized able is just another way of saying can be a, which is another way of saying are.
+so i think i may change ables to ares, but that conflates with the term "being" and a name having beings...
