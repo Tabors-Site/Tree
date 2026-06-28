@@ -1,0 +1,119 @@
+{
+  "format": "treeos-header-vectors",
+  "vectors": [
+    {
+      "name": "hdr-0",
+      "line": "When Cherub births a being, with a name and a password:",
+      "stateVar": "sky",
+      "node": {
+        "kind": "flow",
+        "when": {
+          "summon": {
+            "to": "Cherub",
+            "intent": "birth",
+            "of": {
+              "kind": "being"
+            }
+          }
+        },
+        "binds": [
+          "name",
+          "password"
+        ]
+      }
+    },
+    {
+      "name": "hdr-1",
+      "line": "When Cherub births a being:",
+      "stateVar": "sky",
+      "node": {
+        "kind": "flow",
+        "when": {
+          "summon": {
+            "to": "Cherub",
+            "intent": "birth",
+            "of": {
+              "kind": "being"
+            }
+          }
+        },
+        "binds": []
+      }
+    },
+    {
+      "name": "hdr-2",
+      "line": "When Cherub births a being for a new Name, with a name:",
+      "stateVar": "sky",
+      "node": {
+        "kind": "flow",
+        "when": {
+          "summon": {
+            "to": "Cherub",
+            "intent": "birth",
+            "of": {
+              "kind": "being"
+            }
+          }
+        },
+        "binds": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "hdr-3",
+      "line": "When it is dawn:",
+      "stateVar": "sky",
+      "node": {
+        "kind": "flow",
+        "when": {
+          "state": {
+            "sky": "dawn"
+          }
+        },
+        "binds": []
+      }
+    },
+    {
+      "name": "hdr-4",
+      "line": "When Cherub connects with a name and a password:",
+      "stateVar": "sky",
+      "node": {
+        "kind": "flow",
+        "when": {
+          "op": {
+            "clause": "Cherub connects"
+          }
+        },
+        "binds": [
+          "name",
+          "password"
+        ]
+      }
+    },
+    {
+      "name": "hdr-5",
+      "line": "When a guest enters:",
+      "stateVar": "sky",
+      "node": {
+        "kind": "flow",
+        "when": {
+          "event": "a guest enters"
+        },
+        "binds": []
+      }
+    },
+    {
+      "name": "hdr-6",
+      "line": "When the bell rings:",
+      "stateVar": "sky",
+      "node": {
+        "kind": "flow",
+        "when": {
+          "event": "the bell rings"
+        },
+        "binds": []
+      }
+    }
+  ]
+}

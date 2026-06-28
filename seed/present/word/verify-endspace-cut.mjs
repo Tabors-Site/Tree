@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // end-space — the [C] collapse (23.md), the end-matter pattern for the tree. Was: deleteSpaceHistory
 // hand-stamped TWO inner do:set-space facts (owner=deleter, parent=DELETED). Now: end-space lays ONE
-// do:end-space fact, and the space reducer DERIVES both consequences (parent=DELETED hides it +
-// position mirror; owner=the fact's `through`, the deleter, for revival audit). Proves: a REAL
-// end-space via doVerb lays one end-space fact, zero set-space facts, and the space folds deleted.
+// do:delete fact (the consistent THING-cease verb; the op NAME stays end-space), and the space
+// reducer DERIVES the consequences (parent=DELETED hides it + position mirror; owner=the fact's
+// `through`, the deleter; ADDED qualities.dead={byActor}, the consistent cease marker). Proves: a
+// REAL end-space via doVerb lays one do:delete fact, zero set-space facts, and the space folds dead.
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -110,11 +111,13 @@ try {
   // ── end it ──
   const r = await runOp(target, "end-space", {});
   const facts = r.deltaF || [];
-  const endFacts = facts.filter((f) => f.act === "end-space");
+  // The end-space op's fact act is `delete` (the consistent THING-cease verb across space/matter);
+  // the op NAME stays end-space (the unique dispatch key). The reducer folds on act === "delete".
+  const endFacts = facts.filter((f) => f.act === "delete");
   const setFacts = facts.filter((f) => f.act === "set-space");
   endFacts.length === 1 && setFacts.length === 0
     ? ok(
-        `end-space lays ONE do:end-space fact; zero set-space facts (the two-field false shape is gone)`,
+        `end-space lays ONE do:delete fact; zero set-space facts (the two-field false shape is gone)`,
       )
     : bad(`one fact`, { acts: facts.map((f) => f.act) });
 
@@ -125,23 +128,27 @@ try {
   String(ef.of?.id) === sId &&
   String(ef.through) === String(I)
     ? ok(
-        `the do:end-space fact: of {space, spaceId}, through = the deleter (I)`,
+        `the do:delete fact: of {space, spaceId}, through = the deleter (I)`,
       )
     : bad(
         `fact shape`,
         ef ? { verb: ef.verb, of: ef.of, through: ef.through } : "no end fact",
       );
 
-  // ── the reducer FOLDS parent=DELETED + owner=deleter ──
+  // ── the reducer FOLDS parent=DELETED + owner=deleter + qualities.dead ──
   const slot = await loadOrFold("space", sId, "0");
-  slot?.state?.parent === DELETED && String(slot?.state?.owner) === String(I)
+  slot?.state?.parent === DELETED &&
+  String(slot?.state?.owner) === String(I) &&
+  slot?.state?.qualities?.dead &&
+  String(slot?.state?.qualities?.dead?.byActor) === String(I)
     ? ok(
-        `the space folds: parent=DELETED (hidden) + owner=the deleter (revival audit) — derived from the one fact`,
+        `the space folds: parent=DELETED (hidden) + owner=the deleter + qualities.dead={byActor:I} (the consistent cease marker) — derived from the one fact`,
       )
     : bad(`folds deleted`, {
         parent: slot?.state?.parent,
         owner: slot?.state?.owner,
         position: slot?.state?.position,
+        dead: slot?.state?.qualities?.dead,
       });
 
   // ── it drops out of parent-query (hidden from children) ──

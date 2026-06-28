@@ -2,7 +2,7 @@
 //
 // be.js . the BE verb. Identity operations on a being.
 //
-// BE is the closed five-op set: birth, connect, release, switch, death. The static
+// BE is the closed five-op set: birth, connect, release, switch, kill. The static
 // table BE_OPS in [ibp/beOps.js](../beOps.js) holds the schemas +
 // handlers; this verb's job is to authorize, dispatch, and stamp the
 // audit Fact. Cherub is the canonical handler.
@@ -61,7 +61,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "story.be requires an operation");
   }
   refuseHistoricalWrite("be", payload, opts);
-  // close-story gate: a closed story refuses the world-changing BE ops (birth, death), but EXEMPTS
+  // close-story gate: a closed story refuses the world-changing BE ops (birth, kill), but EXEMPTS
   // connect / release / switch — the session/frame ops a reader needs to attach to a closed story
   // and look around (SEE stays open; only NEW acts stop). Genesis births on a FRESH story → open.
   if (
@@ -113,7 +113,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   const beingName = extractBeingFromAddress(address, addressKind) || "cherub";
 
   // Static-table dispatch. BE_OPS holds the canonical five ops
-  // (birth/connect/release/switch/death); if the operation name is in
+  // (birth/connect/release/switch/kill); if the operation name is in
   // the table AND cherub is the resolved being, dispatch through it.
   // Future seed change could license other beings for these ops, but
   // cherub is the only one today.
@@ -402,7 +402,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
 
   // ── Release (self) — drop the caller's being from the session. ──────
   // ONE dedicated branch for ALL release, cherub-addressed or not — unified
-  // with switch/death/truename (release is SELF: the handler drops
+  // with switch/kill/truename (release is SELF: the handler drops
   // identity.beingId and ignores the address, so beingName never mattered;
   // the old code funkily split this into a non-cherub branch HERE plus the
   // generic cherub dispatch below, which then stamped via writeBeFact). The
@@ -462,7 +462,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     return result;
   }
 
-  // ── Death path. ─────────────────────────────────────────────────
+  // ── Kill path. ──────────────────────────────────────────────────
   // ── Switch path. ────────────────────────────────────────────────
   // BE:switch is a per-session history change on the caller's own
   // being. Self-targeted (the actor is the target). Authorize
@@ -516,19 +516,19 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     return result;
   }
 
-  // BE:death targets the dying being directly (not cherub-on-itself).
+  // BE:kill targets the dying being directly (not cherub-on-itself).
   // Authorize via the able-walk (I bypass admits I; no able
-  // today declares canBe:["death"], so every other actor refuses).
+  // today declares canBe:["kill"], so every other actor refuses).
   // The handler returns a closing summary; writeBeFact stamps a
-  // be:death fact on the target's reel. The reducer's applyDeath
-  // marks qualities.death — the stamper's death gate (logFact) then
+  // be:kill fact on the target's reel. The reducer's applyKill
+  // marks qualities.dead — the stamper's kill gate (logFact) then
   // refuses any further facts riding this being.
-  if (operation === "death") {
+  if (operation === "kill") {
     assertVerbCaller("be", opts);
     // The kill AUTHORITY is the verb-level able-walk (the host's being-tree authority over the
-    // target) — it stays here, like do.js's authorize, run BEFORE the op. death.word owns the op
+    // target) — it stays here, like do.js's authorize, run BEFORE the op. kill.word owns the op
     // gates (caller, target, target-exists) + builds the fact params; the BE dispatcher stamps the
-    // one be:death fact from them. NO inline op-validation: the Word is the source.
+    // one be:kill fact from them. NO inline op-validation: the Word is the source.
     const decision = await authorize({
       identity,
       verb: "be",
@@ -540,12 +540,12 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     if (!decision.ok) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        `BE:death denied for actor "${decision.actor}": ${decision.reason}`,
+        `BE:kill denied for actor "${decision.actor}": ${decision.reason}`,
         { actor: decision.actor },
       );
     }
-    const deathOp = resolveBeOpFromFold("death");
-    const result = await deathOp.handler({
+    const killOp = resolveBeOpFromFold("kill");
+    const result = await killOp.handler({
       address,
       addressKind,
       beingName,
@@ -560,10 +560,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       },
       moment,
     });
-    // EVERY ACT MAKES A FACT — emitWordFact stamps the one be:death fact (verb+noun from the binding).
-    // A gate refusal THROWS before this; reaching here means the death happened — record it.
+    // EVERY ACT MAKES A FACT — emitWordFact stamps the one be:kill fact (verb+noun from the binding).
+    // A gate refusal THROWS before this; reaching here means the kill happened — record it.
     await emitWordFact(
-      deathOp,
+      killOp,
       { through: identity.beingId, actId: moment?.actId || null, history },
       result,
       moment,
@@ -755,7 +755,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       if (_bCtx && !_bWasInOp) _bCtx._inOp = false;
     }
     // ONE fact per BE op. This generic cherub dispatch handles birth + connect only — release has
-    // its own dedicated branch above (switch/death/truename likewise). connect stamps the one
+    // its own dedicated branch above (switch/kill/truename likewise). connect stamps the one
     // be:connect fact through the keystone (emitWordFact), exactly like the four other BE ops:
     // declareConnectFact declares the fact's params/target on the auth result, the keystone reads
     // verb+noun from the binding. birth stamps NOTHING here: cherub's birth handler delegates to
@@ -780,7 +780,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   }
 
   // No dispatch matched. BE is the closed birth/connect/release/
-  // switch/death set; unknown ops throw ACTION_NOT_SUPPORTED. Known
+  // switch/kill set; unknown ops throw ACTION_NOT_SUPPORTED. Known
   // ops against a being that's neither cherub nor birther (and so
   // didn't hit the branches above) throw ABLE_UNAVAILABLE.
   if (!beOp) {
@@ -804,7 +804,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
 /**
  * Declare the one be:connect fact on a connect result, for the dispatcher to stamp through the
  * keystone (emitWordFact) — the last BE op to leave the old writeBeFact path, joining release /
- * switch / death / truename. connect = an identity binding to a being: the fact lands on the TARGET
+ * switch / kill / truename. connect = an identity binding to a being: the fact lands on the TARGET
  * being (the one connected to — the auth result's beingId for the cherub credential / inherit
  * paths, identity.beingId for a re-claim) and records the driver now inhabiting it (the caller's
  * being, or the being ITSELF for a fresh credential-connect that arrives with no prior identity).
@@ -815,7 +815,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
  * keystone reads. The keystone's per-kind result policy curates connect's stamped result field to
  * {beingAddress, note}; stripForAudit also drops the identityToken either way (REVEAL_KEYS), so no
  * token can reach the chain. (birth never passes through here — birthBeing stamps its own canonical
- * be:birth directly; switch/death/truename/release each have their own dedicated dispatch branch.)
+ * be:birth directly; switch/kill/truename/release each have their own dedicated dispatch branch.)
  */
 function declareConnectFact(result, { identity, payload }) {
   const actorBeingId =

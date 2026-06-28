@@ -66,6 +66,7 @@
 //   buildSystemPrompt - auto-assembled via seed/present/buildPrompt when not provided
 //
 import log from "../../seedStory/log.js";
+import { foldWordAble, listAbleWordNames } from "../word/seedAbleFold.js";
 
 // The able registry. Seed-shipped ables (auth, llm-assigner,
 // place-manager) register through registerAble during genesis;
@@ -102,13 +103,26 @@ export const VALID_COGNITION = Object.freeze(
   new Set(["llm", "human", "scripted"]),
 );
 
+// The seed ables are WORDS — folded from store/words/ables/ on demand. There is NO Map of them; the
+// REGISTRY holds only the runtime ables (the JS-handler delegates + operator-authored live ables).
+// _foldCache is a projection of the .word files (the words are the source), NOT a registry — it just
+// keeps the auth hot-path from re-parsing on every call.
+const _foldCache = new Map();
+
 export function getAble(name) {
   if (!name) return null;
-  return REGISTRY.get(name) || null;
+  if (REGISTRY.has(name)) return REGISTRY.get(name); // JS-handler + live ables win (live overrides)
+  if (_foldCache.has(name)) return _foldCache.get(name);
+  const folded = foldWordAble(name); // fold the able from its .word (the seed vocabulary)
+  if (folded) {
+    _foldCache.set(name, folded);
+    return folded;
+  }
+  return null;
 }
 
 export function listAbles() {
-  return Array.from(REGISTRY.keys());
+  return [...new Set([...REGISTRY.keys(), ...listAbleWordNames()])];
 }
 
 /**

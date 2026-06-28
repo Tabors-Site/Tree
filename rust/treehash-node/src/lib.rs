@@ -56,3 +56,40 @@ pub fn fact_id(prev: String, fact_json: String) -> napi::Result<String> {
 pub fn act_id(prev: String, act_json: String) -> napi::Result<String> {
     Ok(treehash::act_id(&prev, &parse_arg(&act_json)?))
 }
+
+/// `verifyFactChain(facts)` (Tier 3) — re-hash each fact and walk the p-links over an oldest-first
+/// reel slice. `facts_json` is the caller's `JSON.stringify` of the materialized fact array; the
+/// verdict comes back as JSON text for `JSON.parse`. Byte-identical to the retired verifyReel.js walk.
+#[napi]
+pub fn verify_fact_chain(facts_json: String) -> napi::Result<String> {
+    let facts = match parse_arg(&facts_json)? {
+        Json::Arr(items) => items,
+        _ => return Err(napi::Error::from_reason("verifyFactChain: facts must be a JSON array")),
+    };
+    Ok(treehash::stringify(&treeverify::verify_fact_chain(&facts)))
+}
+
+/// `verifyFactChainFrom(facts, anchorPrev, fromSeq)` (Tier 3) — verifyReelFrom.js's anchored sibling:
+/// the same fact-chain walk seeded at a DECLARED anchor (`anchorPrev`, `fromSeq`) instead of genesis,
+/// for a contiguous reel SUFFIX (a partial graft). Degenerate at `(GENESIS_PREV, 1)` this equals
+/// `verifyFactChain`. Verdict shape unchanged.
+#[napi]
+pub fn verify_fact_chain_from(facts_json: String, anchor_prev: String, from_seq: f64) -> napi::Result<String> {
+    let facts = match parse_arg(&facts_json)? {
+        Json::Arr(items) => items,
+        _ => return Err(napi::Error::from_reason("verifyFactChainFrom: facts must be a JSON array")),
+    };
+    Ok(treehash::stringify(&treeverify::verify_fact_chain_from(&facts, &anchor_prev, from_seq)))
+}
+
+/// `verifyActChain(acts)` (Tier 3) — the act-chain twin: re-hash each act opening and walk the
+/// p-links over an oldest-first materialized list. The head-walk I/O stays in JS; this is the pure
+/// rehash verdict, byte-identical to actHash.js's retired verifyActChain walk.
+#[napi]
+pub fn verify_act_chain(acts_json: String) -> napi::Result<String> {
+    let acts = match parse_arg(&acts_json)? {
+        Json::Arr(items) => items,
+        _ => return Err(napi::Error::from_reason("verifyActChain: acts must be a JSON array")),
+    };
+    Ok(treehash::stringify(&treeverify::verify_act_chain(&acts)))
+}

@@ -173,13 +173,13 @@ pub fn apply_connection_state(state: &Json, fact: &Json) -> Json {
     v::set(state, "qualities", nq)
 }
 
-pub fn apply_death(state: &Json, fact: &Json) -> Json {
-    if verb(fact) != "be" || act(fact) != "death" || of_kind(fact) != "being" {
+pub fn apply_kill(state: &Json, fact: &Json) -> Json {
+    if verb(fact) != "be" || act(fact) != "kill" || of_kind(fact) != "being" {
         return state.clone();
     }
     let qualities = v::get(state, "qualities").cloned().unwrap_or_else(v::empty_obj);
-    // idempotent: first death wins — the be:death FACT's existence IS the death (no clock).
-    if v::get(&qualities, "death").is_some() {
+    // idempotent: the first kill wins — the be:kill FACT's existence IS the cease (no clock).
+    if v::get(&qualities, "dead").is_some() {
         return state.clone();
     }
     let p = params(fact);
@@ -195,8 +195,9 @@ pub fn apply_death(state: &Json, fact: &Json) -> Json {
         Some(c) => v::set(c, "inhabitedBy", Json::Null),
         None => v::set(&v::empty_obj(), "inhabitedBy", Json::Null),
     };
-    let death = v::set(&v::empty_obj(), "byActor", by_actor);
-    let nq = v::set(&v::set(&qualities, "connection", connection), "death", death);
+    // qualities.dead = { byActor } — the ONE consistent cease marker (being/space/matter).
+    let dead = v::set(&v::empty_obj(), "byActor", by_actor);
+    let nq = v::set(&v::set(&qualities, "connection", connection), "dead", dead);
     let s = v::set(state, "position", Json::Null);
     let s = v::set(&s, "coord", Json::Null);
     v::set(&s, "qualities", nq)
@@ -651,7 +652,7 @@ pub fn reduce_being(state: &Json, fact: &Json) -> Json {
     let mut next = state.clone();
     next = apply_create_being(&next, fact);
     next = apply_connection_state(&next, fact);
-    next = apply_death(&next, fact);
+    next = apply_kill(&next, fact);
     next = apply_true_name(&next, fact);
     next = apply_set_field(&next, fact);
     next = apply_set_qualities(&next, fact);
@@ -681,7 +682,7 @@ pub fn reduce_space(state: &Json, fact: &Json) -> Json {
     if act(fact) == "set-space" && matches!(v::get(&p, "field"), Some(Json::Str(s)) if s == "parent") {
         next = v::set(&next, "position", v::get(&p, "value").cloned().unwrap_or(Json::Null));
     }
-    if act(fact) == "end-space" && of_kind(fact) == "space" {
+    if act(fact) == "delete" && of_kind(fact) == "space" {
         let owner = {
             let thr = v::or_truthy(v::get(fact, "through"), Json::Null);
             if v::truthy(&thr) {
@@ -695,9 +696,23 @@ pub fn reduce_space(state: &Json, fact: &Json) -> Json {
                 }
             }
         };
+        // byActor = params.byActor ?? fact.through (exactly as apply_kill).
+        let by_actor = {
+            let p = params(fact);
+            let a = v::or_truthy(v::get(&p, "byActor"), Json::Null);
+            if v::truthy(&a) {
+                a
+            } else {
+                v::or_truthy(v::get(fact, "through"), Json::Null)
+            }
+        };
         next = v::set(&next, "parent", v::jstr(DELETED));
         next = v::set(&next, "position", v::jstr(DELETED));
         next = v::set(&next, "owner", owner);
+        // qualities.dead = { byActor } — the ONE consistent cease marker (being/space/matter).
+        let qualities = v::get(&next, "qualities").cloned().unwrap_or_else(v::empty_obj);
+        let dead = v::set(&v::empty_obj(), "byActor", by_actor);
+        next = v::set(&next, "qualities", v::set(&qualities, "dead", dead));
     }
     bump_updated(state, next, fact)
 }
@@ -708,9 +723,23 @@ pub fn reduce_matter(state: &Json, fact: &Json) -> Json {
     next = apply_set_field(&next, fact);
     next = apply_set_qualities(&next, fact);
     next = apply_move(&next, fact);
-    if act(fact) == "end-matter" && of_kind(fact) == "matter" {
+    if act(fact) == "delete" && of_kind(fact) == "matter" {
+        // byActor = params.byActor ?? fact.through (exactly as apply_kill).
+        let by_actor = {
+            let p = params(fact);
+            let a = v::or_truthy(v::get(&p, "byActor"), Json::Null);
+            if v::truthy(&a) {
+                a
+            } else {
+                v::or_truthy(v::get(fact, "through"), Json::Null)
+            }
+        };
         next = v::set(&next, "spaceId", v::jstr(DELETED));
         next = v::set(&next, "beingId", v::jstr(DELETED));
+        // qualities.dead = { byActor } — the ONE consistent cease marker (being/space/matter).
+        let qualities = v::get(&next, "qualities").cloned().unwrap_or_else(v::empty_obj);
+        let dead = v::set(&v::empty_obj(), "byActor", by_actor);
+        next = v::set(&next, "qualities", v::set(&qualities, "dead", dead));
     }
     next = apply_purge_content(&next, fact);
     let p = params(fact);

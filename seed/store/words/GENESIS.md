@@ -58,7 +58,7 @@ see · do · name · being · space · matter · weave · be · call · can · r
   is declared last of this group — after the nouns, since it reads being/matter/space.
 - **Verbs** — `see` (read the fold, makes no fact), `do` (stamp; the fact is a see or a do; `be` is
   a do on a being, `name` is a do on a name), `be` (the typed do on a being:
-  birth/connect/release/switch/death/truename), `call` (an `out` plus await — the target decides: a
+  birth/connect/release/switch/kill/truename), `call` (an `out` plus await — the target decides: a
   word to another awaits and calls, a word to oneself reads and recalls), `recall` (a see of the
   past).
 - **Nouns** — `name` (the identity, the signer; grounds `sign`), `being` (a presence a Name acts

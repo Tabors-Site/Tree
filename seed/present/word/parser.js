@@ -226,8 +226,11 @@ const RULES = [
   // capability grant / prohibition (rules 8, 14) — declarations the evaluator
   // treats as LAW (the parser captures them; the engine's able/capability model
   // enforces them, incl. prohibition precedence). "A member can back a proposal."
+  // An?: a vowel-start able reads "An angel can …"; [\w.-]: a kebab able name
+  // ("able-manager") is one token. This is also the seed able grant-set line —
+  // foldAbleNoun collects these into the able's `can` (see seedAbleFold.js).
   [
-    /^A (\w+) can (\w+)(?: (?:a |an |the )?(.+?))?\.$/i,
+    /^An? ([\w.-]+) can (\w+)(?: (?:a |an |the )?(.+?))?\.$/i,
     (m) => ({ kind: "can", able: m[1], verb: verb(m[2]), of: m[3] || null }),
   ],
   [
@@ -248,6 +251,26 @@ const RULES = [
       verb: verb(m[2]),
       of: m[3] || "it",
     }),
+  ],
+
+  // the able-noun declaration + the rest of its grant-set vocabulary (beside `can`).
+  // foldAbleNoun collects these into the able spec. Natural articles both sides:
+  // "An angel is an able." / "An angel reaches /**." / "A scribe needs llm cognition."
+  [
+    /^An? ([\w.-]+) is an? able\.$/i,
+    (m) => ({ kind: "is", subject: m[1], isA: "able" }),
+  ],
+  [
+    /^An? ([\w.-]+) reaches (.+?)\.$/i,
+    (m) => ({ kind: "reach", able: m[1], to: m[2] }),
+  ],
+  [
+    /^An? ([\w.-]+) needs (llm|human|scripted) cognition\.$/i,
+    (m) => ({ kind: "cognition", able: m[1], mode: m[2].toLowerCase() }),
+  ],
+  [
+    /^An? ([\w.-]+) never wakes\.$/i,
+    (m) => ({ kind: "wakes", able: m[1], when: [] }),
   ],
 
   // possession + structure relations (rule 2) + able inheritance. Declarations

@@ -24,7 +24,7 @@
 //   switch   . change THIS session's history on the same being.
 //              Per-session — does not touch other sockets of the
 //              same being. Stamps an audit fact on the new history.
-//   death    . close a being's lifecycle (I-only today).
+//   kill     . close a being's lifecycle (I-only today).
 //
 // History seating: handlers never touch the socket (the moment path
 // can't carry one — acts are records). Handlers that change which
@@ -78,9 +78,9 @@ registerAbleWord(
   "truename",
   new URL("./truename.word", import.meta.url),
 );
-// be:death's world strand — the rung-3 verb-op #2 (a pure fact-lay; the kill authority is the
+// be:kill's world strand — the rung-3 verb-op #2 (a pure fact-lay; the kill authority is the
 // verb-level authorize() in be.js). The .word owns the op gates + builds the fact params.
-registerAbleWord("cherub", "death", new URL("./death.word", import.meta.url));
+registerAbleWord("cherub", "kill", new URL("./kill.word", import.meta.url));
 // be:release's world strand — the rung-3 verb-op #3 (the first fact-vs-session split: the .word
 // authors the be:release FACT; the handler keeps the HOST session effects — lockSigning + seatHistory).
 registerAbleWord(
@@ -875,36 +875,36 @@ async function switchHandler({ payload, identity, moment }) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// death . The being's final act. Locks the act-chain; no new BE ops
+// kill . The being's final act. Locks the act-chain; no new BE ops
 // will be accepted on this being, summons refuse, able grants refuse.
 // Past acts + past grants remain valid (facts at the time stand).
 // See seed/done/DualBeingParents — "WORRY ABOUT LAST."
 //
 // The handler returns the closing summary; beVerb's dispatch path
-// (death branch in be.js) stamps the be:death fact on the dying
-// being's reel. The reducer's applyDeath in reducerHelpers.js
-// projects qualities.death = { time, byActor }.
+// (kill branch in be.js) stamps the be:kill fact on the dying
+// being's reel. The reducer's applyKill in reducerHelpers.js
+// projects qualities.dead = { byActor }.
 //
-// Authority gate: today only I may perform be:death. The authorize
+// Authority gate: today only I may perform be:kill. The authorize
 // step in beVerb's dispatch routes through the able-walk which
 // short-circuits true for I and refuses everyone else (no able
-// today declares a be:death capability). Future doctrine may extend the
+// today declares a be:kill capability). Future doctrine may extend the
 // authority list (mother + governance ables); for now, I only.
 // ────────────────────────────────────────────────────────────────────
 
-// be:death — close a being's lifecycle. WIRED bundle (mirrors truename): the world strand is
-// death.word — the handler runs it through the bridge (CALLER mode, the one floor read wired by
-// deathHost.js); the .word RETURNS { byActor } as `factParams` + the target as `factTarget`, and
-// stampsWordFact promotes them so beVerb stamps the ONE caller-attributed be:death fact on the dying
+// be:kill — close a being's lifecycle. WIRED bundle (mirrors truename): the world strand is
+// kill.word — the handler runs it through the bridge (CALLER mode, the one floor read wired by
+// killHost.js); the .word RETURNS { byActor } as `factParams` + the target as `factTarget`, and
+// stampsWordFact promotes them so beVerb stamps the ONE caller-attributed be:kill fact on the dying
 // being's reel. NO JS fallback — the word is the op. The kill authority is be.js's verb-level
 // authorize() (run before this), not an op concern.
-async function _deathViaWord({ beingName, payload, identity, moment }) {
+async function _killViaWord({ beingName, payload, identity, moment }) {
   if (!moment) return null;
   const { resolveAbleWord, runAbleWord } =
     await import("../../../present/word/ableWordRegistry.js");
-  const ir = resolveAbleWord("cherub", "death", moment?.actorAct?.history);
+  const ir = resolveAbleWord("cherub", "kill", moment?.actorAct?.history);
   if (!ir) return null;
-  const { deathHostEnv } = await import("./deathHost.js");
+  const { killHostEnv } = await import("./killHost.js");
   const history = moment?.actorAct?.history;
   try {
     const { result } = await runAbleWord(ir, {
@@ -914,7 +914,7 @@ async function _deathViaWord({ beingName, payload, identity, moment }) {
         caller: identity?.beingId ? String(identity.beingId) : null,
         beingName: beingName || null,
       },
-      env: { host: deathHostEnv() },
+      env: { host: killHostEnv() },
     });
     if (!result) return null;
     const { stampsWordFact } = await import("../../../ibp/factResult.js");
@@ -926,14 +926,14 @@ async function _deathViaWord({ beingName, payload, identity, moment }) {
   }
 }
 
-async function deathHandler({ beingName, identity, payload, moment }) {
-  const result = await _deathViaWord({ beingName, payload, identity, moment });
+async function killHandler({ beingName, identity, payload, moment }) {
+  const result = await _killViaWord({ beingName, payload, identity, moment });
   if (result) return result;
-  // NO JS fallback: death.word IS the op (the single source of truth). If its IR is absent the op
+  // NO JS fallback: kill.word IS the op (the single source of truth). If its IR is absent the op
   // honestly cannot run — that is the truthful state, not papered over by a JS duplicate.
   throw new IbpError(
     IBP_ERR.INTERNAL,
-    "be:death: death.word is not available (the word is the op — there is no JS fallback)",
+    "be:kill: kill.word is not available (the word is the op — there is no JS fallback)",
   );
 }
 
@@ -1068,15 +1068,15 @@ export const cherubBeOps = Object.freeze({
     // be:switch fact on the DESTINATION history (be.js passes result.toHistory as the fact history).
     factAction: "switch",
   },
-  death: {
+  kill: {
     description:
       "Close this being's lifecycle. One-way; the chain locks. " +
       "Past acts + grants remain valid. Today I only.",
     label: "Close being",
     args: {},
-    handler: deathHandler,
-    // death.word returns factParams; the BE dispatcher stamps be:death from them.
-    factAction: "death",
+    handler: killHandler,
+    // kill.word returns factParams; the BE dispatcher stamps be:kill from them.
+    factAction: "kill",
   },
   truename: {
     description:
@@ -1547,75 +1547,21 @@ function mapSeedError(err) {
 // through here.
 // ────────────────────────────────────────────────────────────────────
 
-export const cherubAble = Object.freeze({
-  name: "cherub",
-  description:
-    "The gate, right below I. Processes the three BE ops (birth/connect/release) AND summon:mate — a connected name births its first TOP-LEVEL being through cherub (owned by the name). Down the chain, names reuse summon:mate on @birther / be:birth on their own beings.",
-  // Seed delegate able — hosted on the story root. The cherub being
-  // gets this able granted at boot by the I-Am. `can` includes
-  // do:grant-able:human + do:grant-able:global so cherub can anoint new
-  // humans on registration. Cherub is the only grantor of the human
-  // and global ables in a default story.
-  requiredCognition: "scripted",
-  respondMode: "async",
-  triggerOn: [],
-
-  // Capabilities, unified in `can`:
-  //   - do  actions cherub can perform. The registration flow needs to
-  //     emit grant-able facts on the freshly-birthed human (giving them
-  //     global + human at the place root). do:grant-able:<able> is the
-  //     entry that lets authorize permit those grants.
-  //   - summon participation. `as: "receiver"` declares this able
-  //     ACCEPTS summon:mate from anonymous arrivals (the registration
-  //     flow): summon @cherub:mate → cherub mints a new being with the
-  //     visitor's chosen credentials, grants global + human at the place
-  //     root, and binds the session. The summoner RECEIVES the new being.
-  //     Mirrors birther's same shape; FEDERATION.md for the federation
-  //     counterpart.
-  //   - be licenses. The descriptor's enrichBeings reads these, cross-
-  //     references the seed's static BE_OPS table for each name, and
-  //     builds the per-being `actions[]` block the portal renders as
-  //     menu + form. Schemas live in the seed (cherubBeOps above + BE_OPS
-  //     at ibp/beOps.js), not here . a be entry names the license, not
-  //     the shape.
-  can: [
-    {
-      verb: "do",
-      word: "grant-able:human",
-      description: "anoint a new human at the place root",
-    },
-    {
-      verb: "do",
-      word: "grant-able:global",
-      description: "give the baseline able to a new human",
-    },
-    {
-      verb: "call",
-      word: "mate",
-      as: "receiver",
-      description:
-        "Birth your first being through your name — a top-level being, owned by you (cherub is right below I)",
-    },
-    { verb: "be", word: "birth" },
-    { verb: "be", word: "connect" },
-    { verb: "be", word: "release" },
-  ],
-
-  // summon:mate — a connected NAME, acting through @arrival, asks cherub to
-  // birth its FIRST being. Cherub is right below I, so it mints TOP-LEVEL
-  // beings; the child is OWNED by the summoner's name (sovereign trueName),
-  // not a being of cherub. Down the chain the name reuses summon:mate against
-  // @birther / be:birth on its own beings. (A name CAN be given beings without
-  // ever using cherub; this is just the typical first-being path on land.)
-  async call(message, ctx) {
-    const intent =
-      typeof message === "object" && message !== null
-        ? message.intent || message.kind || null
-        : null;
-    if (intent === "mate") return await handleCherubMate(message, ctx);
-    return null;
-  },
-});
+// cherub's summon handler-floor. The grant-set — do grant-able:human/global, call mate (as
+// receiver), be birth/connect/release — is the WORD (store/words/ables/cherub.word). This file is
+// only the irreducible behavior the word can't express: a connected name summoning :mate births its
+// first TOP-LEVEL being (owned by the summoner's name, since cherub sits right below I). genesis
+// folds the word and attaches this as the spec's `call`. cherubBeing + cherubBeOps below stay — the
+// BE verb reads cherubBeOps via seed/ibp/beOps.js, and the be:birth/connect/release schemas live
+// there, not in the grant-set.
+export const cherubAbleHandler = async (message, ctx) => {
+  const intent =
+    typeof message === "object" && message !== null
+      ? message.intent || message.kind || null
+      : null;
+  if (intent === "mate") return await handleCherubMate(message, ctx);
+  return null;
+};
 
 // summon:mate → cherub births the name's first TOP-LEVEL being, owned by the
 // summoner's NAME (its trueName = the connected name). The name then

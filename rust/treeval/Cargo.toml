@@ -1,0 +1,9 @@
+[package]
+name = "treeval"
+version = "0.1.0"
+edition = "2021"
+description = "The Word evaluator's RASTERIZE: an act IR node (from treeword) + an eval context -> the fact SPEC the stamper seals. Byte-identical to seed/present/word/evaluator.js (the emit path + the four resolvers + getPath). The DO path (doVerb op handlers) is a separate, later port."
+license = "AGPL-3.0"
+
+[dependencies]
+treehash = { path = "../treehash" }

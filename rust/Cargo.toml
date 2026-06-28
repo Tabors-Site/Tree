@@ -6,9 +6,10 @@
 #   treeproj   — Tier 5: the projection cache (.proj snapshots — fold a reel, cache the folded state)
 #   treeos     — the standalone boot: read+fold+verify the on-disk chain, no Node (the OS entry seed)
 #   treeword   — the Word engine port (the parser first): Word text -> IR, vector-proven vs parser.js
+#   treeval    — the Word evaluator's rasterize: act IR + ctx -> the fact spec, vector-proven vs evaluator.js
 [workspace]
 resolver = "2"
-members = ["treehash", "treefold", "treeverify", "treestore", "treeproj", "treeos", "treeword"]
+members = ["treehash", "treefold", "treeverify", "treestore", "treeproj", "treeos", "treeword", "treeval"]
 # treehash-node (the napi FFI wrapper) is EXCLUDED: it pulls napi from crates.io and builds a cdylib,
 # so it stays out of the zero-dependency determinism-spine workspace. Build it on its own.
 exclude = ["treehash-node"]

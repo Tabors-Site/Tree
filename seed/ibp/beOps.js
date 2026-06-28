@@ -2,7 +2,7 @@
 //
 // BE_OPS . the canonical BE operations.
 //
-// BE is a closed set: birth, connect, release, switch, death. The
+// BE is a closed set: birth, connect, release, switch, kill. The
 // substrate fixes this list; no extension adds a sixth. So unlike DO
 // (which is open and needs a registry), BE just exports a static table.
 //
@@ -25,7 +25,7 @@
 // are universal identity surface, not per-being behavior . if a
 // future story wanted a different welcome-character, that being's
 // able would still license
-// `canBe: ["birth", "connect", "release", "switch", "death"]`
+// `canBe: ["birth", "connect", "release", "switch", "kill"]`
 // and rely on the same static table.
 
 import { cherubBeOps } from "../store/words/cherub/able.js";
@@ -35,7 +35,7 @@ export const BE_OPS = Object.freeze({
   connect:  cherubBeOps.connect,
   release:  cherubBeOps.release,
   switch:   cherubBeOps.switch,
-  death:    cherubBeOps.death,
+  kill:     cherubBeOps.kill,
   // truename — hand a being to a (declared) Name: re-point its trueName.
   // Identity-level, so it rides BE, not do:set-being.
   truename: cherubBeOps.truename,

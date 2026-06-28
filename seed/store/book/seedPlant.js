@@ -672,17 +672,26 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     // we log and continue — partial-rollback is still better than
     // none. The original error is re-thrown at the end so the caller
     // sees what actually broke.
-    const endAction = { space: "end-space", being: "end-being", matter: "end-matter" };
+    // The cease is ONE concept with TWO verbs by nature: a THING (space/matter) is DELETED
+    // (do:delete), an ACTOR (being) is KILLED (be:kill). Each reversal lays the fact its reducer
+    // folds (space/matter → qualities.dead + the DELETED sentinel; being → qualities.dead + the
+    // act-chain seal). byActor rides params so the cease records who reversed it.
+    const ceaseOf = {
+      space:  { verb: "do", act: "delete" },
+      matter: { verb: "do", act: "delete" },
+      being:  { verb: "be", act: "kill" },
+    };
     for (let i = committed.length - 1; i >= 0; i--) {
       const { kind, id } = committed[i];
+      const cease = ceaseOf[kind] || { verb: "do", act: "delete" };
       try {
-        await withBeingFact(opts.operatorBeingId, `graft:rollback ${endAction[kind]}`, history, async (ctx) => {
+        await withBeingFact(opts.operatorBeingId, `graft:rollback ${cease.act} ${kind}`, history, async (ctx) => {
           await emitFact({
-            verb:    "do",
-            act:     endAction[kind],
+            verb:    cease.verb,
+            act:     cease.act,
             through: opts.operatorBeingId,
             of:      { kind, id },
-            params:  { reason: "graft rollback" },
+            params:  { reason: "graft rollback", byActor: opts.operatorBeingId },
             actId:   ctx.actId,
             history: history,
           }, ctx);
@@ -690,7 +699,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
       } catch (rollbackErr) {
         // Best-effort. Log via console — log import would be circular.
         // eslint-disable-next-line no-console
-        console.error(`plantTemplate rollback: ${endAction[kind]} on ${id.slice(0,8)} failed: ${rollbackErr.message}`);
+        console.error(`plantTemplate rollback: ${cease.act} ${kind} on ${id.slice(0,8)} failed: ${rollbackErr.message}`);
       }
     }
     // Audit: the graft failed. Stamps even when rollback is partial

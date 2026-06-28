@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 
 use treehash::{parse, stringify, Json};
 
+use crate::index::update_index_from_slot;
+
 /// fileStore.js `shard`: first 2 chars, or pad to 2 with `_` (so no directory holds millions).
 fn shard(id: &str) -> String {
     let chars: Vec<char> = id.chars().collect();
@@ -58,7 +60,9 @@ pub fn load_snapshot(root: &Path, history: &str, kind: &str, id: &str) -> Option
 /// saveSnapshot: a durable (fsync'd) write of the slot. When `expected_folded_seq` is Some it is a
 /// compare-and-set: write only if the on-disk `foldedSeq` matches (a stale fold returns Ok(false) and
 /// loses; the next fold reads the advanced snapshot and catches up). A first write (no snapshot yet)
-/// always lands. Returns Ok(true) when written. Mirrors projections.saveProjection's CAS.
+/// always lands. Returns Ok(true) when written. Mirrors projections.saveProjection's CAS. After the
+/// .proj write it diffs old -> new into the derived index (update_index_from_slot), exactly as the JS
+/// does, so the inverted-index facets track the snapshots. The index is rebuildable, never truth.
 pub fn save_snapshot(
     root: &Path,
     history: &str,
@@ -67,9 +71,12 @@ pub fn save_snapshot(
     slot: &Json,
     expected_folded_seq: Option<f64>,
 ) -> io::Result<bool> {
+    // Load the prior slot ONCE (the JS reads `old` at the top of saveSnapshot): it serves both the
+    // CAS guard and the index diff below, so a CAS-refused write never touches the index either.
+    let old = load_snapshot(root, history, kind, id);
     if let Some(exp) = expected_folded_seq {
-        if let Some(old) = load_snapshot(root, history, kind, id) {
-            if folded_seq(&old) != Some(exp) {
+        if let Some(old) = &old {
+            if folded_seq(old) != Some(exp) {
                 return Ok(false); // a stale concurrent fold loses the CAS
             }
         }
@@ -85,5 +92,8 @@ pub fn save_snapshot(
         .open(&p)?;
     f.write_all((stringify(slot) + "\n").as_bytes())?;
     f.sync_all()?;
+    // Keep the derived index consistent with the .proj snapshots: diff old -> new and re-bucket this
+    // id across every facet. Rebuildable (a pure function of the snapshots), never truth.
+    update_index_from_slot(root, history, kind, id, old.as_ref(), Some(slot))?;
     Ok(true)
 }

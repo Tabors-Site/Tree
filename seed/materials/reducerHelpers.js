@@ -312,28 +312,30 @@ export function applyConnectionState(state, fact) {
 }
 
 /**
- * Apply be:death facts to the being's qualities.death projection.
+ * Apply be:kill facts to the being's qualities.dead projection.
  *
- * Death is the being's final lifecycle act (seed/done/DualBeingParents).
+ * A kill is the being's final lifecycle act (seed/done/DualBeingParents).
  * One-way: once stamped, the being's act-chain is locked, no new BE
  * ops are accepted, summons refuse, able grants refuse. Past acts and
  * past grants remain valid (facts at the time stand; later closure
  * doesn't retroactively invalidate them).
  *
- * Idempotent: re-applying a be:death to an already-dead being is a
- * no-op (the FIRST death's timestamp is the canonical death moment).
+ * Idempotent: re-applying a be:kill to an already-dead being is a
+ * no-op (the FIRST kill is the canonical cease; the being is dead the
+ * moment that fact exists).
  *
  * Fact shape:
  *   verb:   "be"
- *   action: "death"
- *   target.kind: "being", target.id: <being whose death we're recording>
+ *   action: "kill"
+ *   target.kind: "being", target.id: <being whose cease we're recording>
  *   params.byActor: <beingId who closed this being> (today: always I)
  *
- * The projection lands at `qualities.death = { time, byActor }`.
- * Consumers test `being.qualities.death?.time != null` for the
- * is-dead predicate.
+ * The projection lands at `qualities.dead = { byActor }` — the ONE
+ * consistent cease marker across being / space / matter (everything
+ * lives in qualities). Consumers test `being.qualities.dead != null`
+ * for the is-dead predicate.
  *
- * RENDERING SCRUB: death also nulls every field that descriptor
+ * RENDERING SCRUB: the kill also nulls every field that descriptor
  * builders consult to render the being at a position — `position`,
  * `coord`, and `qualities.connection.inhabitedBy`. The dead being
  * stops appearing in any place's beingsAtSpace lookup without a
@@ -345,17 +347,18 @@ export function applyConnectionState(state, fact) {
  * @param {object} fact
  * @returns {object} new state
  */
-export function applyDeath(state, fact) {
+export function applyKill(state, fact) {
   if (fact?.verb !== "be") return state;
-  if (fact?.act !== "death") return state;
+  if (fact?.act !== "kill") return state;
   if (fact?.of?.kind !== "being") return state;
 
   const qualities = state.qualities || {};
 
-  // Idempotent — first death wins. The being is dead the moment the be:death FACT exists; that fact's
-  // existence IS the death (no clock — an act is present, a fact is past, and "when" is the chain
-  // position, not a timestamp). Re-folding preserves the byActor and the cleared rendering state.
-  if (qualities.death) return state;
+  // Idempotent — the first kill wins. The being is dead the moment the be:kill FACT exists; that
+  // fact's existence IS the cease (no clock — an act is present, a fact is past, and "when" is the
+  // chain position, not a timestamp). Re-folding preserves the byActor and the cleared rendering
+  // state.
+  if (qualities.dead) return state;
 
   const byActor = fact?.params?.byActor || fact?.through || null;
 
@@ -375,7 +378,7 @@ export function applyDeath(state, fact) {
     qualities: {
       ...qualities,
       connection,
-      death: { byActor },
+      dead: { byActor },
     },
   };
 }

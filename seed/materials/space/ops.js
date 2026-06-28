@@ -189,7 +189,10 @@ registerOperation("set-space", {
 registerOperation("end-space", {
   targets: ["space"],
   ownerExtension: "seed",
-  factAction: "end-space",
+  // The act laid on the fact is `delete` (the consistent THING-cease verb across space/matter); the
+  // op NAME stays `end-space` (the unique dispatch key callers speak — the global op REGISTRY can hold
+  // only one `delete`). The space reducer matches `act === "delete"` to fold the cease.
+  factAction: "delete",
   args: {},
   word: { noun: "space", able: "space", idFrom: "spaceId" },
   hostEnv: endSpaceHostEnv,

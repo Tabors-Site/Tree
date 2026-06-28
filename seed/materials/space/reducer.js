@@ -76,12 +76,23 @@ export function reduce(state, fact) {
     next = { ...next, position: fact.params.value ?? null };
   }
 
-  // do:end-space — the space is ended. ONE act, ONE fact (the verb names "delete space"); the reducer
-  // FOLDS the two consequences — parent=DELETED (the sentinel that hides it from parent-query readers,
-  // mirrored onto position) and members.owner=the deleter (revival audit), derived from the fact's
-  // `through` (the actor IS the deleter). Replaces the two hand-stamped set-space facts (23.md).
-  if (fact?.act === "end-space" && fact?.of?.kind === "space") {
-    next = { ...next, parent: DELETED, position: DELETED, owner: String(fact.through || next.owner || "") };
+  // do:delete (the end-space op) — the space is DELETED. ONE act, ONE fact (a THING is deleted); the
+  // reducer FOLDS the consequences. The DELETED sentinel folding stays exactly as-is: parent=DELETED
+  // (the sentinel that hides it from parent-query readers, mirrored onto position) and
+  // members.owner=the deleter (revival audit), derived from the fact's `through` (the actor IS the
+  // deleter). ADDED: qualities.dead = { byActor } — the ONE consistent cease marker across
+  // being/space/matter (tombstoned = state.qualities.dead present, one check in qualities like
+  // everything else). byActor = params.byActor ?? fact.through (exactly as applyKill).
+  if (fact?.act === "delete" && fact?.of?.kind === "space") {
+    const byActor = fact?.params?.byActor ?? fact?.through ?? null;
+    const qualities = next.qualities || {};
+    next = {
+      ...next,
+      parent: DELETED,
+      position: DELETED,
+      owner: String(fact.through || next.owner || ""),
+      qualities: { ...qualities, dead: { byActor } },
+    };
   }
 
   // No wall-clock is folded into space state. The "when" of any

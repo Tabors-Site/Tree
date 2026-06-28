@@ -236,7 +236,10 @@ registerOperation("rename-matter", {
 registerOperation("end-matter", {
   targets: ["matter"],
   ownerExtension: "seed",
-  factAction: "end-matter",
+  // The act laid on the fact is `delete` (the consistent THING-cease verb across space/matter); the
+  // op NAME stays `end-matter` (the unique dispatch key callers speak — the global op REGISTRY can
+  // hold only one `delete`). The matter reducer matches `act === "delete"` to fold the cease.
+  factAction: "delete",
   args: {},
   word: { noun: "matter", able: "matter", idFrom: "matterId" },
   hostEnv: endMatterHostEnv,

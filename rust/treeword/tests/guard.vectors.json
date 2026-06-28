@@ -1,0 +1,70 @@
+{
+  "vectors": [
+    {
+      "name": "g-0",
+      "line": "the rooster crows, and it becomes day.",
+      "forward": false,
+      "capitals": false
+    },
+    {
+      "name": "g-1",
+      "line": "the sun rises because it is dawn.",
+      "forward": true,
+      "capitals": false
+    },
+    {
+      "name": "g-2",
+      "line": "therefore the bell rings.",
+      "forward": true,
+      "capitals": false
+    },
+    {
+      "name": "g-3",
+      "line": "do this in order that it works.",
+      "forward": true,
+      "capitals": false
+    },
+    {
+      "name": "g-4",
+      "line": "Member can back it.",
+      "forward": false,
+      "capitals": true
+    },
+    {
+      "name": "g-5",
+      "line": "Model has a parent.",
+      "forward": false,
+      "capitals": true
+    },
+    {
+      "name": "g-6",
+      "line": "Widget accepts text.",
+      "forward": false,
+      "capitals": true
+    },
+    {
+      "name": "g-7",
+      "line": "A member can back it.",
+      "forward": false,
+      "capitals": false
+    },
+    {
+      "name": "g-8",
+      "line": "It accepts text.",
+      "forward": false,
+      "capitals": false
+    },
+    {
+      "name": "g-9",
+      "line": "I make Gardener.",
+      "forward": false,
+      "capitals": false
+    },
+    {
+      "name": "g-10",
+      "line": "The space has an owner.",
+      "forward": false,
+      "capitals": false
+    }
+  ]
+}

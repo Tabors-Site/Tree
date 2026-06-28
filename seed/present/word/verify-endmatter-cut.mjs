@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // end-matter — the COLLAPSE exemplar (23.md): one act → ONE fact → the reducer folds the rest.
 // Was: endMatter (née deleteMatterAndFile) hand-stamped TWO do:set-matter facts (spaceId=DELETED,
-// beingId=DELETED) — the 2-field-object false shape — on top of the dispatcher's do:end-matter audit.
-// Now: end-matter lays exactly ONE fact (do:end-matter); the matter reducer DERIVES the two
-// consequences (absent-from-space + unheld), and isGone tombstones the slot. The being only ever
-// sees "delete matter"; no blob is touched (content-addressed; casSweep owns lifecycle).
-// Proves: a REAL end-matter via doVerb lays one end-matter fact, zero set-matter facts, and the
-// matter folds gone. Full begin.js boot. Scratch DB, wiped.
+// beingId=DELETED) — the 2-field-object false shape. Now: end-matter lays exactly ONE fact
+// (do:delete — the consistent THING-cease verb; the op NAME stays end-matter); the matter reducer
+// DERIVES the consequences (absent-from-space + unheld via the DELETED sentinel; ADDED qualities.dead,
+// the consistent cease marker), and isGone tombstones the slot. The being only ever sees "delete
+// matter"; no blob is touched (content-addressed; casSweep owns lifecycle). Proves: a REAL end-matter
+// via doVerb lays one do:delete fact, zero set-matter facts, and the matter folds gone. Scratch DB.
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -108,12 +108,14 @@ try {
   const r = await runOp(target, "end-matter", {});
   const facts = r.deltaF || [];
 
-  // ── 1. exactly ONE fact, and it is the do:end-matter act ──
-  const endFacts = facts.filter((f) => f.act === "end-matter");
+  // ── 1. exactly ONE fact, and it is the do:delete act ──
+  // The end-matter op's fact act is `delete` (the consistent THING-cease verb across space/matter);
+  // the op NAME stays end-matter (the unique dispatch key). The reducer folds on act === "delete".
+  const endFacts = facts.filter((f) => f.act === "delete");
   const setFacts = facts.filter((f) => f.act === "set-matter");
   facts.length === 1 && endFacts.length === 1 && setFacts.length === 0
     ? ok(
-        `end-matter lays exactly ONE fact (do:end-matter); zero set-matter facts (the false shape is gone)`,
+        `end-matter lays exactly ONE fact (do:delete); zero set-matter facts (the false shape is gone)`,
       )
     : bad(`one fact`, { count: facts.length, acts: facts.map((f) => f.act) });
 
@@ -125,28 +127,32 @@ try {
   String(ef.of?.id) === mId &&
   String(ef.through) === String(I)
     ? ok(
-        `the do:end-matter fact: of {matter, matterId}, through = caller (the being's "delete matter")`,
+        `the do:delete fact: of {matter, matterId}, through = caller (the being's "delete matter")`,
       )
     : bad(
         `fact shape`,
         ef ? { verb: ef.verb, of: ef.of, through: ef.through } : "no end fact",
       );
 
-  // ── 3. the reducer FOLDS the consequences: absent-from-space + unheld ──
+  // ── 3. the reducer FOLDS the consequences: absent-from-space + unheld + qualities.dead ──
   const slot = await loadOrFold("matter", mId, "0");
   const goneOrDeleted =
     !slot ||
     slot.tombstoned === true ||
     slot.state?.spaceId === "__DELETED__" ||
     /deleted/i.test(String(slot.state?.spaceId));
-  goneOrDeleted
+  // The slot tombstones (isGone reads spaceId=DELETED), so loadOrFold may return the tombstoned
+  // shape; when state is present, qualities.dead is the consistent cease marker.
+  const deadOk = !slot || slot.tombstoned === true || !!slot.state?.qualities?.dead;
+  goneOrDeleted && deadOk
     ? ok(
-        `the matter folds GONE — the reducer derived the ended state from the one fact (spaceId=DELETED → isGone → tombstoned)`,
+        `the matter folds GONE — the reducer derived the ended state from the one fact (spaceId=DELETED → isGone → tombstoned; qualities.dead set)`,
       )
     : bad(`folds gone`, {
         tombstoned: slot?.tombstoned,
         spaceId: slot?.state?.spaceId,
         beingId: slot?.state?.beingId,
+        dead: slot?.state?.qualities?.dead,
       });
 
   // ── 4. it stops resolving by name (the tombstone freed the name index) ──

@@ -1,0 +1,242 @@
+{
+  "vectors": [
+    {
+      "name": "c-0",
+      "input": "the hero's health is at least 5",
+      "node": {
+        "test": {
+          "op": "compare",
+          "as": "ge",
+          "path": "hero.health",
+          "against": 5
+        }
+      }
+    },
+    {
+      "name": "c-1",
+      "input": "the hero's health is less than 5",
+      "node": {
+        "test": {
+          "op": "compare",
+          "as": "lt",
+          "path": "hero.health",
+          "against": 5
+        }
+      }
+    },
+    {
+      "name": "c-2",
+      "input": "the score is at most 10",
+      "node": {
+        "test": {
+          "op": "compare",
+          "as": "le",
+          "path": "score",
+          "against": 10
+        }
+      }
+    },
+    {
+      "name": "c-3",
+      "input": "the gold is greater than 100",
+      "node": {
+        "test": {
+          "op": "compare",
+          "as": "gt",
+          "path": "gold",
+          "against": 100
+        }
+      }
+    },
+    {
+      "name": "c-4",
+      "input": "x equals y",
+      "node": {
+        "test": {
+          "op": "equals",
+          "path": "x",
+          "value": "y"
+        }
+      }
+    },
+    {
+      "name": "c-5",
+      "input": "the count equals 3",
+      "node": {
+        "test": {
+          "op": "equals",
+          "path": "count",
+          "value": 3
+        }
+      }
+    },
+    {
+      "name": "c-6",
+      "input": "the name equals \"space\"",
+      "node": {
+        "test": {
+          "op": "equals",
+          "path": "name",
+          "value": "space"
+        }
+      }
+    },
+    {
+      "name": "c-7",
+      "input": "the coord's x is a number",
+      "node": {
+        "test": {
+          "op": "isFinite",
+          "path": "coord.x"
+        }
+      }
+    },
+    {
+      "name": "c-8",
+      "input": "the label is text",
+      "node": {
+        "test": {
+          "op": "isString",
+          "path": "label"
+        }
+      }
+    },
+    {
+      "name": "c-9",
+      "input": "signedIn",
+      "node": {
+        "flag": "signedIn"
+      }
+    },
+    {
+      "name": "c-10",
+      "input": "no caller",
+      "node": {
+        "negated": true,
+        "flag": "caller"
+      }
+    },
+    {
+      "name": "c-11",
+      "input": "the subject is a space",
+      "node": {
+        "test": {
+          "op": "equals",
+          "path": "subject.kind",
+          "value": "space"
+        }
+      }
+    },
+    {
+      "name": "c-12",
+      "input": "the kind is \"matter\"",
+      "node": {
+        "test": {
+          "op": "equals",
+          "path": "kind",
+          "value": "matter"
+        }
+      }
+    },
+    {
+      "name": "c-13",
+      "input": "the to is the subject's id",
+      "node": {
+        "test": {
+          "op": "equals",
+          "path": "to",
+          "against": {
+            "ref": "subject.id"
+          }
+        }
+      }
+    },
+    {
+      "name": "c-14",
+      "input": "the candidate is remote",
+      "node": {
+        "resolvedBy": "remote",
+        "args": [
+          {
+            "ref": "candidate"
+          }
+        ]
+      }
+    },
+    {
+      "name": "c-15",
+      "input": "the caller has authority over the target",
+      "node": {
+        "resolvedBy": "hasAuthorityOver",
+        "args": [
+          {
+            "ref": "caller"
+          },
+          {
+            "ref": "target"
+          }
+        ]
+      }
+    },
+    {
+      "name": "c-16",
+      "input": "the parent is the being-parent of the child",
+      "node": {
+        "resolvedBy": "isBeingParentOf",
+        "args": [
+          {
+            "ref": "parent"
+          },
+          {
+            "ref": "child"
+          }
+        ]
+      }
+    },
+    {
+      "name": "c-17",
+      "input": "there is a candidate",
+      "node": {
+        "flag": "candidate"
+      }
+    },
+    {
+      "name": "c-18",
+      "input": "there is no caller",
+      "node": {
+        "negated": true,
+        "flag": "caller"
+      }
+    },
+    {
+      "name": "c-19",
+      "input": "the caller exists",
+      "node": {
+        "flag": "caller"
+      }
+    },
+    {
+      "name": "c-20",
+      "input": "the caller is missing",
+      "node": {
+        "negated": true,
+        "flag": "caller"
+      }
+    },
+    {
+      "name": "c-21",
+      "input": "the being is found",
+      "node": {
+        "flag": "beingFound"
+      }
+    },
+    {
+      "name": "c-22",
+      "input": "no being is found",
+      "node": {
+        "negated": true,
+        "flag": "beingFound"
+      }
+    }
+  ]
+}

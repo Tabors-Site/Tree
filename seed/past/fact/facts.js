@@ -292,9 +292,9 @@ export async function logFact(input, opts = {}) {
     }
   }
 
-  // Death gate (seed/done/DualBeingParents — "be:death freezes both
+  // Kill gate (seed/done/DualBeingParents — "be:kill freezes both
   // chains"). Refuse to stamp any Fact whose actor or being-target is
-  // already dead. The lone exception is the be:death fact itself —
+  // already dead. The lone exception is the be:kill fact itself —
   // without it the lock can never seal. Past acts + grants stay in
   // the chain (this gate runs at stamp time, not at fold time).
   //
@@ -302,14 +302,14 @@ export async function logFact(input, opts = {}) {
   // histories see their own view of liveness. The seed's I-Am and
   // pre-bootstrap moments emit Facts before any Being row exists;
   // isBeingDead returns false for a missing row so genesis isn't
-  // blocked. Death stamps land on actual beings only.
-  const { isBeingDead, isDeathFact } =
+  // blocked. Kill stamps land on actual beings only.
+  const { isBeingDead, isKillFact } =
     await import("../../materials/being/closure.js");
-  if (!isDeathFact({ verb, act })) {
+  if (!isKillFact({ verb, act })) {
     if (through && (await isBeingDead(through, history))) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        `logFact: being ${String(through).slice(0, 8)} is closed (be:death). ` +
+        `logFact: being ${String(through).slice(0, 8)} is closed (be:kill). ` +
           `The actor chain is frozen; no new facts can ride this being.`,
         { through },
       );
@@ -322,14 +322,14 @@ export async function logFact(input, opts = {}) {
     ) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        `logFact: target being ${String(normalizedTarget.id).slice(0, 8)} is closed (be:death). ` +
+        `logFact: target being ${String(normalizedTarget.id).slice(0, 8)} is closed (be:kill). ` +
           `The being chain is frozen; no new facts can land on this being's reel.`,
         { targetBeingId: normalizedTarget.id },
       );
     }
   }
 
-  // Banish gate — the Name layer's be:death. Refuse to stamp any fact whose
+  // Banish gate — the Name layer's be:kill. Refuse to stamp any fact whose
   // ACTOR name (by) is banished. The lone exception is the name:banish
   // fact itself, so the tombstone can seal. A Name is story-wide (its reel
   // does not fork), so this reads on main regardless of the fact's history;

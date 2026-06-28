@@ -1,8 +1,8 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// closure.js — being lifecycle closure (be:death) predicates + gate.
+// closure.js — being lifecycle closure (be:kill) predicates + gate.
 //
-// A being's death is the structural end of its participation. Past
+// A being's cease is the structural end of its participation. Past
 // acts + grants stay valid (facts at the time stand). Going forward:
 //
 //   - The dead being cannot act. No new Acts open on its chain;
@@ -11,29 +11,30 @@
 //     it as `of.id` (recipient). Summons refuse. BE ops on it
 //     refuse. Able grants/revocations refuse.
 //
-// The reducer (applyDeath in reducerHelpers.js) lands the projection
-// at `qualities.death = { time, byActor }` AND scrubs every field
-// that descriptor builders use to render the being at a position
-// (position → null, coord → null, qualities.connection.inhabitedBy
-// → null). The dead being disappears from every SEE projection
-// without a per-call alive-filter. Identity-level state (name,
-// defaultAble, ablesGranted, homeSpace, parentBeingId) stays —
-// queryable as history. This module's `isBeingDead(beingId, history)`
-// reads `qualities.death?.time` through `loadOrFold` so sub-histories
-// that diverged see their effective view. The stamper (past/fact/facts.js emitFact) consults this
-// predicate before every emit; refusal surfaces as an IbpError so
-// upstream callers see a structured failure.
+// The reducer (applyKill in reducerHelpers.js) lands the projection
+// at `qualities.dead = { byActor }` (the ONE consistent cease marker
+// across being/space/matter) AND scrubs every field that descriptor
+// builders use to render the being at a position (position → null,
+// coord → null, qualities.connection.inhabitedBy → null). The dead
+// being disappears from every SEE projection without a per-call
+// alive-filter. Identity-level state (name, defaultAble, ablesGranted,
+// homeSpace, parentBeingId) stays — queryable as history. This module's
+// `isBeingDead(beingId, history)` reads `qualities.dead` through
+// `loadOrFold` so sub-histories that diverged see their effective view.
+// The stamper (past/fact/facts.js emitFact) consults this predicate
+// before every emit; refusal surfaces as an IbpError so upstream
+// callers see a structured failure.
 //
-// The ONE exception: the be:death fact itself is allowed through.
+// The ONE exception: the be:kill fact itself is allowed through.
 // It's the closing fact; without it the lock can never seal. The
-// reducer's applyDeath is idempotent, so a duplicate be:death (after
+// reducer's applyKill is idempotent, so a duplicate be:kill (after
 // the chain already closed) is a no-op rather than a corruption.
 
 import { loadOrFold } from "../projections.js";
 
 /**
- * True if the being is closed (be:death stamped). Reads
- * `qualities.death?.time`. History-aware via loadOrFold.
+ * True if the being is dead (be:kill stamped). Reads
+ * `qualities.dead`. History-aware via loadOrFold.
  *
  * Returns false for a missing being (no row to be closed) — callers
  * that need a being-existence check perform it separately.
@@ -52,20 +53,20 @@ export async function isBeingDead(beingId, history) {
     );
   }
   const slot = await loadOrFold("being", String(beingId), history);
-  // Dead = the be:death FACT folded (qualities.death exists). No clock — the fact's existence IS the
-  // death; "when" is its chain position, not a timestamp.
-  return !!slot?.state?.qualities?.death;
+  // Dead = the be:kill FACT folded (qualities.dead exists). No clock — the fact's existence IS the
+  // cease; "when" is its chain position, not a timestamp.
+  return !!slot?.state?.qualities?.dead;
 }
 
 /**
- * The one exception to the stamper's liveness gate: a be:death fact
+ * The one exception to the stamper's liveness gate: a be:kill fact
  * is allowed through even when its target is already (or becomes)
  * dead. Lets the lock seal without a chicken-and-egg failure;
- * applyDeath is idempotent so a re-firing be:death is a no-op.
+ * applyKill is idempotent so a re-firing be:kill is a no-op.
  *
  * @param {object} fact
  * @returns {boolean}
  */
-export function isDeathFact(fact) {
-  return fact?.verb === "be" && fact?.act === "death";
+export function isKillFact(fact) {
+  return fact?.verb === "be" && fact?.act === "kill";
 }

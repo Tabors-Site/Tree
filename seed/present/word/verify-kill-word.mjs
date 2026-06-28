@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// verify-death-word . be:death is authored by a .word (death.word); the BE dispatcher stamps the one
-// be:death fact from the word's factParams (rung-3 verb-op #2 — a pure fact-lay). The kill AUTHORITY
-// is be.js's verb-level authorize() (NOT in the word). Proves: (1) cherub:death folds as ableword +
-// resolveAbleWord returns IR (the word is the live path); (2) be:death via beVerb closes a being
-// (applyDeath folds qualities.death); (3) THE PROOF — the emitted fact carries verb:"be" act:"death"
+// verify-kill-word . be:kill is authored by a .word (kill.word); the BE dispatcher stamps the one
+// be:kill fact from the word's factParams (rung-3 verb-op #2 — a pure fact-lay). The kill AUTHORITY
+// is be.js's verb-level authorize() (NOT in the word). Proves: (1) cherub:kill folds as ableword +
+// resolveAbleWord returns IR (the word is the live path); (2) be:kill via beVerb closes a being
+// (applyKill folds qualities.dead); (3) THE PROOF — the emitted fact carries verb:"be" act:"kill"
 // of:{kind:"being"}, params.byActor === the caller, result.closed (the word's sentinel) — the WORD
 // authored the params, the dispatcher stamped; (4) gate-equivalence: a missing target being →
 // BEING_NOT_FOUND (an authorized caller passes authorize() first, so the .word's target-exists gate
@@ -64,7 +64,7 @@ const bad = (l, d) => {
     console.log(`      ${typeof d === "string" ? d : JSON.stringify(d)}`);
 };
 console.log(
-  `\n  verify-death-word (be:death authored by a .word; the dispatcher stamps from factParams)\n`,
+  `\n  verify-kill-word (be:kill authored by a .word; the dispatcher stamps from factParams)\n`,
 );
 try {
   const cherub = await pollFor(
@@ -79,13 +79,13 @@ try {
   const story = getStoryDomain();
 
   // (1) the word is the live path
-  const w = getWordSync("cherub:death");
-  const ir = resolveAbleWord("cherub", "death", "0");
+  const w = getWordSync("cherub:kill");
+  const ir = resolveAbleWord("cherub", "kill", "0");
   w?.kind === "ableword" && !!ir
     ? ok(
-        `cherub:death folds as kind:"ableword" + resolveAbleWord returns its IR (the word is the live path)`,
+        `cherub:kill folds as kind:"ableword" + resolveAbleWord returns its IR (the word is the live path)`,
       )
-    : bad(`death word folded`, { kind: w?.kind, hasIR: !!ir });
+    : bad(`kill word folded`, { kind: w?.kind, hasIR: !!ir });
 
   // (2) birth a being to death
   let beingId = null;
@@ -108,14 +108,14 @@ try {
     () => loadProjection("being", beingId, "0"),
     (s) => !!s?.state,
   );
-  before?.state && !before.state.qualities?.death?.time
-    ? ok(`birthed @dyingbeing, alive (no qualities.death yet)`)
-    : bad(`birth alive`, before?.state?.qualities?.death);
+  before?.state && !before.state.qualities?.dead
+    ? ok(`birthed @dyingbeing, alive (no qualities.dead yet)`)
+    : bad(`birth alive`, before?.state?.qualities?.dead);
 
-  // (3) be:death via beVerb — the .word runs, the dispatcher stamps, applyDeath folds
-  await withIAmAct("be:death", async (ctx) => {
+  // (3) be:kill via beVerb — the .word runs, the dispatcher stamps, applyKill folds
+  await withIAmAct("be:kill", async (ctx) => {
     await beVerb(
-      "death",
+      "kill",
       {},
       {
         address: `${story}/.@dyingbeing`,
@@ -128,20 +128,20 @@ try {
   });
   const after = await pollFor(
     () => loadProjection("being", beingId, "0"),
-    (s) => !!s?.state?.qualities?.death,
+    (s) => !!s?.state?.qualities?.dead,
   );
-  after?.state?.qualities?.death
+  after?.state?.qualities?.dead
     ? ok(
-        `be:death folded qualities.death (applyDeath ran — the being is closed; the FACT's existence IS the death, no clock)`,
+        `be:kill folded qualities.dead (applyKill ran — the being is closed; the FACT's existence IS the cease, no clock)`,
       )
-    : bad(`death folded`, after?.state?.qualities?.death);
+    : bad(`kill folded`, after?.state?.qualities?.dead);
 
-  // (4) THE PROOF: the emitted be:death fact carries the WORD's factParams (byActor) + sentinel
+  // (4) THE PROOF: the emitted be:kill fact carries the WORD's factParams (byActor) + sentinel
   const f = await pollFor(
     () =>
       factFindOne({
         verb: "be",
-        act: "death",
+        act: "kill",
         "of.id": String(beingId),
       }),
     (v) => !!v,
@@ -151,7 +151,7 @@ try {
   f.of?.kind === "being" &&
   f.result?.closed === true
     ? ok(
-        `be:death fact: params.byActor === caller, of:{kind:"being"}, result.closed (the WORD authored the params; the dispatcher stamped)`,
+        `be:kill fact: params.byActor === caller, of:{kind:"being"}, result.closed (the WORD authored the params; the dispatcher stamped)`,
       )
     : bad(`the fact's authored params`, {
         params: f?.params,
@@ -163,10 +163,10 @@ try {
   //     I, so the .word's target-exists gate is what refuses), no fact.
   let threw = false,
     code = null;
-  await withIAmAct("be:death a ghost", async (ctx) => {
+  await withIAmAct("be:kill a ghost", async (ctx) => {
     try {
       await beVerb(
-        "death",
+        "kill",
         {},
         {
           address: `${story}/.@ghostbeing404`,
@@ -183,7 +183,7 @@ try {
   });
   const ghostFact = factFindOne({
     verb: "be",
-    act: "death",
+    act: "kill",
     "of.id": "ghostbeing404",
   });
   threw && code === IBP_ERR.BEING_NOT_FOUND && !ghostFact

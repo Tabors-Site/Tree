@@ -1,6 +1,0 @@
-When a being deaths a being:
-  If no caller, refuse with "be:death requires an authenticated caller" as unauthorized.
-  If no beingName, refuse with "be:death requires an explicit target being in the address (e.g. <story>/@<being>)" as invalid-input.
-  see resolve-target-being(beingName) as targetId.
-  If no targetId, refuse with "be:death: target being not found on this history" as being-not-found.
-  Return closed: true, targetBeingId: $targetId, factTarget: $targetId, factParams: { byActor: $caller }.

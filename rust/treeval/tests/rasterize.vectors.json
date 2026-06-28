@@ -1,0 +1,458 @@
+{
+  "format": "treeos-rasterize-vectors",
+  "version": 1,
+  "vectors": [
+    {
+      "name": "be set-truename, by I, $-param",
+      "act": {
+        "kind": "act",
+        "verb": "be",
+        "act": "set-truename",
+        "by": "I",
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        },
+        "params": {
+          "trueName": "$name"
+        }
+      },
+      "ctx": {
+        "identity": {
+          "nameId": "alice",
+          "beingId": "b0"
+        },
+        "bindings": {
+          "name": "Alice"
+        },
+        "state": {},
+        "beings": {}
+      },
+      "spec": {
+        "verb": "be",
+        "act": "set-truename",
+        "through": "alice",
+        "by": "alice",
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        },
+        "params": {
+          "trueName": "Alice"
+        }
+      }
+    },
+    {
+      "name": "name i-am genesis, empty params",
+      "act": {
+        "kind": "act",
+        "verb": "name",
+        "act": "i-am",
+        "by": "I",
+        "of": {
+          "kind": "name",
+          "id": "alice"
+        },
+        "params": {}
+      },
+      "ctx": {
+        "identity": {
+          "nameId": "alice",
+          "beingId": "b0"
+        },
+        "bindings": {},
+        "state": {},
+        "beings": {}
+      },
+      "spec": {
+        "verb": "name",
+        "act": "i-am",
+        "through": "alice",
+        "by": "alice",
+        "of": {
+          "kind": "name",
+          "id": "alice"
+        },
+        "params": {}
+      }
+    },
+    {
+      "name": "be connect, through {ref}",
+      "act": {
+        "kind": "act",
+        "verb": "be",
+        "act": "connect",
+        "by": "I",
+        "through": {
+          "ref": "conn"
+        },
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        },
+        "params": {}
+      },
+      "ctx": {
+        "identity": {
+          "nameId": "alice"
+        },
+        "bindings": {
+          "conn": "being-xyz"
+        },
+        "state": {},
+        "beings": {}
+      },
+      "spec": {
+        "verb": "be",
+        "act": "connect",
+        "through": "being-xyz",
+        "by": "alice",
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        },
+        "params": {}
+      }
+    },
+    {
+      "name": "be release, of.ref target",
+      "act": {
+        "kind": "act",
+        "verb": "be",
+        "act": "release",
+        "by": "I",
+        "of": {
+          "kind": "being",
+          "ref": "conn"
+        },
+        "params": {}
+      },
+      "ctx": {
+        "identity": {
+          "nameId": "alice"
+        },
+        "bindings": {
+          "conn": "being-xyz"
+        },
+        "state": {},
+        "beings": {}
+      },
+      "spec": {
+        "verb": "be",
+        "act": "release",
+        "through": "alice",
+        "by": "alice",
+        "of": {
+          "kind": "being",
+          "id": "being-xyz"
+        },
+        "params": {}
+      }
+    },
+    {
+      "name": "give share, to {ref}",
+      "act": {
+        "kind": "act",
+        "verb": "give",
+        "act": "share",
+        "by": "I",
+        "of": {
+          "kind": "matter",
+          "id": "m1"
+        },
+        "to": {
+          "ref": "recipient"
+        },
+        "params": {}
+      },
+      "ctx": {
+        "identity": {
+          "nameId": "alice"
+        },
+        "bindings": {
+          "recipient": "being-r"
+        },
+        "state": {},
+        "beings": {}
+      },
+      "spec": {
+        "verb": "give",
+        "act": "share",
+        "through": "alice",
+        "by": "alice",
+        "of": {
+          "kind": "matter",
+          "id": "m1"
+        },
+        "to": "being-r",
+        "params": {}
+      }
+    },
+    {
+      "name": "be set-being, being-name param",
+      "act": {
+        "kind": "act",
+        "verb": "be",
+        "act": "set-being",
+        "by": "I",
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        },
+        "params": {
+          "mother": "Cherub"
+        }
+      },
+      "ctx": {
+        "identity": {
+          "nameId": "alice"
+        },
+        "bindings": {},
+        "state": {},
+        "beings": {
+          "Cherub": "being-cherub"
+        }
+      },
+      "spec": {
+        "verb": "be",
+        "act": "set-being",
+        "through": "alice",
+        "by": "alice",
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        },
+        "params": {
+          "mother": "being-cherub"
+        }
+      }
+    },
+    {
+      "name": "be x, dotted $-ref",
+      "act": {
+        "kind": "act",
+        "verb": "be",
+        "act": "x",
+        "by": "I",
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        },
+        "params": {
+          "hash": "$credential.hash"
+        }
+      },
+      "ctx": {
+        "identity": {
+          "nameId": "alice"
+        },
+        "bindings": {
+          "credential": {
+            "hash": "abc123"
+          }
+        },
+        "state": {},
+        "beings": {}
+      },
+      "spec": {
+        "verb": "be",
+        "act": "x",
+        "through": "alice",
+        "by": "alice",
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        },
+        "params": {
+          "hash": "abc123"
+        }
+      }
+    },
+    {
+      "name": "be form, of.bind mint dry",
+      "act": {
+        "kind": "act",
+        "verb": "be",
+        "act": "form",
+        "by": "I",
+        "of": {
+          "kind": "space",
+          "bind": "home"
+        },
+        "params": {}
+      },
+      "ctx": {
+        "identity": {
+          "nameId": "alice"
+        },
+        "bindings": {},
+        "state": {},
+        "beings": {}
+      },
+      "spec": {
+        "verb": "be",
+        "act": "form",
+        "through": "alice",
+        "by": "alice",
+        "of": {
+          "kind": "space",
+          "id": "<home>"
+        },
+        "params": {}
+      }
+    },
+    {
+      "name": "be greet, by proper name",
+      "act": {
+        "kind": "act",
+        "verb": "be",
+        "act": "greet",
+        "by": "Cherub",
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        },
+        "params": {}
+      },
+      "ctx": {
+        "identity": {
+          "nameId": "alice"
+        },
+        "bindings": {},
+        "state": {},
+        "beings": {}
+      },
+      "spec": {
+        "verb": "be",
+        "act": "greet",
+        "through": "Cherub",
+        "by": "Cherub",
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        },
+        "params": {}
+      }
+    },
+    {
+      "name": "be beat, _event + _sets",
+      "act": {
+        "kind": "act",
+        "verb": "be",
+        "act": "beat",
+        "by": "I",
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        },
+        "params": {},
+        "event": "beat",
+        "sets": {
+          "phase": "day"
+        }
+      },
+      "ctx": {
+        "identity": {
+          "nameId": "alice"
+        },
+        "bindings": {},
+        "state": {},
+        "beings": {}
+      },
+      "spec": {
+        "verb": "be",
+        "act": "beat",
+        "through": "alice",
+        "by": "alice",
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        },
+        "params": {},
+        "_event": "beat",
+        "_sets": {
+          "phase": "day"
+        }
+      }
+    },
+    {
+      "name": "be ping, no params",
+      "act": {
+        "kind": "act",
+        "verb": "be",
+        "act": "ping",
+        "by": "I",
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        }
+      },
+      "ctx": {
+        "identity": {
+          "nameId": "alice"
+        },
+        "bindings": {},
+        "state": {},
+        "beings": {}
+      },
+      "spec": {
+        "verb": "be",
+        "act": "ping",
+        "through": "alice",
+        "by": "alice",
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        }
+      }
+    },
+    {
+      "name": "array param with $-refs",
+      "act": {
+        "kind": "act",
+        "verb": "be",
+        "act": "tag",
+        "by": "I",
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        },
+        "params": {
+          "tags": [
+            "$a",
+            "lit",
+            "$b"
+          ]
+        }
+      },
+      "ctx": {
+        "identity": {
+          "nameId": "alice"
+        },
+        "bindings": {
+          "a": "AA",
+          "b": "BB"
+        },
+        "state": {},
+        "beings": {}
+      },
+      "spec": {
+        "verb": "be",
+        "act": "tag",
+        "through": "alice",
+        "by": "alice",
+        "of": {
+          "kind": "being",
+          "id": "b1"
+        },
+        "params": {
+          "tags": [
+            "AA",
+            "lit",
+            "BB"
+          ]
+        }
+      }
+    }
+  ]
+}

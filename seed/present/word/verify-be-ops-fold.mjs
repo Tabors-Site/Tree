@@ -70,7 +70,7 @@ try {
     "connect",
     "release",
     "switch",
-    "death",
+    "kill",
     "truename",
   ];
 

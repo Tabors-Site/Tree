@@ -241,7 +241,7 @@
     },
     {
       "kind": "being",
-      "name": "being-death",
+      "name": "being-kill",
       "facts": [
         {
           "verb": "be",
@@ -280,7 +280,7 @@
         },
         {
           "verb": "be",
-          "act": "death",
+          "act": "kill",
           "of": {
             "kind": "being",
             "id": "beD"
@@ -295,7 +295,7 @@
         },
         {
           "verb": "be",
-          "act": "death",
+          "act": "kill",
           "of": {
             "kind": "being",
             "id": "beD"
@@ -309,7 +309,7 @@
           "ord": 17
         }
       ],
-      "canonical": "{\"bornOrd\":14,\"coord\":null,\"defaultAble\":null,\"homeHistory\":null,\"homeSpace\":null,\"homeStory\":null,\"isRemote\":false,\"name\":\"Dead\",\"parentBeingId\":null,\"position\":null,\"qualities\":{\"connection\":{\"inhabitedBy\":null,\"since\":null},\"death\":{\"byActor\":\"be0\"}},\"trueName\":null}"
+      "canonical": "{\"bornOrd\":14,\"coord\":null,\"defaultAble\":null,\"homeHistory\":null,\"homeSpace\":null,\"homeStory\":null,\"isRemote\":false,\"name\":\"Dead\",\"parentBeingId\":null,\"position\":null,\"qualities\":{\"connection\":{\"inhabitedBy\":null,\"since\":null},\"dead\":{\"byActor\":\"be0\"}},\"trueName\":null}"
     },
     {
       "kind": "being",
@@ -503,7 +503,7 @@
         },
         {
           "verb": "do",
-          "act": "end-space",
+          "act": "delete",
           "of": {
             "kind": "space",
             "id": "sp2"
@@ -515,7 +515,7 @@
           "ord": 28
         }
       ],
-      "canonical": "{\"bornOrd\":27,\"coord\":null,\"heavenSpace\":null,\"name\":\"Doomed\",\"owner\":\"beDeleter\",\"parent\":\"deleted\",\"position\":\"deleted\",\"size\":null,\"type\":null}"
+      "canonical": "{\"bornOrd\":27,\"coord\":null,\"heavenSpace\":null,\"name\":\"Doomed\",\"owner\":\"beDeleter\",\"parent\":\"deleted\",\"position\":\"deleted\",\"qualities\":{\"dead\":{\"byActor\":\"beDeleter\"}},\"size\":null,\"type\":null}"
     },
     {
       "kind": "matter",
@@ -659,7 +659,7 @@
         },
         {
           "verb": "do",
-          "act": "end-matter",
+          "act": "delete",
           "of": {
             "kind": "matter",
             "id": "m2"
@@ -671,7 +671,7 @@
           "ord": 36
         }
       ],
-      "canonical": "{\"beingId\":\"deleted\",\"bornOrd\":35,\"children\":[],\"content\":{\"hash\":\"z\",\"kind\":\"cas\"},\"coord\":null,\"name\":\"Bye\",\"parentMatterId\":null,\"position\":\"sp1\",\"spaceId\":\"deleted\",\"type\":\"generic\"}",
+      "canonical": "{\"beingId\":\"deleted\",\"bornOrd\":35,\"children\":[],\"content\":{\"hash\":\"z\",\"kind\":\"cas\"},\"coord\":null,\"name\":\"Bye\",\"parentMatterId\":null,\"position\":\"sp1\",\"qualities\":{\"dead\":{\"byActor\":\"be0\"}},\"spaceId\":\"deleted\",\"type\":\"generic\"}",
       "isGone": true
     },
     {

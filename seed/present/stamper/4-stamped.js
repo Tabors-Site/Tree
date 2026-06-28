@@ -514,9 +514,9 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
         continue;
       }
 
-      // create-space / end-space inside a moment fire afterSpaceCreate /
-      // afterSpaceDelete here, post-seal — the in-moment helper in
-      // spaces.js can't fire them inline because the row isn't yet
+      // create-space / delete (the end-space op) inside a moment fire
+      // afterSpaceCreate / afterSpaceDelete here, post-seal — the in-moment
+      // helper in spaces.js can't fire them inline because the row isn't yet
       // materialized at that point and subscribers refetching too early
       // would miss it. The protocols/ibp/index.js handler reads
       // `space.parent` off the payload to invalidate the parent's
@@ -539,7 +539,9 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
         }
         continue;
       }
-      if (action === "end-space") {
+      // The space cease fact's act is `delete` (the end-space op's factAction); scope by
+      // target.kind so a matter delete (same act) doesn't fire the space hook.
+      if (action === "delete" && target?.kind === "space") {
         try {
           await hooks.run("afterSpaceDelete", {
             space: { _id: String(target.id) },

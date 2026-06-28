@@ -5,7 +5,7 @@
 // A Name's banish is the structural end of its authority. Past facts it
 // signed stay valid (history stands). Going forward, no fact can ever be
 // signed by it again — the gate lives in the stamper (past/fact/facts.js
-// logFact), beside the be:death gate, and keys on the fact's ACTOR
+// logFact), beside the be:kill gate, and keys on the fact's ACTOR
 // (fact.nameId): a banished Name cannot be the actor of any new fact.
 //
 // A Name is story-wide — its reel does not fork (identity is above the
@@ -14,7 +14,7 @@
 // history, unlike isBeingDead.
 //
 // The ONE exception: the name:banish fact itself is allowed through (mirror
-// closure.js's be:death carve-out), so the tombstone can seal. The Name
+// closure.js's be:kill carve-out), so the tombstone can seal. The Name
 // reducer's applyCloseName is idempotent, so a re-firing banish is a no-op.
 
 import { loadProjection } from "../projections.js";

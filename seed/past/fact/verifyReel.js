@@ -23,17 +23,26 @@
 // Under content addressing the fact's `_id` IS its hash; "unhashed"
 // became "unaddressed" (a row whose _id doesn't verify as a content
 // hash — pre-CAS rows or foreign inserts).
+//
+// ── IMPLEMENTATION: PURE RUST ───────────────────────────────────────────────
+// The HISTORY I/O stays in JS — resolving the lineage + branchPoint floors and reading the reel
+// slice (readReelLineage) is a storage concern. The CHAIN WALK (recompute each fact's identity from
+// p+content, confirm the four break shapes) is now the Tier-3 `treeverify` crate, reached through the
+// napi addon as native.verifyFactChain. There is NO JS walk anymore — the rehash + p-link logic that
+// used to live here was deleted; Rust is the single source of truth (proven byte-identical by the
+// chain golden vectors + the live-chain parity harness). The verdict shape is unchanged, so the
+// callers (chainRoots, instateReel, receive, seedPlant, graft) are untouched.
 
 // FLAG: direct fileStore import RETAINED. This file is
-// the INTEGRITY primitive — it recomputes each fact's content-hash from the raw
-// p/_id/seq fields across a history lineage with per-history floors. The curated
+// the INTEGRITY primitive — it reads each fact's raw p/_id/seq fields across a history lineage with
+// per-history floors and hands them to the Rust chain verifier. The curated
 // FACT layer (past/fact/facts.js: getReel / getFactsByActId / getFactsOnReelWhere)
 // has NO lineage-floors raw-chain read, and by design it reshapes/redacts facts
 // (serializeFactForReel) — which would destroy the p/_id/seq the chain walk
 // verifies. So this stays a storage-primitive chokepoint (alongside chainRoots.js
 // / verifyReelFrom.js, the other integrity walkers reading fileStore directly).
 import { readReelLineage } from "../fileStore.js";
-import { computeHash, contentOf, GENESIS_PREV } from "./hash.js";
+import { native } from "./native.js";
 
 const REEL_KINDS = new Set(["being", "space", "matter", "library"]);
 
@@ -69,7 +78,7 @@ export async function verifyReel(targetKind, targetId, history = "0") {
   // lineage[i] owns (floor(lineage[i]), floor(lineage[i+1])]; the
   // leaf is unbounded above. Main's floor is 0. STORAGE SWAP: the
   // OR-of-ranges Fact.find became a fileStore reel read over the same
-  // (lineage, floors). The chain walk below is byte-for-byte unchanged
+  // (lineage, floors). The chain walk below is the Rust verifier
   // (file _id = computeHash(p, contentOf), the store's content-hash _id).
   const lineage = isMain(history) ? ["0"] : await resolveHistoryLineage(history);
   const floors = { "0": 0 };
@@ -79,47 +88,7 @@ export async function verifyReel(targetKind, targetId, history = "0") {
   }
 
   const facts = readReelLineage(lineage, floors, targetKind, id);
-  if (facts.length === 0) return { ok: true, count: 0, headHash: null };
-
-  let expectedPrev = GENESIS_PREV;
-  let expectedSeq  = 1;
-  let count = 0;
-  for (const f of facts) {
-    count++;
-    if (f.seq !== expectedSeq) {
-      return {
-        ok: false, count, brokenAt: expectedSeq,
-        reason: "seq-gap", expected: expectedSeq, actual: f.seq,
-      };
-    }
-    if (typeof f.p !== "string" || typeof f._id !== "string" || !/^[0-9a-f]{64}$/.test(f._id)) {
-      return {
-        ok: false, count, brokenAt: f.seq,
-        reason: "unaddressed", expected: expectedPrev, actual: f.p ?? null,
-      };
-    }
-    if (f.p !== expectedPrev) {
-      return {
-        ok: false, count, brokenAt: f.seq,
-        reason: "prev-mismatch", expected: expectedPrev, actual: f.p,
-      };
-    }
-    const expectedId = computeHash(f.p, contentOf(f));
-    if (f._id !== expectedId) {
-      return {
-        ok: false, count, brokenAt: f.seq,
-        reason: "hash-mismatch", expected: expectedId, actual: f._id,
-      };
-    }
-    expectedPrev = f._id;
-    expectedSeq  = f.seq + 1;
-  }
-
-  return {
-    ok: true,
-    count,
-    // The reel's root: the head fact's identity (GENESIS_PREV walked
-    // forward through every fact). Null for an empty reel.
-    headHash: count > 0 ? expectedPrev : null,
-  };
+  // The chain walk IS Rust now: recompute each fact's identity from p+content and confirm the chain.
+  // The verdict is byte-identical to the retired JS walk (proven by the chain vectors + parity harness).
+  return JSON.parse(native.verifyFactChain(JSON.stringify(facts)));
 }

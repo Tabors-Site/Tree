@@ -7,7 +7,9 @@
 // the address handle, assert the Name EXISTS on main, and assert it is NOT
 // banished. Each reimplements NOTHING — it wires the SAME primitives the be.js
 // truename branch already called (resolveNameId, findByName, loadProjection,
-// isNameBanished). Name reads pin to "0" (identity is above the history timeline).
+// isNameBanished). Name reads pin to "0" (identity is above the history timeline);
+// the BEING resolve comes from the ACT (actorAct.history) — a being's fact chain is
+// per-history, so the target resolves on the branch the act is on, no silent "0".
 // Mirrors portalHost.js / matterHost.js (the host-env pattern).
 
 export function truenameHostEnv() {
@@ -18,7 +20,7 @@ export function truenameHostEnv() {
     },
     "resolve-target-being": async ({ args: [beingName] }, ctx) => {
       const { findByName } = await import("../../../materials/projections.js");
-      const slot = await findByName("being", beingName, ctx?.moment?.actorAct?.history || "0");
+      const slot = await findByName("being", beingName, ctx?.moment?.actorAct?.history);
       return slot ? String(slot.id) : null;
     },
     "name-exists": async ({ args: [nameId] }) => {

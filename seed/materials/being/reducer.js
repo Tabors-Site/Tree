@@ -24,7 +24,7 @@ import {
   applySetField,
   applyCreateBeing,
   applyConnectionState,
-  applyDeath,
+  applyKill,
   applyTrueName,
   applyAbleGrants,
 } from "../reducerHelpers.js";
@@ -64,12 +64,13 @@ export function reduce(state, fact) {
   // cognition to "human" when an inhabitor is present.
   next = applyConnectionState(next, fact);
 
-  // be:death — locks the being's lifecycle. Writes qualities.death =
-  // { time, byActor }. Idempotent (first death wins). Consumers test
-  // `qualities.death?.time != null` for is-dead. Past acts + grants
-  // remain valid; new acts targeting this being refuse upstream
-  // (beVerb + callVerb gate on isDead).
-  next = applyDeath(next, fact);
+  // be:kill — locks the being's lifecycle. Writes qualities.dead =
+  // { byActor } (the ONE consistent cease marker across being/space/
+  // matter). Idempotent (first kill wins). Consumers test
+  // `qualities.dead != null` for is-dead. Past acts + grants remain
+  // valid; new acts targeting this being refuse upstream (beVerb +
+  // callVerb gate on isDead).
+  next = applyKill(next, fact);
 
   // be:truename — re-point this being at a declared Name (the trueName
   // transfer). Folds state.trueName onto the row; the being's _id (frozen

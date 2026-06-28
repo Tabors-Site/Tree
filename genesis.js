@@ -496,143 +496,21 @@ export async function genesis(app, opts = {}) {
   // host below (data-only spec), but the registry is what holds the
   // handler functions and prompt closures since the file store can't
   // serialize those.
-  const { registerAble } = await import("./seed/present/ables/registry.js");
-  const { storyManagerAble } =
-    await import("./seed/present/ables/story-manager/able.js");
-  registerAble("story-manager", storyManagerAble, "seed");
+  const { registerAble, getAble } = await import("./seed/present/ables/registry.js");
 
-  // No seed verb-tools, no JSON tool registry. The cognition speaks
-  // WORD (14.md §4.5): each able's vocabulary is rendered AS Word
-  // (renderVocabularyAsWord) and the being's one Word is parsed +
-  // run via runAbleWord onto the moment's deltaF — there is no
-  // do/call/be/end-turn JSON tool. A able's capability is its can*
-  // lists (the words it may speak); the verb set is the WORD grammar.
-
-  // The receptive able every human being carries. Without it, SUMMONs
-  // to a human are rejected with ABLE_UNAVAILABLE. The able's summon
-  // is a no-op — humans respond out-of-band from their own transport,
-  // not synchronously through the factory.
-  const { humanAble } = await import("./seed/present/ables/human/able.js");
-  registerAble("human", humanAble, "seed");
-
-  // The "birther" able. Carried by the @birther seed delegate at the
-  // story root. Authenticated callers click @birther to mint a child
-  // whose parent (being-tree) is the caller. Cherub is for arrival →
-  // fresh identity; birther is for authenticated → child of self.
-  // See seed/present/ables/birther/able.js for the doctrine.
-  const { birtherAble } = await import("./seed/present/ables/birther/able.js");
-  registerAble("birther", birtherAble, "seed");
-
-  // able-manager: authors and edits live-defined ables. canDo:["set-able"].
-  // After this registration, the live-able boot loader (later in genesis)
-  // walks ./ables/* for origin:"live" entries and registers them too.
-  const { ableManagerAble } =
-    await import("./seed/store/words/able-manager/able.js");
-  registerAble("able-manager", ableManagerAble, "seed");
-
-  // history-manager: creates histories (divergent worlds) from past
-  // points of existing histories. canDo:["create-history"]. Substrate
-  // helpers in seed/materials/history/ do the path arithmetic and
-  // historyPoint snapshotting; the able just routes the op.
-  const { historyManagerAble } =
-    await import("./seed/present/ables/history-manager/able.js");
-  registerAble("history-manager", historyManagerAble, "seed");
-
-  // federation-manager: negotiates transfers (push / pull) with peer
-  // realities. Operator triggers offer-template / offer-being (push) or
-  // request-template (pull); the able's summon handler classifies incoming
-  // intents (offer-template, accept-template, deliver-template, deliver-being,
-  // etc.) from peer federation-managers. Seed and graft are the data
-  // primitives (template = shape, being = entity); this able is the social
-  // protocol on top of them. See protocols/ibp/FEDERATION.md.
-  const { federationManagerAble } =
+  // SEED ables are WORDS — getAble (registry.js) folds each from store/words/ables/<name>.word on
+  // demand; there is no pre-load and no Map of them. able-manager + llm-assigner are grant-set words
+  // (they never wake — no handler). federation-manager + cherub still carry a live summon handler
+  // (federation classifies peer intents; cherub owns the BE gate), so their JS spec is registered
+  // here for the handler; their grant-set is the word.
+  const { foldWordAble } = await import("./seed/present/word/seedAbleFold.js");
+  const { federationManagerHandler } =
     await import("./seed/store/words/federation-manager/able.js");
-  registerAble("federation-manager", federationManagerAble, "seed");
-
-  // The host tier (nodeServerTest Phase 1): the HTTP listener and the
-  // WebSocket pool as beings. Scripted cognition; their lifecycle code
-  // lives in seed/materials/host/.
-  const { httpServerAble } =
-    await import("./seed/present/ables/http-server/able.js");
-  registerAble("http-server", httpServerAble, "seed");
-  const { websocketPoolAble } =
-    await import("./seed/present/ables/websocket-pool/able.js");
-  registerAble("websocket-pool", websocketPoolAble, "seed");
-
-  // able-finder: LLM helper that authors live ables from English.
-  // Summon @able-finder, describe what a being should be able to do,
-  // it surfaces matches in ./ables or drafts a new able via set-able.
-  const { ableFinderAble } =
-    await import("./seed/present/ables/able-finder/able.js");
-  registerAble("able-finder", ableFinderAble, "seed");
-
-  // flow-composer: LLM helper that authors a being's flow
-  // (the behavioral program that picks which able applies per moment).
-  // Summon @flow-composer, describe a being's behavior, it
-  // produces the structured flow and writes via set-being-flow.
-  const { flowComposerAble } =
-    await import("./seed/present/ables/flow-composer/able.js");
-  registerAble("flow-composer", flowComposerAble, "seed");
-
-  // merge-mediator: LLM helper that walks the operator through
-  // resolving conflicts on a merged history. Created by the
-  // merge-histories op; reconciliation facts stamp via normal state-
-  // setting ops with params._merge metadata.
-  const { mergeMediatorAble } =
-    await import("./seed/present/ables/merge-mediator/able.js");
-  registerAble("merge-mediator", mergeMediatorAble, "seed");
-
-  // (The @history-registry delegate retired 2026-06-04 with the
-  // "heaven never histories" landing. Named pointers now live on the
-  // .histories heaven space's qualities; set-pointer / delete-pointer
-  // DO ops live alongside merge-histories on @history-manager.)
-
-  // The shared stance every unauthenticated visitor carries. SEE
-  // bypasses the scheduler so many concurrent visitors share one
-  // row without contention.
-  const { arrivalAble } = await import("./seed/present/ables/arrival/able.js");
-  registerAble("arrival", arrivalAble, "seed");
-
-  // The commons delegate. public never acts; it holds members.owner
-  // slots for spaces transferred to the public commons (the
-  // owner-check in authorize admits any caller when public appears
-  // on the chain). See seed/AblesAreAuth.md "Public being".
-  const { publicAble } = await import("./seed/present/ables/public/able.js");
-  registerAble("public", publicAble, "seed");
-
-  // Cherub + llm-assigner. Registered HERE (before hostAbleAt
-  // and the genesis.word grants) so the install loop has access to
-  // their specs and the self-able grants land cleanly. Real work
-  // happens through their verb handlers (cherub owns the BE_OPS table;
-  // llm-assigner is registered before the host/grant loop); the
-  // registry entries are stubs that surface canX for the able-walk.
-  const { cherubAble } = await import("./seed/store/words/cherub/able.js");
-  const { llmAssignerAble } =
-    await import("./seed/store/words/llm-assigner/able.js");
-  registerAble("cherub", cherubAble, "seed");
-  registerAble("llm-assigner", llmAssignerAble, "seed");
-
-  // (public-commons is no longer registered as a seed able. It's a
-  // regular operator-installable template that lives in
-  // seed/present/ables/public-commons/able.js — operators install it
-  // on their public-owned spaces via set-able / hostAbleAt
-  // when they want the open-commons surface with auto-grant on entry.)
-
-  // The foundational ables of the ables-are-auth doctrine
-  // (seed/AblesAreAuth.md):
-  //   - angel: hosted at heaven, reach: ["/**"] (story-wide). Carries
-  //     canDo: grant-able:* + revoke-able:* so angels can promote
-  //     others recursively. Granted to every seed delegate at genesis
-  //     and to the first human registrant. Also expresses IDENTITY:
-  //     descendants of I-Am with heaven access.
-  //   - global: hosted at the story root, default reach (host +
-  //     descendants = whole story). The baseline every being holds —
-  //     granted at birth via birth.js#_anointGlobal. canX defines what
-  //     "every being can do here."
-  const { angelAble } = await import("./seed/present/ables/angel/able.js");
-  registerAble("angel", angelAble, "seed");
-  const { globalAble } = await import("./seed/present/ables/global/able.js");
-  registerAble("global", globalAble, "seed");
+  registerAble("federation-manager",
+    { ...foldWordAble("federation-manager"), label: "Federation Manager", call: federationManagerHandler },
+    "seed");
+  const { cherubAbleHandler } = await import("./seed/store/words/cherub/able.js");
+  registerAble("cherub", { ...foldWordAble("cherub"), call: cherubAbleHandler }, "seed");
 
   // Host able auth specs onto space qualities (seed/AblesAreAuth.md
   // Final doctrine). Every able-in-effect lives on a space's
@@ -657,62 +535,20 @@ export async function genesis(app, opts = {}) {
 
     if (heaven) {
       await withIAmAct("I install angel on heaven", async (ctx) => {
-        await hostAbleAt(String(heaven.id), "angel", angelAble, I, ctx);
+        await hostAbleAt(String(heaven.id), "angel", getAble("angel"), I, ctx);
       });
     }
     if (storyRootId) {
-      await withIAmAct("I install global on the story root", async (ctx) => {
-        await hostAbleAt(String(storyRootId), "global", globalAble, I, ctx);
-      });
-      await withIAmAct("I install arrival on the story root", async (ctx) => {
-        await hostAbleAt(String(storyRootId), "arrival", arrivalAble, I, ctx);
-      });
-      // Host every other seed delegate able on the story root too.
-      // Per the single-gate doctrine, the able-walk authorize finds each
-      // delegate's canX through the qualities.ables host (not through a
-      // registry-fallback hack). Each one-op-per-moment.
-      const { humanAble } = await import("./seed/present/ables/human/able.js");
-      const { cherubAble } = await import("./seed/store/words/cherub/able.js");
-      const { birtherAble } =
-        await import("./seed/present/ables/birther/able.js");
-      const { storyManagerAble } =
-        await import("./seed/present/ables/story-manager/able.js");
-      const { ableManagerAble } =
-        await import("./seed/store/words/able-manager/able.js");
-      const { ableFinderAble } =
-        await import("./seed/present/ables/able-finder/able.js");
-      const { flowComposerAble } =
-        await import("./seed/present/ables/flow-composer/able.js");
-      const { historyManagerAble } =
-        await import("./seed/present/ables/history-manager/able.js");
-      const { mergeMediatorAble } =
-        await import("./seed/present/ables/merge-mediator/able.js");
-      const { llmAssignerAble } =
-        await import("./seed/store/words/llm-assigner/able.js");
-      const { publicAble } =
-        await import("./seed/present/ables/public/able.js");
-      const { httpServerAble: httpServerAbleSpec } =
-        await import("./seed/present/ables/http-server/able.js");
-      const { websocketPoolAble: websocketPoolAbleSpec } =
-        await import("./seed/present/ables/websocket-pool/able.js");
-      const installs = [
-        ["human", humanAble],
-        ["cherub", cherubAble],
-        ["birther", birtherAble],
-        ["story-manager", storyManagerAble],
-        ["able-manager", ableManagerAble],
-        ["able-finder", ableFinderAble],
-        ["flow-composer", flowComposerAble],
-        ["history-manager", historyManagerAble],
-        ["merge-mediator", mergeMediatorAble],
-        ["llm-assigner", llmAssignerAble],
-        ["public", publicAble],
-        ["http-server", httpServerAbleSpec],
-        ["websocket-pool", websocketPoolAbleSpec],
+      // Host every seed delegate able on the story root (the able-walk reads qualities.ables). The
+      // spec comes from getAble — word-folded for the 14, JS for the 4 handler ables. One op/moment.
+      const installNames = [
+        "global", "arrival", "human", "cherub", "birther", "story-manager",
+        "able-manager", "able-finder", "flow-composer", "history-manager",
+        "merge-mediator", "llm-assigner", "public", "http-server", "websocket-pool",
       ];
-      for (const [name, spec] of installs) {
+      for (const name of installNames) {
         await withIAmAct(`I install ${name} on the story root`, async (ctx) => {
-          await hostAbleAt(String(storyRootId), name, spec, I, ctx);
+          await hostAbleAt(String(storyRootId), name, getAble(name), I, ctx);
         });
       }
     }
@@ -803,7 +639,7 @@ export async function genesis(app, opts = {}) {
   // (seed/materials/history/) own the heavy lifting; the op is a thin
   // handler routing through createBranch.
   const { registerHistoryManagerOps } =
-    await import("./seed/present/ables/history-manager/ops.js");
+    await import("./seed/store/words/history-manager/ops.js");
   registerHistoryManagerOps();
   // set-pointer + delete-pointer were carved out of history-manager/ops.js
   // into their own store bundle (the words + their shared host). The bundle
@@ -822,11 +658,8 @@ export async function genesis(app, opts = {}) {
 
   // Host SEE ops: http-stats, connections. Pure reads over the live
   // process, gated by canSee on the infra ables + angel.
-  const { registerHttpServerOps } =
-    await import("./seed/present/ables/http-server/ops.js");
-  registerHttpServerOps();
   const { registerWebsocketPoolOps } =
-    await import("./seed/present/ables/websocket-pool/ops.js");
+    await import("./seed/store/words/websocket-pool/ops.js");
   registerWebsocketPoolOps();
 
   // I hand my remembered settings (from ./config) down to the seed

@@ -1,0 +1,161 @@
+{
+  "format": "treeos-auth-vectors",
+  "version": 1,
+  "vectors": [
+    {
+      "name": "target.history wins over everything",
+      "target": {
+        "history": "#5"
+      },
+      "moment": {
+        "targetHistory": "#3"
+      },
+      "currentHistory": "#1",
+      "argsActorHistory": null,
+      "storyDomain": "home",
+      "wantTargetHistory": "#5",
+      "wantActorHistory": "#5"
+    },
+    {
+      "name": "moment.targetHistory next",
+      "target": null,
+      "moment": {
+        "targetHistory": "#3"
+      },
+      "currentHistory": "#1",
+      "argsActorHistory": null,
+      "storyDomain": "home",
+      "wantTargetHistory": "#3",
+      "wantActorHistory": "#3"
+    },
+    {
+      "name": "moment.actorAct.history next",
+      "target": null,
+      "moment": {
+        "actorAct": {
+          "history": "#2"
+        }
+      },
+      "currentHistory": "#1",
+      "argsActorHistory": null,
+      "storyDomain": "home",
+      "wantTargetHistory": "#2",
+      "wantActorHistory": "#2"
+    },
+    {
+      "name": "currentHistory last resort",
+      "target": null,
+      "moment": null,
+      "currentHistory": "#1",
+      "argsActorHistory": null,
+      "storyDomain": "home",
+      "wantTargetHistory": "#1",
+      "wantActorHistory": "#1"
+    },
+    {
+      "name": "nothing -> null (both)",
+      "target": null,
+      "moment": null,
+      "currentHistory": null,
+      "argsActorHistory": null,
+      "storyDomain": "home",
+      "wantTargetHistory": null,
+      "wantActorHistory": null
+    },
+    {
+      "name": "actor LOCAL: story===domain -> actorAct.history",
+      "target": {
+        "history": "#5"
+      },
+      "moment": {
+        "actorAct": {
+          "story": "home",
+          "history": "#0"
+        }
+      },
+      "currentHistory": null,
+      "argsActorHistory": null,
+      "storyDomain": "home",
+      "wantTargetHistory": "#5",
+      "wantActorHistory": "#0"
+    },
+    {
+      "name": "actor FOREIGN guard: reads target history, not #9",
+      "target": null,
+      "moment": {
+        "targetHistory": "#5",
+        "actorAct": {
+          "story": "other",
+          "history": "#9"
+        }
+      },
+      "currentHistory": null,
+      "argsActorHistory": null,
+      "storyDomain": "home",
+      "wantTargetHistory": "#5",
+      "wantActorHistory": "#5"
+    },
+    {
+      "name": "actor args wins",
+      "target": {
+        "history": "#5"
+      },
+      "moment": {
+        "actorAct": {
+          "story": "home",
+          "history": "#0"
+        }
+      },
+      "currentHistory": null,
+      "argsActorHistory": "#7",
+      "storyDomain": "home",
+      "wantTargetHistory": "#5",
+      "wantActorHistory": "#7"
+    },
+    {
+      "name": "actor no-story is LOCAL (!story)",
+      "target": {
+        "history": "#5"
+      },
+      "moment": {
+        "actorAct": {
+          "history": "#0"
+        }
+      },
+      "currentHistory": null,
+      "argsActorHistory": null,
+      "storyDomain": "home",
+      "wantTargetHistory": "#5",
+      "wantActorHistory": "#0"
+    },
+    {
+      "name": "foreign-only actorAct: targetHistory itself = #9 (faithful edge)",
+      "target": null,
+      "moment": {
+        "actorAct": {
+          "story": "other",
+          "history": "#9"
+        }
+      },
+      "currentHistory": null,
+      "argsActorHistory": null,
+      "storyDomain": "home",
+      "wantTargetHistory": "#9",
+      "wantActorHistory": "#9"
+    },
+    {
+      "name": "empty-string history is falsy -> falls through",
+      "target": {
+        "history": ""
+      },
+      "moment": {
+        "targetHistory": "#3"
+      },
+      "currentHistory": null,
+      "argsActorHistory": null,
+      "storyDomain": "home",
+      "wantTargetHistory": "#3",
+      "wantActorHistory": "#3"
+    }
+  ]
+}

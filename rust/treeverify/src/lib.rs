@@ -82,11 +82,23 @@ fn broken(count: f64, broken_at: Json, reason: &str, expected: Json, actual: Jso
 ///
 /// Returns `{ok:true, count, headHash}` or `{ok:false, count, brokenAt, reason, expected, actual}`.
 pub fn verify_fact_chain(facts: &[Json]) -> Json {
+    // The genesis-seeded walk IS the anchored walk at { anchor_prev: GENESIS_PREV, from_seq: 1 }.
+    verify_fact_chain_from(facts, GENESIS_PREV, 1.0)
+}
+
+/// verifyReelFrom.js's anchored sibling: walk a CONTIGUOUS SUFFIX `[from_seq..head]`, seeding the
+/// chain at a DECLARED anchor (`anchor_prev` = the identity of the fact immediately before `from_seq`,
+/// which a partial graft legitimately does NOT carry; `from_seq` = the first seq present). The anchor
+/// is the ONLY license for a non-genesis start — an UNANCHORED gap still breaks (seq-gap /
+/// prev-mismatch) exactly as the genesis walk would. Degenerate at `(GENESIS_PREV, 1)` this IS
+/// `verify_fact_chain`. Same four break shapes, same byte-for-byte recompute (`fact_id`); only the
+/// seeded start differs, so the verdict shape is unchanged.
+pub fn verify_fact_chain_from(facts: &[Json], anchor_prev: &str, from_seq: f64) -> Json {
     if facts.is_empty() {
         return ok_verdict(0.0, None);
     }
-    let mut expected_prev = GENESIS_PREV.to_string();
-    let mut expected_seq = 1.0_f64;
+    let mut expected_prev = anchor_prev.to_string();
+    let mut expected_seq = from_seq;
     let mut count = 0.0_f64;
     for f in facts {
         count += 1.0;

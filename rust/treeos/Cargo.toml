@@ -14,3 +14,5 @@ treehash = { path = "../treehash" }
 treefold = { path = "../treefold" }
 treeverify = { path = "../treeverify" }
 treestore = { path = "../treestore" }
+treeword = { path = "../treeword" }
+treeval = { path = "../treeval" }

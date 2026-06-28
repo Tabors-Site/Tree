@@ -197,6 +197,14 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "treehash",
+ "treeverify",
+]
+
+[[package]]
+name = "treeverify"
+version = "0.1.0"
+dependencies = [
+ "treehash",
 ]
 
 [[package]]

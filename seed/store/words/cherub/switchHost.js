@@ -6,7 +6,7 @@
 // missing (not found / deleted), is it paused, and does the caller's reel fold to a LIVING birth
 // there. Reimplements nothing — wires the same isMain / loadHistory / loadOrFold the be.js switch
 // handler called. The SESSION seat (socket.currentHistory) is the verb/transport's job (stamp-then-
-// seat), never a floor read. Mirrors deathHost.js / truenameHost.js.
+// seat), never a floor read. Mirrors killHost.js / truenameHost.js.
 
 export function switchHostEnv() {
   return {
@@ -29,12 +29,12 @@ export function switchHostEnv() {
       return !!(row && row.paused);
     },
     // A session may only seat where the being's reel folds to a LIVING birth on that history's
-    // lineage view: a name (born here, not after the fork) and no death. Else a switch would stamp
+    // lineage view: a name (born here, not after the fork) and not dead. Else a switch would stamp
     // be:switch as the first fact of an orphan reel (a biography with no be:birth).
     "being-lives-on": async ({ args: [caller, history] }) => {
       const { loadOrFold } = await import("../../../materials/projections.js");
       const destSlot = await loadOrFold("being", String(caller), String(history));
-      return !!(destSlot?.state?.name && !destSlot?.state?.qualities?.death?.time);
+      return !!(destSlot?.state?.name && !destSlot?.state?.qualities?.dead);
     },
   };
 }
