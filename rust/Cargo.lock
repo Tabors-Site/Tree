@@ -422,6 +422,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "treecognition"
+version = "0.1.0"
+dependencies = [
+ "treehash",
+ "treeval",
+ "treeword",
+]
+
+[[package]]
 name = "treefold"
 version = "0.1.0"
 dependencies = [
@@ -445,21 +454,36 @@ name = "treehash"
 version = "0.1.0"
 
 [[package]]
+name = "treehost"
+version = "0.1.0"
+dependencies = [
+ "treecas",
+ "treefold",
+ "treehash",
+ "treeproj",
+ "treestore",
+]
+
+[[package]]
 name = "treeibp"
 version = "0.1.0"
 dependencies = [
  "treefold",
  "treehash",
+ "treehost",
+ "treeproj",
  "treesign",
  "treestore",
  "treeval",
  "treeword",
+ "treewordfold",
 ]
 
 [[package]]
 name = "treeos"
 version = "0.1.0"
 dependencies = [
+ "treecognition",
  "treefold",
  "treehash",
  "treeibp",
@@ -528,6 +552,14 @@ dependencies = [
  "fancy-regex",
  "regex",
  "treehash",
+]
+
+[[package]]
+name = "treewordfold"
+version = "0.1.0"
+dependencies = [
+ "treehash",
+ "treestore",
 ]
 
 [[package]]

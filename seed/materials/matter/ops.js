@@ -15,10 +15,7 @@
 // dispatches.
 
 import { registerOperation } from "../../ibp/operations.js";
-import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
-import { targetIdOf } from "../_targetShape.js";
 import { registerAbleWord } from "../../present/word/ableWordRegistry.js";
-import { stampsFact } from "../../ibp/factResult.js";
 import { renameMatterHostEnv } from "./renameMatterHost.js";
 import { setMatterHostEnv } from "./setMatterHost.js";
 import { purgeContentHostEnv } from "./purgeContentHost.js";
@@ -78,118 +75,25 @@ registerAbleWord("matter", "end-matter", new URL("./end-matter.word", import.met
 // / set-space lay a scalar field.
 
 // ─────────────────────────────────────────────────────────────────────
-// purge-content
+// purge-content (WORD-SOLE, registered below). No JS handler.
 // ─────────────────────────────────────────────────────────────────────
 //
 // Physically delete the bytes behind a matter's content hash from the
-// content store. The fact chain is append-only — the facts naming the
+// content store. The fact chain is append-only: the facts naming the
 // hash remain, the projection marks the ref purged, and reads return
 // the purged marker. This is the "I accidentally posted that"
 // scalpel; background reclamation is casSweep's retention policy.
 //
 // Dedup makes purge a shared-fate decision: identical bytes are ONE
 // blob, so other matter referencing the same hash goes dark too. The
-// handler refuses when other live referents exist unless force=true —
+// host refuses when other live referents exist unless force=true,
 // explicit, never silent.
 //
-// Auth: the able-walk gates canDo "purge-content" (advertised on the
-// file/model types); the handler additionally enforces
-// author-or-root-owner, same shape as endMatter.
-
-async function purgeContentHandler({ target, params, identity, moment }) {
-  const matterId = targetIdOf(target);
-  if (!matterId) throw new IbpError(IBP_ERR.INVALID_INPUT, "purge-content: matter target required");
-  if (!identity?.beingId) {
-    throw new IbpError(IBP_ERR.UNAUTHORIZED, "purge-content: identity required");
-  }
-  const history = moment?.actorAct?.history || "0";
-
-  const { loadOrFold } = await import("../projections.js");
-  const slot = await loadOrFold("matter", String(matterId), history);
-  if (!slot) throw new IbpError(IBP_ERR.INVALID_INPUT, "purge-content: matter not found");
-  const matter = { _id: slot.id, ...(slot.state || {}) };
-
-  const { isCasRef } = await import("./contentStore.js");
-  const hash = typeof params?.hash === "string" && params.hash.length
-    ? params.hash
-    : (isCasRef(matter.content) ? matter.content.hash : null);
-  if (!hash) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "purge-content: matter has no stored content (pass `hash` for a historical version)");
-  }
-
-  // Owner gate: the matter's author or the tree's root owner.
-  const { resolveRootSpace } = await import("../space/spaces.js");
-  const { getSpaceOwner } = await import("../space/members.js");
-  const rootSpace = matter.spaceId && matter.spaceId !== "deleted"
-    ? await resolveRootSpace(matter.spaceId)
-    : null;
-  const isAuthor = String(matter.beingId) === String(identity.beingId);
-  const isRootOwner = rootSpace
-    ? String(getSpaceOwner(rootSpace) || "") === String(identity.beingId)
-    : false;
-  if (!isAuthor && !isRootOwner) {
-    throw new IbpError(
-      IBP_ERR.FORBIDDEN,
-      "purge-content: only the matter author or the tree owner can purge its content",
-    );
-  }
-
-  // Shared-fate refcount: other live matter whose CURRENT content is this
-  // hash. Purging would blind them — refuse without force.
-  //
-  // FLAG (cross-history scope loss): the legacy query was history-AGNOSTIC
-  // ("any history" — it scanned EVERY history's matter projections for the
-  // hash). The curated projection layer is per-history (listByType(type,
-  // history) + loadProjection); there is NO curated all-histories content-
-  // hash scan. This dead handler (the LIVE purge-content path is
-  // purgeContentHostEnv / purgeContentHost.js, which still carries the raw
-  // Projection.find) is translated to the OWN-history (the moment's
-  // history) refcount only — a sibling history referencing the same bytes
-  // is no longer counted here. A true cross-history dedup refcount needs a
-  // new curated primitive (e.g. projections.findByContentHash across the
-  // history lineage).
-  const force = params?.force === true || params?.force === "true";
-  const { listByType, loadProjection } = await import("../projections.js");
-  const others = [];
-  for (const occ of await listByType("matter", history)) {
-    if (String(occ.id) === String(matterId)) continue;
-    const slot = await loadProjection("matter", String(occ.id), history);
-    if (!slot || slot.tombstoned) continue;
-    if (slot.state?.content?.hash === hash) {
-      others.push({ id: String(occ.id), history });
-    }
-  }
-  if (others.length > 0 && !force) {
-    throw new IbpError(
-      IBP_ERR.RESOURCE_CONFLICT,
-      `purge-content: ${others.length} other matter row(s) reference these same bytes ` +
-      `(content is deduplicated by hash). Pass force=true to purge anyway — ` +
-      `their content goes dark too.`,
-      { referents: others.map((o) => ({ matterId: o.id, history: o.history })) },
-    );
-  }
-
-  // ONE act, ONE fact (23.md): purge-content returns its OWN do:purge-content fact (the dispatcher
-  // stamps it; applyPurgeContent folds it, marking the ref purged) — no self-emit, no skipAudit. The
-  // physical delete still runs AFTER the moment seals (afterSeal), so the chain explains the missing
-  // bytes BEFORE they go (fact-first is preserved: the dispatcher's fact seals in-moment, then the host
-  // deleteContent runs post-seal). deleteContent is the host floor, gated by the refcount check above.
-  const doDelete = async () => {
-    const { deleteContent } = await import("./contentStore.js");
-    await deleteContent(hash);
-  };
-  if (moment?.afterSeal) {
-    moment.afterSeal.push(doDelete);
-  } else {
-    await doDelete();
-  }
-
-  return stampsFact(
-    { purged: true, matterId: String(matterId), hash, sharedReferents: others.length },
-    { hash, force, referents: others.length },
-    { kind: "matter", id: String(matterId) },
-  );
-}
+// purge-content.word is the SOLE path. Auth (author-or-root-owner, same
+// shape as end-matter), hash resolution, and the shared-fate refcount
+// gate are the host see-op resolve-purge (purgeContentHostEnv,
+// purgeContentHost.js); the FACT-FIRST afterSeal content delete runs
+// there too. No JS handler.
 
 // ─────────────────────────────────────────────────────────────────────
 // Registration

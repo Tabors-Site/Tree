@@ -11,8 +11,22 @@ treeword = { path = "../treeword" }
 treeval = { path = "../treeval" }
 treefold = { path = "../treefold" }
 treestore = { path = "../treestore" }
+# the HOST SEE-OP BRIDGE: run_body's `see resolve-X(args) as bind` arm calls treehost's HostResolver
+# to resolve the substrate spec the materials .word stamps. One-way dep (treehost does NOT dep treeibp,
+# so no cycle), exactly like treeibp -> treeval.
+treehost = { path = "../treehost" }
+# the WORD-FOLD: the live word-set folded from the declare-word facts on chain. The runner resolves a
+# word's descriptor FROM this fold (treewordfold::resolve_word), replacing the hardcoded fold_op_word
+# match — the vocabulary is the fold, nothing hard-declared. treewordfold is STORE logic (reads facts),
+# does not dep treeibp, so no cycle.
+treewordfold = { path = "../treewordfold" }
 
 # treeibp stays crypto-FREE in its lib (the signer is injected); treesign is ONLY a dev-dep, used by
 # the signed-act round-trip test to build the inject closure + verify the ed25519 sig.
 [dev-dependencies]
 treesign = { path = "../treesign" }
+# the materials-`.word` end-to-end test plants rows the SAME way treehost's resolver tests do: stamp a
+# reel (treestore) then refold it into a .proj snapshot (treeproj, which builds the inverted name index
+# the collision gate reads), so the host see-op's substrate reads see the genuine on-disk store.
+treeproj = { path = "../treeproj" }
+treehost = { path = "../treehost" }

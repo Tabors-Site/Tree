@@ -1,0 +1,28 @@
+[package]
+name = "treehost"
+version = "0.1.0"
+edition = "2021"
+description = "TreeOS host SEE-OP BRIDGE: the *Host.js resolver bodies as native Rust. The materials act-handlers are WORD-SOLE (.word files) whose substrate reads bottom out in `see resolve-X(args) as bind` host see-ops (setBeingHost.js / setSpaceHost.js / spaceHost.js / endSpaceHost.js / setMatterHost.js / matterHost.js). treeibp::run_body does not evaluate those `see` nodes yet, so the .word files cannot execute end-to-end. This crate ports the resolver bodies' substrate-READ + VALIDATION (load-row, name-uniqueness, coord-bounds, CAS-existence, the DELETED-sentinel, the type-registry gate, the content-addressed id mint) behind an injectable dispatch SEAM (the HostResolver trait), composing the past-engine crates (treeproj find/refold, treefold fold, treecas existence, treestore reels, treehash hash). AUTHORITY (the able-walk / owner) is the CALLER's input (an AuthCtx parameter), so this crate does NOT depend on treeibp/treeval."
+license = "AGPL-3.0"
+
+[dependencies]
+treehash = { path = "../treehash" }
+treefold = { path = "../treefold" }
+treeproj = { path = "../treeproj" }
+treestore = { path = "../treestore" }
+treecas = { path = "../treecas" }
+
+# The resolver tests plant rows the SAME way treeproj/treefold's write-half tests do: stamp a reel
+# (treestore seal_moment + write_fact_doc) then refold it into a .proj snapshot (treeproj), so the
+# toolkit's find/fold/cas reads see the real on-disk store. No mocks.
+[dev-dependencies]
+treestore = { path = "../treestore" }
+treecas = { path = "../treecas" }
+
+[lib]
+name = "treehost"
+path = "src/lib.rs"
+
+# treehost does NOT depend on treeibp or treeval: the AUTHORITY result (has_authority_over / owner)
+# is an INPUT (AuthCtx), mirroring the existing able_spec_of / host: &dyn Fn injection seams. It
+# composes ONLY the past-engine crates (find/fold/cas/reels/hash); it reimplements none of them.

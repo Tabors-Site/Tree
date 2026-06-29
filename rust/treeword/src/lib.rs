@@ -13,6 +13,9 @@
 
 use regex::{Captures, Regex};
 use std::collections::HashSet;
+use std::sync::LazyLock;
+
+pub mod render; // the INVERSE of parse: a Word IR node -> Word text (the generative / output-Word side)
 use treehash::Json;
 
 fn jstr(s: &str) -> Json {
@@ -118,8 +121,8 @@ fn items(s: &str) -> Json {
 
 type Builder = fn(&Captures) -> Json;
 
-fn rules() -> Vec<(Regex, Builder)> {
-    vec![
+fn rules() -> &'static [(Regex, Builder)] {
+    static TABLE: LazyLock<Vec<(Regex, Builder)>> = LazyLock::new(|| vec![
         // A <name> is a space.
         (
             Regex::new(r"(?i)^A ([\w.-]+) is a space\.$").unwrap(),
@@ -200,6 +203,12 @@ fn rules() -> Vec<(Regex, Builder)> {
             Regex::new(r"(?i)^A (\w+) (accepts|carries|claims) (.+)\.$").unwrap(),
             |m| obj(vec![("kind", jstr(&m[2].to_lowercase())), ("subject", jstr(&m[1].to_lowercase())), ("items", items(&m[3]))]),
         ),
+        // It accepts|carries|claims <items>.   (same registry vocab; subject = the last-declared kind —
+        // null standalone, which is what the per-statement corpus sees. parser.js `lastSubject || null`.)
+        (
+            Regex::new(r"(?i)^It (accepts|carries|claims) (.+)\.$").unwrap(),
+            |m| obj(vec![("kind", jstr(&m[1].to_lowercase())), ("subject", Json::Null), ("items", items(&m[2]))]),
+        ),
         // I am "what?" I am.   (the genesis verse)
         (
             Regex::new(r#"(?i)^I am "what\?" I am\.$"#).unwrap(),
@@ -238,12 +247,30 @@ fn rules() -> Vec<(Regex, Builder)> {
                 obj(o)
             },
         ),
+        // I stand in [the] <space>.   -> a move act (rule 9, the genesis life-register).
+        (
+            Regex::new(r"(?i)^I stand in (?:the )?([\w.-]+)\.$").unwrap(),
+            |m| obj(vec![
+                ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("move")), ("by", jstr("I")),
+                ("of", obj(vec![("kind", jstr("space")), ("id", jstr(&m[1]))])),
+            ]),
+        ),
+        // I give the <matter> to <Receiver>.   -> a give act carrying the `to` receiver (rule 17/19).
+        (
+            Regex::new(r"^I give the ([\w.-]+) to ([A-Z][\w.-]*)\.$").unwrap(),
+            |m| obj(vec![
+                ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("give")), ("by", jstr("I")),
+                ("of", obj(vec![("kind", jstr("matter")), ("id", jstr(&m[1]))])),
+                ("to", jstr(&m[2])),
+            ]),
+        ),
         // A <name> is a <isA>.   (generic kind — LAST so `is a space` / `is a able for a Y` win first)
         (
             Regex::new(r"(?i)^A ([\w.-]+) is a (.+?)\.$").unwrap(),
             |m| obj(vec![("kind", jstr("is")), ("subject", jstr(&m[1].to_lowercase())), ("isA", jstr(&m[2]))]),
         ),
-    ]
+    ]);
+    TABLE.as_slice()
 }
 
 // ── flow context + body (parser.js first pass, collectBody, EFFECT_RULES) ────
@@ -294,6 +321,21 @@ pub struct Ctx {
 fn obj_ref(obj_name: &str, ctx: &Ctx) -> Json {
     let kind = if ctx.spaces.contains(&obj_name.to_lowercase()) { "space" } else { "matter" };
     obj(vec![("kind", jstr(kind)), ("id", jstr(obj_name))])
+}
+
+/// stateAct (parser.js): a flow effect — by capitalize(R), act = verb(V), with an optional `of`
+/// (a declared space, else matter) and an optional `sets` (the next phase of the state dimension).
+fn state_act(ctx: &Ctx, r: &str, v: &str, of_name: Option<&str>, becomes: Option<&str>) -> Json {
+    let mut node = vec![
+        ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr(&verb(v))), ("by", jstr(&capitalize(r))),
+    ];
+    if let Some(o) = of_name {
+        node.push(("of", obj_ref(o, ctx)));
+    }
+    if let Some(y) = becomes {
+        node.push(("sets", Json::Obj(vec![(ctx.state_var.clone(), jstr(y))])));
+    }
+    obj(node)
 }
 
 /// First pass: read the state dimension (START line) + declared spaces (is-a-space). Events (DERIVE)
@@ -364,8 +406,8 @@ fn write_act(ctx: &Ctx, noun: &str, field: &str, value: &str, merge: Option<bool
 type EffBuilder = fn(&Captures, &Ctx) -> Json;
 
 /// EFFECT_RULES (this slice: the two state-act forms — parser.js `stateAct`).
-fn effect_rules() -> Vec<(Regex, EffBuilder)> {
-    vec![
+fn effect_rules() -> &'static [(Regex, EffBuilder)] {
+    static TABLE: LazyLock<Vec<(Regex, EffBuilder)>> = LazyLock::new(|| vec![
         // the <able> <verb>, and it becomes <X>.   (a state-wheel act: no `of`, sets the next state)
         (
             Regex::new(r"(?i)^the (\w+) (\w+), and it becomes (\w+)\.$").unwrap(),
@@ -394,6 +436,14 @@ fn effect_rules() -> Vec<(Regex, EffBuilder)> {
                 obj(node)
             },
         ),
+        // see whether <X> is an ancestor of <Y> as <bind>.   (being-tree descent predicate)
+        (
+            Regex::new(r"(?i)^see whether (.+?) is an ancestor of (.+?) as (\w+)\.$").unwrap(),
+            |m, _ctx| obj(vec![
+                ("kind", jstr("see")), ("of", ref_obj(&ref_key(&m[2]))),
+                ("descendsFrom", ref_obj(&ref_key(&m[1]))), ("bind", jstr(&m[3])),
+            ]),
+        ),
         // see the <X>'s <field> as <bind>.   (a fresh projection read)
         (
             Regex::new(r"(?i)^see the (.+?)'s (\w+) as (\w+)\.$").unwrap(),
@@ -411,6 +461,35 @@ fn effect_rules() -> Vec<(Regex, EffBuilder)> {
                     node.push(("one", Json::Bool(true)));
                 }
                 node.push(("bind", jstr(&m[3])));
+                obj(node)
+            },
+        ),
+        // call <X>, saying <Y> [as <bind>].   -> a CALL (the quotative hinge: talk content).
+        (
+            Regex::new(r"(?i)^call\s+(.+?),\s*saying\s+(.+?)(?:\s+as\s+(\w+))?\.?$").unwrap(),
+            |m, _ctx| {
+                let mut node = vec![("kind", jstr("call")), ("of", ref_obj(&ref_key(&m[1]))), ("saying", ref_lit(m[2].trim()))];
+                if let Some(b) = m.get(3) {
+                    if !b.as_str().is_empty() {
+                        node.push(("bind", jstr(b.as_str())));
+                    }
+                }
+                obj(node)
+            },
+        ),
+        // call <X> to <Y>[, with <Z>] [as <bind>].   -> a CALL (the intent hinge: summon-to-act).
+        (
+            Regex::new(r"(?i)^call\s+(.+?)\s+to\s+([\w-]+)(?:,\s*with\s+(.+?))?(?:\s+as\s+(\w+))?\.?$").unwrap(),
+            |m, _ctx| {
+                let mut node = vec![("kind", jstr("call")), ("of", ref_obj(&ref_key(&m[1]))), ("to", jstr(&m[2].to_lowercase()))];
+                if let Some(w) = m.get(3) {
+                    node.push(("with", ref_lit(w.as_str().trim())));
+                }
+                if let Some(b) = m.get(4) {
+                    if !b.as_str().is_empty() {
+                        node.push(("bind", jstr(b.as_str())));
+                    }
+                }
                 obj(node)
             },
         ),
@@ -457,7 +536,104 @@ fn effect_rules() -> Vec<(Regex, EffBuilder)> {
                 ])
             },
         ),
-    ]
+        // form the being as the new Name's own.   -> be:form-being expressing the arriving Name.
+        (
+            Regex::new(r"(?i)^form the being as the new Name's own\.$").unwrap(),
+            |_m, ctx| {
+                let b = ctx.being.clone().map(|x| jstr(&x)).unwrap_or(Json::Null);
+                obj(vec![
+                    ("kind", jstr("act")), ("verb", jstr("be")), ("act", jstr("form-being")), ("by", jstr("I")),
+                    ("through", b.clone()), ("bind", jstr("child")),
+                    ("params", obj(vec![
+                        ("name", jstr("$name")), ("password", jstr("$password")), ("cognition", jstr("human")),
+                        ("defaultAble", jstr("human")), ("parentBeingId", b), ("homeId", jstr("$home")),
+                        ("trueName", jstr("$ownerName")),
+                    ])),
+                ])
+            },
+        ),
+        // make the being the <space>'s owner.   -> do:set-space owner = the new being.
+        (
+            Regex::new(r"(?i)^make the being the (\w+)'s owner\.$").unwrap(),
+            |m, ctx| being_act(ctx, "do", "set-space",
+                obj(vec![("kind", jstr("space")), ("ref", jstr(&m[1].to_lowercase()))]),
+                obj(vec![("field", jstr("owner")), ("value", jstr("$child"))])),
+        ),
+        // grant the being the <able> able.   -> do:grant-able (anchored at the place root).
+        (
+            Regex::new(r"(?i)^grant the being the (\w+) able\.$").unwrap(),
+            |m, ctx| being_act(ctx, "do", "grant-able",
+                obj(vec![("kind", jstr("being")), ("ref", jstr("child"))]),
+                obj(vec![("able", jstr(&m[1])), ("anchorSpaceId", jstr("$placeRoot"))])),
+        ),
+        // record the being's lineage.   -> do:set-being qualities.lineage (mother = the flow's being).
+        (
+            Regex::new(r"(?i)^record the being's lineage\.$").unwrap(),
+            |_m, ctx| {
+                let mother = ctx.being.clone().map(|x| jstr(&x)).unwrap_or(Json::Null);
+                being_act(ctx, "do", "set-being",
+                    obj(vec![("kind", jstr("being")), ("ref", jstr("child"))]),
+                    obj(vec![("field", jstr("qualities.lineage")),
+                        ("value", obj(vec![("mother", mother), ("father", jstr("Arrival"))]))]))
+            },
+        ),
+        // host: <fn>(<args>) [as <bind>].   -> a host-escape act (the crypto / session-transport floor).
+        (
+            Regex::new(r"(?i)^host:\s*(\w+)\(([^)]*)\)\s*(?:as\s+(\w+))?\.?$").unwrap(),
+            |m, _ctx| {
+                let args: Vec<Json> = arg_list(&m[2], "$").into_iter().map(|r| jstr(&r)).collect();
+                let mut node = vec![
+                    ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr(&m[1])), ("host", jstr(&m[1])),
+                    ("params", obj(vec![("args", Json::Arr(args))])),
+                ];
+                if let Some(b) = m.get(3) {
+                    if !b.as_str().is_empty() {
+                        node.push(("bind", jstr(b.as_str())));
+                    }
+                }
+                obj(node)
+            },
+        ),
+        // the <X> is|are|was|were <Y>.   -> a reflexive state-mark (a flow-local flag a sibling If reads).
+        (
+            Regex::new(r"(?i)^the ([\w.-]+) (?:is|are|was|were) (\w+)\.$").unwrap(),
+            |m, _ctx| {
+                let clause = format!("{} {}", &m[1], &m[2]);
+                let flag = infer_flag(&clause).unwrap_or_else(|| camel_key(&clause));
+                obj(vec![("kind", jstr("mark")), ("flag", jstr(&flag))])
+            },
+        ),
+        // <X> stops the search. / stop.   -> break the nearest foreach.
+        (
+            Regex::new(r"(?i)\bstops? the search\.$").unwrap(),
+            |_m, _ctx| obj(vec![("kind", jstr("break"))]),
+        ),
+        (
+            Regex::new(r"(?i)^stop\.$").unwrap(),
+            |_m, _ctx| obj(vec![("kind", jstr("break"))]),
+        ),
+        // Return <items>.   -> a success terminator; "k: v" items are `extra` kv, bare items `values`.
+        (
+            Regex::new(r"(?i)^Return (.+)\.$").unwrap(),
+            |m, _ctx| {
+                let kv = Regex::new(r"^([\w][\w.-]*)\s*:\s*(.+)$").unwrap();
+                let (mut values, mut extra): (Vec<Json>, Vec<(String, Json)>) = (Vec::new(), Vec::new());
+                for it in split_items(&m[1]) {
+                    if let Some(c) = kv.captures(&it) {
+                        extra.push((camel_key(&c[1]), ref_lit(c[2].trim())));
+                    } else {
+                        values.push(jstr(&camel_key(&it)));
+                    }
+                }
+                let mut node = vec![("kind", jstr("return")), ("values", Json::Arr(values))];
+                if !extra.is_empty() {
+                    node.push(("extra", Json::Obj(extra)));
+                }
+                obj(node)
+            },
+        ),
+    ]);
+    TABLE.as_slice()
 }
 
 // ── the do effect (parser.js doOpAct + the do RULES; lookahead → fancy-regex) ────────────────
@@ -586,8 +762,22 @@ fn fg(m: &fancy_regex::Captures, i: usize) -> String {
 type FancyEffBuilder = fn(&fancy_regex::Captures, &Ctx) -> Json;
 
 /// The lookahead-bearing EFFECT_RULES (the do forms — `(?!the|a|an)`) — fancy-regex.
-fn fancy_effect_rules() -> Vec<(fancy_regex::Regex, FancyEffBuilder)> {
-    vec![
+fn fancy_effect_rules() -> &'static [(fancy_regex::Regex, FancyEffBuilder)] {
+    static TABLE: LazyLock<Vec<(fancy_regex::Regex, FancyEffBuilder)>> = LazyLock::new(|| vec![
+        // refuse with "<msg>" [as <code>].   (an error halt; the `(?!If)` so an inline `If …, refuse …`
+        // stays the inline-if's, not a bare refuse). `as <code>` -> the SCREAMING_SNAKE IBP error code.
+        (
+            fancy_regex::Regex::new(r#"(?i)^(?!If\b).*?\brefuses?\b.*?\bwith\s+"([^"]+)"(?:\s+as\s+([\w-]+))?\.?$"#).unwrap(),
+            |m, _ctx| {
+                let mut node = vec![("kind", jstr("refuse")), ("message", jstr(&fg(m, 1)))];
+                if let Some(code) = m.get(2) {
+                    if !code.as_str().is_empty() {
+                        node.push(("code", jstr(&code.as_str().to_uppercase().replace('-', "_"))));
+                    }
+                }
+                obj(node)
+            },
+        ),
         // see <op>[(<args>)] as <bind>.   -> a see-op (perception/compute; no fact). (SEE_FLOOR reject-
         // unknown validation deferred — it's a gate, not an IR-shape concern; known ops match exactly.)
         (
@@ -623,7 +813,138 @@ fn fancy_effect_rules() -> Vec<(fancy_regex::Regex, FancyEffBuilder)> {
             fancy_regex::Regex::new(r"(?i)^do\s+(?!the\b|a\b|an\b)([\w-]+)\s*(.*?)\.?$").unwrap(),
             |m, ctx| do_op_act(&fg(m, 1), fg(m, 2).trim(), ctx),
         ),
-    ]
+    ]);
+    TABLE.as_slice()
+}
+
+/// parser.js `splitInlineIf(inner)`: the HINGE of an inline `If <cond>, <then>` — scanned at
+/// paren/brace/bracket/quote depth 0 so a comma inside a see-op's args or a `{ … }` param never reads
+/// as the hinge. The hinge is ` then `, `→`/`->`, or a top-level comma NOT followed by `and`/`or`
+/// (those join multi-conditions). Returns (cond, then) at the FIRST hinge, or None (malformed).
+fn split_inline_if(inner: &str) -> Option<(String, String)> {
+    let chars: Vec<char> = inner.chars().collect();
+    let (mut depth, mut in_str, mut i) = (0i32, false, 0usize);
+    let then_re = Regex::new(r"(?i)^\s+then\s+").unwrap();
+    let arrow_re = Regex::new(r"^\s*(?:→|->)\s*").unwrap();
+    let andor = Regex::new(r"(?i)^\s*(?:and|or)\b").unwrap();
+    while i < chars.len() {
+        let ch = chars[i];
+        if in_str {
+            if ch == '"' {
+                in_str = false;
+            }
+            i += 1;
+            continue;
+        }
+        match ch {
+            '"' => {
+                in_str = true;
+                i += 1;
+                continue;
+            }
+            '(' | '{' | '[' => {
+                depth += 1;
+                i += 1;
+                continue;
+            }
+            ')' | '}' | ']' => {
+                depth = (depth - 1).max(0);
+                i += 1;
+                continue;
+            }
+            _ => {}
+        }
+        if depth != 0 {
+            i += 1;
+            continue;
+        }
+        let rest: String = chars[i..].iter().collect();
+        if let Some(h) = then_re.find(&rest).or_else(|| arrow_re.find(&rest)) {
+            let cond: String = chars[..i].iter().collect();
+            let then: String = chars[i + rest[..h.end()].chars().count()..].iter().collect();
+            return Some((cond.trim().to_string(), then.trim().to_string()));
+        }
+        if ch == ',' {
+            let after: String = chars[i + 1..].iter().collect();
+            if !andor.is_match(&after) {
+                let cond: String = chars[..i].iter().collect();
+                let then: String = chars[i + 1..].iter().collect();
+                return Some((cond.trim().to_string(), then.trim().to_string()));
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+/// parser.js `splitInlineEffects(s)`: split an inline-then into effects on top-level `,` / `, and ` /
+/// ` and `, respecting nested (), {}, [], "..." (a do-param object / op-arg / quoted comma never splits).
+fn split_inline_effects(s: &str) -> Vec<String> {
+    let sep = Regex::new(r"(?i)^(?:,\s*and\s+|,\s*|\s+and\s+)").unwrap();
+    let chars: Vec<char> = s.chars().collect();
+    let (mut depth, mut in_str, mut buf, mut out, mut i) = (0i32, false, String::new(), Vec::new(), 0usize);
+    while i < chars.len() {
+        let ch = chars[i];
+        if in_str {
+            buf.push(ch);
+            if ch == '"' {
+                in_str = false;
+            }
+            i += 1;
+            continue;
+        }
+        match ch {
+            '"' => {
+                in_str = true;
+                buf.push(ch);
+                i += 1;
+                continue;
+            }
+            '(' | '{' | '[' => {
+                depth += 1;
+                buf.push(ch);
+                i += 1;
+                continue;
+            }
+            ')' | '}' | ']' => {
+                depth = (depth - 1).max(0);
+                buf.push(ch);
+                i += 1;
+                continue;
+            }
+            _ => {}
+        }
+        if depth == 0 {
+            let rest: String = chars[i..].iter().collect();
+            if let Some(m) = sep.find(&rest) {
+                if !buf.trim().is_empty() {
+                    out.push(buf.trim().to_string());
+                }
+                buf.clear();
+                i += rest[..m.end()].chars().count();
+                continue;
+            }
+        }
+        buf.push(ch);
+        i += 1;
+    }
+    if !buf.trim().is_empty() {
+        out.push(buf.trim().to_string());
+    }
+    out
+}
+
+/// parser.js `parseInlineThen(rest, c)`: the consequence of an inline If — one-or-more effects. A
+/// leading `Return` is ONE effect (its commas are structural kv), else split on the inline separators.
+fn parse_inline_then(rest: &str, ctx: &Ctx) -> Vec<Json> {
+    let t = rest.trim();
+    let as_line = |p: &str| format!("{}.", p.trim_end_matches('.'));
+    if Regex::new(r"(?i)^Return\b").unwrap().is_match(t) {
+        if let Some(eff) = parse_effect(&as_line(t), ctx) {
+            return vec![eff];
+        }
+    }
+    split_inline_effects(t).into_iter().filter_map(|p| parse_effect(&as_line(&p), ctx)).collect()
 }
 
 fn parse_effect(line: &str, ctx: &Ctx) -> Option<Json> {
@@ -635,6 +956,17 @@ fn parse_effect(line: &str, ctx: &Ctx) -> Option<Json> {
     for (re, build) in fancy_effect_rules() {
         if let Ok(Some(caps)) = re.captures(line) {
             return Some(build(&caps, ctx));
+        }
+    }
+    // inline if: "If <cond>, <then>." -> {kind:if, cond, then:[…]}. The hinge (comma/then/arrow) at
+    // depth 0 splits the conditional frame from the consequence (itself one-or-more effects).
+    if let Some(m) = Regex::new(r"(?i)^If\s+(.+)\.$").unwrap().captures(line) {
+        if let Some((cond, then)) = split_inline_if(&m[1]) {
+            return Some(obj(vec![
+                ("kind", jstr("if")),
+                ("cond", parse_cond(&cond)),
+                ("then", Json::Arr(parse_inline_then(&then, ctx))),
+            ]));
         }
     }
     None
@@ -828,6 +1160,32 @@ fn collect_body(raw: &[&str], start_i: usize, parent_indent: usize, ctx: &Ctx) -
     (out, i)
 }
 
+/// The single-LINE flow forms (parser.js inline When-flows): a state-wheel phase, a state rider, or a
+/// derived-event watch — each wraps exactly ONE effect. (The multi-line `:` headers are parse_header.)
+fn parse_single_line_flow(line: &str, ctx: &Ctx) -> Option<Json> {
+    let flow = |when: Json, eff: Json| obj(vec![("kind", jstr("flow")), ("when", when), ("effects", Json::Arr(vec![eff]))]);
+    let state_when = |x: &str| obj(vec![("state", Json::Obj(vec![(ctx.state_var.clone(), jstr(x))]))]);
+    let on_when = |e: &str| obj(vec![("on", jstr(e))]);
+
+    // When it is X, the R V, and it becomes Y.   (wheel phase — rule 12)
+    if let Some(m) = Regex::new(r"(?i)^When it is (\w+), the (\w+) (\w+), and it becomes (\w+)\.$").unwrap().captures(line) {
+        return Some(flow(state_when(&m[1]), state_act(ctx, &m[2], &m[3], None, Some(&m[4]))));
+    }
+    // When it is X, the R V the O.   (rider — rule 6)
+    if let Some(m) = Regex::new(r"(?i)^When it is (\w+), the (\w+) (\w+) the (\w+)\.$").unwrap().captures(line) {
+        return Some(flow(state_when(&m[1]), state_act(ctx, &m[2], &m[3], Some(&m[4]), None)));
+    }
+    // When a E happens, the R V the O.   (derived-event watch — harmony)
+    if let Some(m) = Regex::new(r"(?i)^When a (\w+) happens, the (\w+) (\w+) the (\w+)\.$").unwrap().captures(line) {
+        return Some(flow(on_when(&m[1]), state_act(ctx, &m[2], &m[3], Some(&m[4]), None)));
+    }
+    // When a E happens, the R V.   (derived-event watch, intransitive)
+    if let Some(m) = Regex::new(r"(?i)^When a (\w+) happens, the (\w+) (\w+)\.$").unwrap().captures(line) {
+        return Some(flow(on_when(&m[1]), state_act(ctx, &m[2], &m[3], None, None)));
+    }
+    None
+}
+
 /// Parse Word source into the IR node array. Two-pass, like parser.js: first pass reads Ctx (the state
 /// dimension + spaces), second pass walks raw lines — a `:` header opens a flow (parse_header +
 /// collect_body for its body), every other line applies the single-line RULES. (The guards, nested
@@ -862,15 +1220,41 @@ pub fn parse(source: &str) -> Vec<Json> {
                 continue;
             }
         }
-        for (re, build) in &rs {
+        if let Some(flow) = parse_single_line_flow(line, &ctx) {
+            nodes.push(flow);
+            i += 1;
+            continue;
+        }
+        let mut matched = false;
+        for (re, build) in rs {
             if let Some(caps) = re.captures(line) {
                 nodes.push(build(&caps));
+                matched = true;
                 break;
+            }
+        }
+        if !matched {
+            // A bare imperative DEED spoken as a standalone statement — the cognition OUTPUT a being
+            // utters ("do move.", "see X as Y.", "call …"). Only deeds (act/see/call) lift to top level;
+            // flow-control effects (refuse/return/if/foreach/mark/…) stay body-only. The `.word` corpus
+            // carries no top-level deed, so this strictly ADDS the spoken-decision form.
+            if let Some(eff) = parse_effect(line, &ctx) {
+                if matches!(node_kind(&eff), "act" | "see" | "call") {
+                    nodes.push(eff);
+                }
             }
         }
         i += 1;
     }
     nodes
+}
+
+/// The `kind` of an IR node ("" if absent) — used to gate the top-level imperative-deed fallback.
+fn node_kind(n: &Json) -> &str {
+    match n {
+        Json::Obj(e) => e.iter().find(|(k, _)| k == "kind").and_then(|(_, v)| if let Json::Str(s) = v { Some(s.as_str()) } else { None }).unwrap_or(""),
+        _ => "",
+    }
 }
 
 // ── flow headers (the `:` lines) — parser.js parseHeader + parseBinds ────────
@@ -1094,6 +1478,18 @@ pub fn parse_leaf(t: &str) -> Json {
     } else if Regex::new(r"(?i)\bnot\b").unwrap().is_match(&s) {
         negated = true;
         s = Regex::new(r"(?i)\bnot\s*").unwrap().replace(&s, "").to_string();
+    }
+
+    // INLINE SEE-OP CALL as a predicate: `<op>(<args>)` -> {seeCall, args}. A live check (no bind, no
+    // fact); the as-removal kept the call's args (a gloss has a space before its paren). SEE_FLOOR
+    // validation is a gate, not an IR-shape concern, so it's skipped here.
+    if let Some(m) = Regex::new(r"(?i)^([a-z][\w-]*)\((.*)\)$").unwrap().captures(&s) {
+        let args: Vec<Json> = if m[2].trim().is_empty() {
+            vec![]
+        } else {
+            arg_list(&m[2], "").into_iter().map(|r| ref_obj(&r)).collect()
+        };
+        return neg(obj(vec![("seeCall", jstr(&m[1])), ("args", Json::Arr(args))]), negated);
     }
 
     // authority predicate: <X> has [credential] authority over <Y>

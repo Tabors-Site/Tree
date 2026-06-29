@@ -11,6 +11,8 @@
 //   cargo run -p treeos -- serve 127.0.0.1:7070 store/past   # serve the chain over http + ws
 
 mod chain;
+mod cognize;
+mod llm_http;
 mod wire;
 
 use std::env;
@@ -143,6 +145,9 @@ fn route(req: &Request, root: &Path) -> (&'static str, &'static str, String) {
     if req.method == "POST" && segs == ["word"] {
         return word_seam(&req.body, root);
     }
+    if req.method == "POST" && segs == ["cognize"] {
+        return cognize::cognize_seam(&req.body, root);
+    }
     if get && (segs.is_empty() || segs == ["health"]) {
         return ok(json(&health(root)));
     }
@@ -176,6 +181,14 @@ fn word_seam(body: &[u8], root: &Path) -> (&'static str, &'static str, String) {
     // Rust) — so GRANTED ables authorize, not just i-am + owner. The vocabulary is read from
     // `seed/store/words/ables` relative to the cwd (the repo root, where `treeos serve` is launched).
     let ables_dir = std::path::Path::new("seed/store/words/ables");
+    // The WORD-SOLE ops (set-being / set-space / end-space / set-matter / create-* / set-owner / …) carry
+    // NO inline body in the act; their body is their co-located `.word`. THE KEYSTONE: an act naming an op
+    // resolves that op's DESCRIPTOR from the CHAIN FOLD of declare-word facts (treewordfold, read through
+    // treeibp::act_via_fold) — NOT a hardcoded op list. The fold says "this is a kind:op word"; the host
+    // then loads its `.word` body off disk (op_word_file, the bottom-turtle path map). ANY declared op
+    // resolves, not just a fixed set. Read from `seed/materials/<noun>/<op>.word` + `seed/store/words/…`.
+    let materials_dir = std::path::Path::new("seed/materials");
+    let store_words_dir = std::path::Path::new("seed/store/words");
 
     // SIGNING (the EDGE holds the key). The STORY signs its own acts (I) with the custodial story key
     // (.story/story.key, cwd-relative — the canonical key the on-disk acts verify against). A being
@@ -201,7 +214,16 @@ fn word_seam(body: &[u8], root: &Path) -> (&'static str, &'static str, String) {
         }
     });
     let sign_ref = signer.as_ref().map(|f| f as &dyn Fn(&Json, &[String]) -> Json);
-    let outcomes = treeibp::act(word, &actor, root, history, |name| treeibp::fold_word_able(name, ables_dir), basis, sign_ref);
+    let outcomes = treeibp::act_via_fold(
+        word,
+        &actor,
+        root,
+        history,
+        |name| treeibp::fold_word_able(name, ables_dir),
+        |op, noun| treeibp::op_word_file(op, noun, materials_dir, store_words_dir),
+        basis,
+        sign_ref,
+    );
     let results: Vec<Json> = outcomes
         .iter()
         .map(|o| match o {

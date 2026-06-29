@@ -1,0 +1,15 @@
+[package]
+name = "treewordfold"
+version = "0.1.0"
+edition = "2021"
+description = "The WORD-FOLD: the live word-set is the FOLD of the declare-word (do:coin / do:retire) facts on the Named being I's reel, NOT a hardcoded code table. Reads facts through the existing fold/projection path (treestore), folds them to a word-set (name -> descriptor {kind, body pointer, see-op, noun, idFrom}). The store-side language layer that replaces treeibp's hardcoded fold_op_word match. Generic over WHATEVER declare-word facts I has read in (no fixed genesis set)."
+license = "AGPL-3.0"
+
+[dependencies]
+# READ the facts off the reel via the kernel store (compose, never reimplement). treehash for Json.
+treehash = { path = "../treehash" }
+treestore = { path = "../treestore" }
+
+[dev-dependencies]
+# the conformance test reads the genuine on-disk store (the genesis declare-word vocabulary).
+treehash = { path = "../treehash" }

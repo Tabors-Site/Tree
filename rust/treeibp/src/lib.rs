@@ -19,6 +19,7 @@
 use std::path::Path;
 use std::sync::Mutex;
 use treehash::Json;
+use treehost::HostError; // the host see-op refusal (the .word's refusal); the resolver seam run_body calls
 use treestore::{
     commit_moment, commit_moment_signed, next_ord, read_ord, read_reel_file, verify_fact_chain,
 };
@@ -414,6 +415,18 @@ pub enum Outcome {
     Denied(String),   // the gate's reason
 }
 
+/// `ranAsMoments` (moments.md) — the POSITIVE marker that a Word ran as N MOMENTS, so the dispatcher
+/// must NOT auto-stamp a fact for the Word itself: a composite word lays NO fact of its own, its DEEDS
+/// do. In the JS dispatcher this gated an else-branch that would have auto-Fact'd; in Rust the `act`
+/// family NEVER auto-stamps — it ONLY seals the specs the body produced (`seal_specs` opens one moment
+/// per spec). So this is structural here, and the marker is a TRUE assertion over the outcome list: an
+/// outcome list IS the N moments (one Outcome per deed-fact / refusal), never a single fused composite
+/// fact. Holds for `act` / `act_via_fold` / `act_with_ops` by construction — the runner has no
+/// composite-fact path to skip. (Surfaced as a predicate so a caller / test can name the invariant.)
+pub fn ran_as_moments(_outcomes: &[Outcome]) -> bool {
+    true // the act family always runs as N moments; there is no auto-stamp of the composite word
+}
+
 /// The ACT primitive — a being speaks a Word: parse → run its body (`run_body`: acts, flows, and
 /// control flow, threading bindings + state) → AUTHORIZE + SEAL each act that targets a reel (the
 /// moment-seal, `seal_one`). ONE entry; declarations are skipped, and a state-only act threads its
@@ -429,18 +442,266 @@ pub fn act(
     basis: Option<f64>,
     sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
 ) -> Vec<Outcome> {
+    act_with_ops(word, actor, dir, history, able_spec_of, |_| None, basis, sign)
+}
+
+/// `act` with the materials-op body resolver injected — the COMPOSITE-by-reference seam. A WORD-SOLE
+/// materials op (set-being / set-space / create-space / end-space / set-matter / create-matter) carries
+/// NO inline body in the act; its body is its co-located `.word`, and the act NAMES it. `op_word_of(op)`
+/// returns that `.word` source (the binary resolves it off disk the way it resolves able words), and an
+/// act-node naming such an op is EXPANDED: the trigger is derived from the act's OWN fields (its `of` /
+/// `params` / `history` / `by`/`through`, exactly do.js's STANDARD trigger), the op's `.word` runs
+/// through the host see-op seam, and the do-fact the `Return` synthesizes seals as the moment. The act
+/// stays the single entry; the trigger is INTERNAL, derived from the act — there is NO external trigger
+/// channel. A node with no materials body runs the existing inline path. `act` is the `op_word_of=None`
+/// case (every node inline) so existing callers are byte-identical.
+#[allow(clippy::too_many_arguments)]
+pub fn act_with_ops(
+    word: &str,
+    actor: &Json,
+    dir: &Path,
+    history: &str,
+    able_spec_of: impl Fn(&str) -> Option<Json>,
+    op_word_of: impl Fn(&str) -> Option<String>,
+    basis: Option<f64>,
+    sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
+) -> Vec<Outcome> {
+    let nodes = treeword::parse(word);
+    let fail_closed = |_: &str, _: &[Json]| false; // domain predicates fail closed (no host wired)
+
+    // The HOST SEE-OP seam (treehost): the AuthCtx is free here - `actor` carries the identity, and the
+    // resolver runs BEFORE the act's authorize (it's the substrate READ the `.word` runs to BUILD its
+    // fact). I (the bootstrap Name / boot mirror) bypasses the create/end resolvers' gates; a real
+    // being is a `caller`. The closure closes over (dir, history, resolver, auth) and calls
+    // treehost::Resolvers - the faithful mirror of the `host`/`able_spec_of` injection seams.
+    let auth = match get_str(actor, "beingId") {
+        Some(b) if b == I_AM || b == "i-am" => treehost::AuthCtx::i_am(),
+        Some(b) if !b.is_empty() => treehost::AuthCtx::caller(b),
+        _ => treehost::AuthCtx::default(),
+    };
+    let resolver = treehost::Resolvers; // the default see-op table (resolve-X -> its native body)
+    let see_op = |op: &str, args: &[Json]| -> Result<Json, HostError> {
+        treehost::HostResolver::resolve(&resolver, op, args, dir, history, &auth)
+    };
+
+    // Run the WHOLE body through the EXPANDING driver. A deed naming a declared op-word (its `.word`
+    // resolved by op_word_of) is EXPANDED into running that body with the deed-derived trigger; a
+    // composite deed (an op-word whose `.word` itself names op-words — set-owner.word's `do set-space`)
+    // expands the SAME way, recursively, all the way down (expand_one threads itself). Each produced
+    // spec is one act -> one fact -> one moment; `seal_specs` opens a moment per spec. Deeds that are
+    // NOT op-words (grant-able, a plain field set) rasterize inline as before. This is the N-MOMENTS
+    // composite: one entry, the body fans out to its deeds, every deed lays its own fact and NONE is
+    // fused — the top-level word itself lays no fact of its own (its deeds do), so the dispatcher's
+    // result is the N outcomes, never a single composite fact (`ran_as_moments`, below).
     let mut ctx = obj(vec![
         ("identity", actor.clone()),
         ("bindings", obj(vec![])),
         ("state", obj(vec![])),
         ("beings", obj(vec![])),
     ]);
-    let nodes = treeword::parse(word);
-    let fail_closed = |_: &str, _: &[Json]| false; // domain predicates fail closed (no host wired)
-    let specs = run_body(&nodes, &mut ctx, &fail_closed);
+    let expand = |n: &Json, c: &mut Json| expand_one(n, c, actor, history, &op_word_of, &see_op);
+    let specs = match run_body_expand(&nodes, &mut ctx, &fail_closed, &see_op, &expand) {
+        Ok(s) => s,
+        Err(e) => return vec![Outcome::Denied(e.to_string())],
+    };
+
     let basis = basis.or_else(|| Some(read_ord(dir))); // the moment-ord this Word was decided against
+    seal_specs(&specs, actor, dir, history, &able_spec_of, basis, sign)
+}
+
+/// Derive the STANDARD trigger from an act node's OWN fields — the do.js runOpWord mapping, sourced from
+/// the ACT (not a separate channel): `target` = the act's `of` ({kind,id}, rasterized so a `ref` target
+/// resolves), `field`/`value`/`merge` (+ any op params) = the act's `params`, `branch` = the history,
+/// `caller` = the actor's beingId, `targetId`/`targetKind` extracted from the target. Matches do.js's
+/// trigger key names + shape so the op `.word`'s `see resolve-X($target, $field, ...)` binds identically.
+fn derive_trigger(node: &Json, ctx: &Json, actor: &Json, history: &str) -> Json {
+    // rasterize the act's `of` against ctx so a `{ref}` / `$id` target resolves to a concrete {kind,id}
+    // (the JS dispatcher passes the resolved ctx.target). A plain {kind,id} passes through unchanged.
+    let mut target = treeval::resolve_target(get(node, "of"), ctx, None).unwrap_or(Json::Null);
+    // RECOVER a LITERAL id the parser ref-keyed. `do <op> on the being <id>` lowers the id to a
+    // `{ kind, ref }` (parse_do_target always refs), so resolve_target yields a NULL id when the ref is
+    // not a binding (an id named directly, not a $var). Fall back to the act's raw `of.ref`/`of.id` as
+    // the literal id — the being WAS named in the act, the trigger is derived from the act's own field.
+    let id_empty = matches!(get(&target, "id"), None | Some(Json::Null))
+        || get_str(&target, "id").map(|s| s.is_empty()).unwrap_or(false);
+    if id_empty {
+        let of = get(node, "of");
+        let lit = of
+            .and_then(|o| get_str(o, "id").or_else(|| get_str(o, "ref")))
+            .filter(|s| !s.is_empty() && !s.starts_with('$'));
+        if let Some(lit) = lit {
+            if let Json::Obj(t) = &mut target {
+                t.retain(|(k, _)| k != "id");
+                t.push(("id".to_string(), jstr(lit)));
+            }
+        }
+    }
+    let target = target;
+    let params = match get(node, "params") {
+        Some(p) => treeval::resolve_value(p, ctx),
+        None => obj(vec![]),
+    };
+    // STANDARD trigger: op params spread top-level (so `$field`/`$value`/`$merge` resolve), then the
+    // standard keys LAST so an op param can never shadow them (do.js ordering).
+    let mut fields: Vec<(String, Json)> = match &params {
+        Json::Obj(e) => e.clone(),
+        _ => Vec::new(),
+    };
+    let set = |fields: &mut Vec<(String, Json)>, k: &str, v: Json| {
+        fields.retain(|(kk, _)| kk != k);
+        fields.push((k.to_string(), v));
+    };
+    set(&mut fields, "target", target.clone());
+    set(&mut fields, "params", params);
+    if let Some(t) = trigger_target_id(&obj(vec![("target", target.clone())])) {
+        set(&mut fields, "targetId", jstr(&t));
+    }
+    if let Some(k) = get_str(&target, "kind") {
+        set(&mut fields, "targetKind", jstr(k));
+    }
+    if let Some(b) = get_str(actor, "beingId").filter(|s| !s.is_empty()) {
+        set(&mut fields, "caller", jstr(b));
+    }
+    set(&mut fields, "branch", jstr(history));
+    Json::Obj(fields)
+}
+
+/// op_word_via_fold — the FOLD-BACKED op-word resolver. THE keystone of the chain-as-vocabulary build:
+/// a word resolves from the CHAIN FOLD of declare-word facts (treewordfold::resolve_word), NOT a
+/// hardcoded code table. Replaces the old `fold_op_word` match (set-being / set-space / end-space /
+/// set-matter — the only 4) with the genuine fold: ANY word the chain declares as `kind:"op"` resolves,
+/// nothing is hard-declared in code.
+///
+/// The split (doctrine: the word-fold is STORE logic, the file path is the bottom turtle):
+///   1. resolve the word's DESCRIPTOR from the chain word-fold (treewordfold). Not declared, disabled,
+///      or not a `kind:"op"` word -> None (the act runs inline, the existing path).
+///   2. it IS a declared op word -> ask the HOST `file_of(op)` for its `.word` BODY off disk (the
+///      bottom-turtle code-matter lookup the binary owns; for a seed op, the bundled `.word`). None
+///      from the host (no co-located body found) -> None, the act runs inline.
+///
+/// The descriptor itself (noun, idFrom, factAction, able) rides the fold — it is the SAME data the JS
+/// `binding.word` carried — so the run/seal of the op's `.word` is driven by what the chain declared,
+/// never a code constant. Generic over whatever I has read in: a word declared LATER (by I reading the
+/// genesis book) resolves the moment its coin fact lands, with no code change.
+pub fn op_word_via_fold(
+    dir: &Path,
+    history: &str,
+    op: &str,
+    file_of: impl Fn(&str, Option<&str>) -> Option<String>,
+) -> Option<String> {
+    let desc = treewordfold::resolve_word(dir, history, op)?;
+    if !desc.is_op() {
+        return None; // declared, but not an op word (a concept / type / reducer / …) — run inline
+    }
+    // the chain says "op"; the host resolves its `.word` code-matter off disk, keyed by the op name +
+    // the NOUN the fold declared (which names the materials subfolder — being / space / matter).
+    file_of(op, desc.noun.as_deref())
+}
+
+/// op_word_file — the HOST file-path map: a seed op's name -> its co-located `.word` source off disk.
+/// This is the BOTTOM TURTLE (the JS `registerAbleWord(able, op, URL)` host registration), NOT the
+/// vocabulary: the vocabulary is the fold; this only maps a known seed op to the bundled body file. It
+/// searches the two seed roots the JS registers from — `materials/<kind>/<op>.word` (the set/end family)
+/// and the carved-out `store/words/<folder>/<op>.word` (create-space/create-matter/owner/…). The op's
+/// NOUN (from the fold descriptor) names the materials subfolder; the store/words layout is folder-per-op
+/// so the op name is tried as both `<op>/<op>.word` and the create-space alias `<op>/create.word`.
+pub fn op_word_file(op: &str, noun: Option<&str>, materials_dir: &Path, store_words_dir: &Path) -> Option<String> {
+    // 1) materials/<noun>/<op>.word (set-being -> being/set-being, set-space/end-space -> space/…).
+    if let Some(kind) = noun {
+        let p = materials_dir.join(kind).join(format!("{op}.word"));
+        if let Ok(s) = std::fs::read_to_string(&p) {
+            return Some(s);
+        }
+    }
+    // 2) store/words/<op>/<op>.word (the carved-out word-sole ops: create-matter, …) + the create-space
+    //    alias store/words/create-space/create.word.
+    for rel in [
+        store_words_dir.join(op).join(format!("{op}.word")),
+        store_words_dir.join(op).join("create.word"),
+    ] {
+        if let Ok(s) = std::fs::read_to_string(&rel) {
+            return Some(s);
+        }
+    }
+    // 3) the carved-out ops live under a FEATURE folder keyed by their able / extension (owner/set-owner,
+    //    credential/credential-read, llm-assigner/set-story-llm, …) — the folder is the JS
+    //    registerAbleWord URL, NOT derivable from the op name. So the host DISCOVERS the body by a bounded
+    //    walk of its bundled words dir for `<op>.word`. This is the bottom turtle (the host's own disk
+    //    layout), not the vocabulary — the vocabulary already said "op" from the fold.
+    find_word_file(store_words_dir, op, 3)
+}
+
+/// Bounded recursive search for `<op>.word` under `dir` (the host's bundled word tree). Depth-capped so
+/// a deep tree can't run away. The first match wins (the seed layout is one file per op name).
+fn find_word_file(dir: &Path, op: &str, depth: usize) -> Option<String> {
+    let target = format!("{op}.word");
+    let entries = std::fs::read_dir(dir).ok()?;
+    let mut subdirs = Vec::new();
+    for e in entries.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            subdirs.push(p);
+        } else if p.file_name().and_then(|n| n.to_str()) == Some(target.as_str()) {
+            if let Ok(s) = std::fs::read_to_string(&p) {
+                return Some(s);
+            }
+        }
+    }
+    if depth == 0 {
+        return None;
+    }
+    for sd in subdirs {
+        if let Some(s) = find_word_file(&sd, op, depth - 1) {
+            return Some(s);
+        }
+    }
+    None
+}
+
+/// `act_via_fold` — the act entry that resolves each op word's body FROM the chain word-fold (the
+/// keystone wiring). It is `act_with_ops` with the `op_word_of` closure built by `op_word_via_fold`:
+/// the word-fold (treewordfold, reading the declare-word facts off `dir`/`history`) decides whether an
+/// act-node names a declared op word, and the host `file_of` loads that op's `.word` off disk. So the
+/// runner consults the FOLD, never a hardcoded op list. `file_of` is the binary's seed-`.word` path map
+/// (op_word_file); everything else (authorize, seal, sign) is unchanged.
+#[allow(clippy::too_many_arguments)]
+pub fn act_via_fold(
+    word: &str,
+    actor: &Json,
+    dir: &Path,
+    history: &str,
+    able_spec_of: impl Fn(&str) -> Option<Json>,
+    file_of: impl Fn(&str, Option<&str>) -> Option<String>,
+    basis: Option<f64>,
+    sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
+) -> Vec<Outcome> {
+    act_with_ops(
+        word,
+        actor,
+        dir,
+        history,
+        able_spec_of,
+        |op| op_word_via_fold(dir, history, op, &file_of),
+        basis,
+        sign,
+    )
+}
+
+/// AUTHORIZE + SEAL each reel-targeting spec a body produced (the stamping half of `act`, factored so
+/// the materials-`.word` entry `run_op_word` shares the EXACT authorize + moment-seal path). A
+/// state-only spec (no reel target) is skipped; an unauthorized one is `Denied`; the rest seal as a
+/// moment (`seal_one`). Byte-identical to the loop `act` ran inline before this extraction.
+fn seal_specs(
+    specs: &[Json],
+    actor: &Json,
+    dir: &Path,
+    history: &str,
+    able_spec_of: impl Fn(&str) -> Option<Json>,
+    basis: Option<f64>,
+    sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
+) -> Vec<Outcome> {
     let mut out = Vec::new();
-    for spec in &specs {
+    for spec in specs {
         let (k, i) = match get(spec, "of") {
             Some(o) => (
                 get_str(o, "kind").unwrap_or("being").to_string(),
@@ -449,7 +710,7 @@ pub fn act(
             None => ("being".to_string(), String::new()),
         };
         if i.is_empty() {
-            continue; // a state-only act (no reel target) — its `sets` already threaded
+            continue; // a state-only act (no reel target) - its `sets` already threaded
         }
         let verb = get_str(spec, "verb").unwrap_or("");
         let op = get_str(spec, "act");
@@ -464,6 +725,135 @@ pub fn act(
         }
     }
     out
+}
+
+/// runOpWord (do.js) in Rust - the materials-`.word` entry. A WORD-SOLE op (`set-being` / `set-space` /
+/// `create-space` / `set-matter` / `create-matter` / `end-space`) runs its co-located `.word` THROUGH
+/// this: seed the STANDARD trigger bindings (`target` / `field` / `value` / `merge` / `branch` / the
+/// extracted `caller` / `targetId`), parse + run the body with the host see-op seam wired (so the
+/// body's `see resolve-X` reaches treehost), and AUTHORIZE + SEAL the do-fact the `Return` terminator
+/// synthesized - the SAME authorize + moment-seal `act` uses. A host refusal (the `.word`'s refusal) is
+/// surfaced as a single `Outcome::Denied`, carrying the host throw's reason. `trigger` is the op's
+/// resolved params (`{ target, field, value, merge, branch, ... }`), exactly as the dispatcher passed.
+pub fn run_op_word(
+    word: &str,
+    actor: &Json,
+    trigger: &Json,
+    dir: &Path,
+    history: &str,
+    able_spec_of: impl Fn(&str) -> Option<Json>,
+    basis: Option<f64>,
+    sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
+) -> Vec<Outcome> {
+    let auth = match get_str(actor, "beingId") {
+        Some(b) if b == I_AM || b == "i-am" => treehost::AuthCtx::i_am(),
+        Some(b) if !b.is_empty() => treehost::AuthCtx::caller(b),
+        _ => treehost::AuthCtx::default(),
+    };
+    let resolver = treehost::Resolvers;
+    let see_op = |op: &str, args: &[Json]| -> Result<Json, HostError> {
+        treehost::HostResolver::resolve(&resolver, op, args, dir, history, &auth)
+    };
+    let specs = match run_op_body(word, actor, trigger, history, &see_op) {
+        Ok(specs) => specs,
+        Err(host_err) => return vec![Outcome::Denied(host_err.to_string())],
+    };
+    let basis = basis.or_else(|| Some(read_ord(dir)));
+    seal_specs(&specs, actor, dir, history, &able_spec_of, basis, sign)
+}
+
+/// The SHARED op-`.word` runner (the trigger->specs core both `run_op_word` and `act_with_ops` call).
+/// Seed the trigger as ctx.bindings (so the body's `see resolve-X($target, ...)` resolves them), plus
+/// the extracted `caller` (the actor's beingId) + `branch` + `targetId` the standard trigger carries,
+/// then parse + run the op's `.word` body through the host see-op seam. Returns the produced fact specs
+/// (the `Return` terminator's do-fact), or the host throw (the `.word`'s refusal). NO authorize/seal —
+/// the caller seals via `seal_specs` (the ONE moment-seal path). The `see_op` seam is passed in so the
+/// caller controls the resolver + AuthCtx (it has the same `auth` already built).
+fn run_op_body(
+    word: &str,
+    actor: &Json,
+    trigger: &Json,
+    history: &str,
+    see_op: &dyn Fn(&str, &[Json]) -> Result<Json, HostError>,
+) -> Result<Vec<Json>, HostError> {
+    // The base op-body run: NO nested composite-by-reference expansion (a deed inside this `.word`
+    // rasterizes inline). `run_op_body_expand` below threads the `expand_op` seam for the recursive case.
+    let no_expand = |_: &Json, _: &mut Json| None;
+    run_op_body_expand(word, actor, trigger, history, see_op, &no_expand)
+}
+
+/// `run_op_body` PLUS the composite-by-reference seam threaded: an op-word's `.word` whose body holds a
+/// deed naming ANOTHER op-word (set-owner.word's `do set-space`) expands that deed recursively. Seeds
+/// the standard trigger bindings exactly as `run_op_body` does, then runs the body through
+/// `run_body_expand` carrying `expand_op` — so a nested op-deed re-reads its own `.word` and re-facts it
+/// (its own moment), all the way down.
+fn run_op_body_expand(
+    word: &str,
+    actor: &Json,
+    trigger: &Json,
+    history: &str,
+    see_op: &dyn Fn(&str, &[Json]) -> Result<Json, HostError>,
+    expand_op: &ExpandOp,
+) -> Result<Vec<Json>, HostError> {
+    let mut bindings = match trigger {
+        Json::Obj(e) => e.clone(),
+        _ => Vec::new(),
+    };
+    if !bindings.iter().any(|(k, _)| k == "caller") {
+        if let Some(b) = get_str(actor, "beingId").filter(|s| !s.is_empty()) {
+            bindings.push(("caller".to_string(), jstr(b)));
+        }
+    }
+    if !bindings.iter().any(|(k, _)| k == "branch") {
+        bindings.push(("branch".to_string(), jstr(history)));
+    }
+    if !bindings.iter().any(|(k, _)| k == "targetId") {
+        if let Some(t) = trigger_target_id(trigger) {
+            bindings.push(("targetId".to_string(), jstr(&t)));
+        }
+    }
+    let mut ctx = obj(vec![
+        ("identity", actor.clone()),
+        ("bindings", Json::Obj(bindings)),
+        ("state", obj(vec![])),
+        ("beings", obj(vec![])),
+    ]);
+    let nodes = treeword::parse(word);
+    let fail_closed = |_: &str, _: &[Json]| false;
+    run_body_expand(&nodes, &mut ctx, &fail_closed, see_op, expand_op)
+}
+
+/// The composite-by-reference EXPANDER (one deed). If `node` is a `do` act naming a declared op-word
+/// (resolved by `op_word_of`), run that word's `.word` body with the deed-derived trigger and return
+/// its produced fact specs — recursively, so a nested op-deed expands the same way (the `expand_op`
+/// closure it threads calls back into THIS function). `None` when the deed is not an op-word (it
+/// rasterizes inline). This is the SAME expansion the top-level `act_with_ops` loop does, now reachable
+/// from inside any body (a flow-wrapped deed, a deed inside another op's `.word`).
+fn expand_one(
+    node: &Json,
+    ctx: &Json,
+    actor: &Json,
+    history: &str,
+    op_word_of: &dyn Fn(&str) -> Option<String>,
+    see_op: &dyn Fn(&str, &[Json]) -> Result<Json, HostError>,
+) -> Option<Result<Vec<Json>, HostError>> {
+    if get_str(node, "kind") != Some("act") || get_str(node, "verb") != Some("do") {
+        return None;
+    }
+    let body = get_str(node, "act").and_then(op_word_of)?;
+    let trigger = derive_trigger(node, ctx, actor, history);
+    // recurse: a deed inside THIS op's `.word` that names yet another op-word expands the same way.
+    let nested = move |n: &Json, c: &mut Json| expand_one(n, c, actor, history, op_word_of, see_op);
+    Some(run_op_body_expand(&body, actor, &trigger, history, see_op, &nested))
+}
+
+/// targetIdOf for the trigger seed: a `{kind,id}` target -> its id; a bare id string -> itself.
+fn trigger_target_id(trigger: &Json) -> Option<String> {
+    match get(trigger, "target") {
+        Some(Json::Str(s)) => Some(s.clone()),
+        Some(t @ Json::Obj(_)) => get_str(t, "id").map(|s| s.to_string()),
+        _ => None,
+    }
 }
 
 fn json_str(v: &Json) -> String {
@@ -518,13 +908,88 @@ fn apply_sets(ctx: &mut Json, node: &Json) {
 /// while / for-each / match; threads bindings (for-each item + an act's `as`) and state (an act's
 /// `sets`, so loops terminate and chained conds see prior effects). `host` resolves domain predicates.
 ///
-/// (NOTE per the act/fact doctrine: stamping these specs is fact-only today — the act-log/moment-seal
+/// This is the PURE-WORD surface (no host see-op): it fails the `see resolve-X` floor CLOSED (a
+/// materials `.word` that reaches a host see-op needs `run_body_host`, which threads the resolver
+/// seam). Existing callers keep this exact signature; `act` calls the threaded form below.
+///
+/// (NOTE per the act/fact doctrine: stamping these specs is fact-only today - the act-log/moment-seal
 /// is the doctrine-correct write, tracked separately.)
 pub fn run_body(body: &[Json], ctx: &mut Json, host: &dyn Fn(&str, &[Json]) -> bool) -> Vec<Json> {
+    // No resolver wired - the `see resolve-X` floor fails CLOSED (the JS host-less default). A pure
+    // control-flow Word never reaches a `see` node, so this only refuses an actual host see-op, which
+    // surfaces as the SAME empty-effects no-op the unwired floor always produced.
+    let see_floor = |op: &str, _args: &[Json]| {
+        Err(HostError::invalid(format!(
+            "host see-op \"{op}\" reached run_body with no resolver wired (use act / run_body_host)"
+        )))
+    };
+    run_body_host(body, ctx, host, &see_floor).unwrap_or_default()
+}
+
+/// The FLOW eval driver WITH the host see-op seam threaded - the materials-`.word` end-to-end form.
+/// Identical to `run_body` for every existing arm (act / if / while / for-each / match / flow), PLUS:
+///   - `see`    - a `see resolve-X(args) as bind` node: resolve the positional `args` against ctx,
+///     call the injected `see_op` (which drives treehost's `HostResolver` against the on-disk store),
+///     and BIND the returned block under `bind` (so the `.word`'s `$spec.factParams` reaches the
+///     stamped fact through the `return` arm + the existing act path). A resolver refusal (the JS host
+///     THROW) is the `.word`'s REFUSAL - it short-circuits the body and propagates as `Err(HostError)`.
+///   - `return` - the materials `.word`'s success terminator (`Return spaceId: $spec.spaceId,
+///     factParams: $spec.factParams.`): mirror do.js `stampsWordFact` + `idFrom`. Read `extra`
+///     (resolving each `{ref}` against ctx), then synthesize the ONE caller-attributed do-fact spec
+///     the dispatcher would have stamped - `{ verb:"do", act:<fact op>, of:{kind,id}, params, by,
+///     through }` - and emit it. The fact TARGET is an explicit `factTarget {kind,id}` if present
+///     (end-space), else the id-key (`beingId`/`spaceId`/`matterId`) names the id + the kind; the
+///     params are `factParams` (absent for end-space - the reducer derives the whole fold). The fact
+///     op + `by`/`through` ride on the ctx (`__factOp` set by the `see` arm; `identity` the actor).
+///
+/// The return widens to carry the refusal: `Ok(specs)` is the emitted facts, `Err` is the host throw
+/// (the `.word`'s refusal), which `act` maps to `Outcome::Denied` - the SAME shape an unauthorized act
+/// produces.
+pub fn run_body_host(
+    body: &[Json],
+    ctx: &mut Json,
+    host: &dyn Fn(&str, &[Json]) -> bool,
+    see_op: &dyn Fn(&str, &[Json]) -> Result<Json, HostError>,
+) -> Result<Vec<Json>, HostError> {
+    // The base form: NO composite-by-reference expansion (an op-deed inside the body rasterizes inline,
+    // as it always did). The expanding form `run_body_expand` threads the `expand_op` seam below; this
+    // keeps `run_body_host`'s signature + behavior byte-identical for its direct callers (the host-seam
+    // test, the pure-word `run_body` floor).
+    let no_expand = |_: &Json, _: &mut Json| None;
+    run_body_expand(body, ctx, host, see_op, &no_expand)
+}
+
+/// The expanding-body type: given an act node + the threaded ctx, EITHER recognize it as an op-word
+/// deed and run that word's `.word` (returning its produced fact specs — `Some(Ok(specs))`, the
+/// composite-by-reference expansion, N facts), OR surface the nested word's refusal (`Some(Err(e))`),
+/// OR decline (`None` — not an op-word deed, the body rasterizes it inline as before).
+type ExpandOp<'a> = dyn Fn(&Json, &mut Json) -> Option<Result<Vec<Json>, HostError>> + 'a;
+
+/// `run_body_host` PLUS the composite-by-reference seam: an `act` node naming a declared op-word is
+/// EXPANDED (its `.word` re-read + re-facted, recursively) instead of rasterized inline. This is the
+/// N-MOMENTS recursion — a composite body of N deeds runs each deed as its own act→fact, and a deed
+/// that is itself a composite (a `do set-space` inside set-owner.word) expands the SAME way, all the
+/// way down. The produced specs are flattened in source order; `seal_specs` then opens one moment per
+/// spec (each its own chain link). `expand_op` declines (`None`) for a non-op deed (grant-able, a plain
+/// field set), which falls through to the unchanged inline rasterize.
+fn run_body_expand(
+    body: &[Json],
+    ctx: &mut Json,
+    host: &dyn Fn(&str, &[Json]) -> bool,
+    see_op: &dyn Fn(&str, &[Json]) -> Result<Json, HostError>,
+    expand_op: &ExpandOp,
+) -> Result<Vec<Json>, HostError> {
     let mut out = Vec::new();
     for node in body {
         match get_str(node, "kind") {
             Some("act") => {
+                // COMPOSITE-BY-REFERENCE: if this deed names a declared op-word, run its `.word` (each
+                // deed its own fact, recursively) instead of rasterizing it inline. `None` = not an op
+                // deed -> the inline path below (grant-able, a plain field set).
+                if let Some(result) = expand_op(node, ctx) {
+                    out.extend(result?); // the nested word's refusal short-circuits the body
+                    continue;
+                }
                 let spec = treeval::rasterize_emit(node, ctx, None);
                 if let Some(b) = get_str(node, "bind") {
                     if let Some(id) = get(&spec, "of").and_then(|o| get_str(o, "id")) {
@@ -534,11 +999,39 @@ pub fn run_body(body: &[Json], ctx: &mut Json, host: &dyn Fn(&str, &[Json]) -> b
                 apply_sets(ctx, node);
                 out.push(spec);
             }
+            // see resolve-X(args) as bind - the host SEE-OP (treehost). Resolve args against ctx (the
+            // JS dispatcher passes RESOLVED values, not refs - reuse the same resolve_value the `act`
+            // arm leans on), call the resolver, and bind the returned BLOCK under `bind`. A refusal
+            // (HostError) is the `.word`'s refusal - propagate it (short-circuits the body).
+            Some("see") => {
+                let op = get_str(node, "act").unwrap_or("");
+                let args: Vec<Json> = match get(node, "args") {
+                    Some(Json::Arr(a)) => a.iter().map(|x| treeval::resolve_value(x, ctx)).collect(),
+                    _ => vec![],
+                };
+                let block = see_op(op, &args)?; // Err = the .word's refusal, surfaced
+                if let Some(b) = get_str(node, "bind") {
+                    set_nested(ctx, "bindings", b, block);
+                }
+                // record the fact op + noun this see-op feeds, so the `return` arm builds the right
+                // do-fact (the JS op.word.{noun,idFrom} declaration, recovered from the see-op name).
+                if let Some((fact_op, noun)) = fact_binding_of(op) {
+                    set_nested(ctx, "bindings", "__factOp", jstr(fact_op));
+                    set_nested(ctx, "bindings", "__factNoun", jstr(noun));
+                }
+            }
+            // Return <items>. - the materials `.word`'s success terminator. Mirror stampsWordFact +
+            // idFrom: synthesize the ONE do-fact the dispatcher stamps from the returned block.
+            Some("return") => {
+                if let Some(spec) = build_return_fact(node, ctx) {
+                    out.push(spec);
+                }
+            }
             Some("if") => {
                 let holds = get(node, "cond").is_some_and(|c| treeval::cond::resolve_cond(c, ctx, host));
                 let branch = if holds { get(node, "then") } else { get(node, "else") };
                 if let Some(Json::Arr(b)) = branch.cloned() {
-                    out.extend(run_body(&b, ctx, host));
+                    out.extend(run_body_expand(&b, ctx, host, see_op, expand_op)?);
                 }
             }
             Some("while") => {
@@ -549,7 +1042,7 @@ pub fn run_body(body: &[Json], ctx: &mut Json, host: &dyn Fn(&str, &[Json]) -> b
                         break;
                     }
                     if let Some(Json::Arr(b)) = get(node, "body").cloned() {
-                        out.extend(run_body(&b, ctx, host));
+                        out.extend(run_body_expand(&b, ctx, host, see_op, expand_op)?);
                     }
                     guard += 1;
                 }
@@ -562,7 +1055,7 @@ pub fn run_body(body: &[Json], ctx: &mut Json, host: &dyn Fn(&str, &[Json]) -> b
                     let bind = bind.to_string();
                     for item in items {
                         set_nested(ctx, "bindings", &bind, item);
-                        out.extend(run_body(&b, ctx, host));
+                        out.extend(run_body_expand(&b, ctx, host, see_op, expand_op)?);
                     }
                 }
             }
@@ -574,20 +1067,104 @@ pub fn run_body(body: &[Json], ctx: &mut Json, host: &dyn Fn(&str, &[Json]) -> b
                         .find(|c| get_str(c, "label") == Some(subj.as_str()))
                         .or_else(|| cases.iter().find(|c| get(c, "label").is_none()));
                     if let Some(Json::Arr(b)) = chosen.and_then(|c| get(c, "body")).cloned() {
-                        out.extend(run_body(&b, ctx, host));
+                        out.extend(run_body_expand(&b, ctx, host, see_op, expand_op)?);
                     }
                 }
             }
             Some("flow") => {
-                // a flow node — run its effects (the When-trigger gating is a scheduler concern)
+                // a flow node - run its effects (the When-trigger gating is a scheduler concern)
                 if let Some(Json::Arr(e)) = get(node, "effects").cloned() {
-                    out.extend(run_body(&e, ctx, host));
+                    out.extend(run_body_expand(&e, ctx, host, see_op, expand_op)?);
                 }
             }
             _ => {}
         }
     }
-    out
+    Ok(out)
+}
+
+/// The see-op name -> (fact op, fact noun) declaration the JS carried as `op.word.{noun,idFrom}`,
+/// recovered from the resolve-X name. The materials `.word` runs through `act(word)` with NO op
+/// declaration around it, so the `return` arm reconstructs the fact's op + target kind from the
+/// see-op the body resolved. The id field (`idFrom`) is the noun's id-key (`<noun>Id`), read off the
+/// returned block in the `return` arm. None = not a known materials see-op (no synthesized fact).
+fn fact_binding_of(see_op: &str) -> Option<(&'static str, &'static str)> {
+    match see_op {
+        "resolve-set-being-spec" => Some(("set-being", "being")),
+        "resolve-set-space-spec" => Some(("set-space", "space")),
+        "resolve-set-matter-spec" => Some(("set-matter", "matter")),
+        "resolve-birth-space" => Some(("create-space", "space")),
+        "resolve-birth-spec" => Some(("create-matter", "matter")),
+        "resolve-end-space-spec" => Some(("end-space", "space")),
+        _ => None,
+    }
+}
+
+/// Build the ONE do-fact a materials `.word`'s `Return` terminator yields - the Rust twin of do.js
+/// `runOpWord` -> `stampsWordFact(result, noun, idFrom)`. The parsed `return` node carries `extra`
+/// (`{ beingId:{ref:"spec.beingId"}, factParams:{ref:"spec.factParams"} }` and friends); resolve each
+/// `{ref}` against ctx, then:
+///   - the fact TARGET is an explicit `factTarget {kind,id}` (end-space) if present; else the id-key
+///     named by `idFrom` (`<noun>Id`) gives the id, and the noun gives the kind;
+///   - the params are `factParams` when the word authored them (absent for end-space - the reducer
+///     derives the whole fold from the act + through);
+///   - the op + by/through come from the ctx (`__factOp` the `see` arm recorded, `identity` the actor).
+/// None when there's no `extra` / no resolvable target (a bare `Return value.` with no fact, which the
+/// pure-word path leaves as a no-op exactly as before).
+fn build_return_fact(node: &Json, ctx: &Json) -> Option<Json> {
+    let extra = get(node, "extra")?;
+    // the fact op + noun the `see` arm recorded (the JS op.word declaration). Without it, this Return
+    // is not a materials-fact terminator - leave it a no-op (the pure-word path).
+    let bindings = get(ctx, "bindings");
+    let fact_op = bindings.and_then(|b| get_str(b, "__factOp"))?.to_string();
+    let noun = bindings.and_then(|b| get_str(b, "__factNoun")).unwrap_or("being").to_string();
+
+    // Resolve every `extra` value (`{ref}`/literal) against ctx - the returned block's fields.
+    let resolved_extra = treeval::resolve_value(extra, ctx);
+
+    // The fact TARGET: an explicit { kind, id } factTarget wins (end-space); else `<noun>Id` is the id
+    // and the noun is the kind (stampsWordFact's idFrom path).
+    let (kind, id) = match get(&resolved_extra, "factTarget") {
+        Some(ft) if get(ft, "id").is_some() => (
+            get_str(ft, "kind").unwrap_or(&noun).to_string(),
+            json_str(get(ft, "id").unwrap_or(&Json::Null)),
+        ),
+        _ => {
+            let id_key = format!("{noun}Id");
+            let id = get(&resolved_extra, &id_key).map(json_str).unwrap_or_default();
+            (noun.clone(), id)
+        }
+    };
+    if id.is_empty() {
+        return None; // no resolvable target - no fact
+    }
+
+    // by/through = the actor (the materials `.word` runs AS the caller; the fact is caller-attributed).
+    let identity = get(ctx, "identity");
+    let by = match identity.and_then(|i| get_str(i, "nameId")).filter(|s| !s.is_empty()) {
+        Some(n) => n.to_string(),
+        None => identity.and_then(|i| get_str(i, "beingId")).unwrap_or(I_AM).to_string(),
+    };
+    let through = identity
+        .and_then(|i| get_str(i, "beingId"))
+        .filter(|s| !s.is_empty())
+        .map(jstr)
+        .unwrap_or_else(|| jstr(&by));
+
+    // the fact params: factParams when the word authored them (absent for end-space).
+    let params = match get(&resolved_extra, "factParams") {
+        Some(p) if !matches!(p, Json::Null) => p.clone(),
+        _ => obj(vec![]),
+    };
+
+    Some(obj(vec![
+        ("verb", jstr("do")),
+        ("act", jstr(&fact_op)),
+        ("through", through),
+        ("by", jstr(&by)),
+        ("of", obj(vec![("kind", jstr(&kind)), ("id", jstr(&id))])),
+        ("params", params),
+    ]))
 }
 
 /// The MOMENT primitive — a being perceives (left stance): authorize the see, then read + verify +

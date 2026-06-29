@@ -1,0 +1,11 @@
+[package]
+name = "treecognition"
+version = "0.1.0"
+edition = "2021"
+description = "A being's THINKING: wake -> assemble the perceived inner-face -> produce a WORD (parsed via treeword, run via treeibp). Three modes (scripted / llm / human); only the model call leaves the box. The pure-word, one-Word-per-moment cognition (philosophy/llm.md). Ports the stable cognitionResult contract; the call shapes follow the pure-word model."
+license = "AGPL-3.0"
+
+[dependencies]
+treehash = { path = "../treehash" }
+treeword = { path = "../treeword" }
+treeval = { path = "../treeval" }
