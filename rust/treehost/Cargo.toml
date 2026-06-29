@@ -11,6 +11,10 @@ treefold = { path = "../treefold" }
 treeproj = { path = "../treeproj" }
 treestore = { path = "../treestore" }
 treecas = { path = "../treecas" }
+# treesign carries ALL crypto (ed25519 / BIP39 / PKCS8): the key-export see-op (paper-form) COMPOSES
+# it for the DETERMINISTIC mnemonic derivation, reimplementing no crypto. The non-reproducible mints
+# (the fresh keypair + AES encrypt) still DEFER to the seal — the credential/key sees stay inert.
+treesign = { path = "../treesign" }
 
 # The resolver tests plant rows the SAME way treeproj/treefold's write-half tests do: stamp a reel
 # (treestore seal_moment + write_fact_doc) then refold it into a .proj snapshot (treeproj), so the

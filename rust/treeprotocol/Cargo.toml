@@ -1,0 +1,10 @@
+[package]
+name = "treeprotocol"
+version = "0.1.0"
+edition = "2021"
+description = "The IBP protocol error/envelope contract (port of seed/ibp/protocol.js): the IBP_ERR code vocabulary the wire knows, the one canonical code->HTTP-status mapping, the IbpError type, the transport-agnostic ok/error envelope shapes, and the message-pattern->code mapper. PURE; the express send* helpers stay glue (treeos has its own wire layer)."
+license = "AGPL-3.0"
+
+[dependencies]
+treehash = { path = "../treehash" }
+regex = "1"

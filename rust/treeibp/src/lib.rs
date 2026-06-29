@@ -466,6 +466,28 @@ pub fn act_with_ops(
     basis: Option<f64>,
     sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
 ) -> Vec<Outcome> {
+    act_with_ops_bound(word, actor, dir, history, able_spec_of, op_word_of, &obj(vec![]), basis, sign)
+}
+
+/// `act_with_ops` with INITIAL ctx bindings seeded — the WORLD-ANCHOR seam. The genesis reader holds
+/// the ids of the spaces/beings it has already created (the `$heaven` / `$root` / `$cherub` anchors the
+/// header of genesis.word describes); it passes them as `binds` so a creation Word's `of`/`params` refs
+/// resolve to those live ids (the parent space a child is born under, the being a grant lands on).
+/// `binds` is a `{ <anchor>: <id>, ... }` object merged into ctx.bindings BEFORE the body runs. Looking
+/// up an already-created id is FLOOR (the reader holds it); the act is the WORD. `act_with_ops` is the
+/// empty-binds case (every prior caller is byte-identical).
+#[allow(clippy::too_many_arguments)]
+pub fn act_with_ops_bound(
+    word: &str,
+    actor: &Json,
+    dir: &Path,
+    history: &str,
+    able_spec_of: impl Fn(&str) -> Option<Json>,
+    op_word_of: impl Fn(&str) -> Option<String>,
+    binds: &Json,
+    basis: Option<f64>,
+    sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
+) -> Vec<Outcome> {
     let nodes = treeword::parse(word);
     let fail_closed = |_: &str, _: &[Json]| false; // domain predicates fail closed (no host wired)
 
@@ -493,9 +515,13 @@ pub fn act_with_ops(
     // composite: one entry, the body fans out to its deeds, every deed lays its own fact and NONE is
     // fused — the top-level word itself lays no fact of its own (its deeds do), so the dispatcher's
     // result is the N outcomes, never a single composite fact (`ran_as_moments`, below).
+    let initial_binds = match binds {
+        Json::Obj(_) => binds.clone(),
+        _ => obj(vec![]),
+    };
     let mut ctx = obj(vec![
         ("identity", actor.clone()),
-        ("bindings", obj(vec![])),
+        ("bindings", initial_binds),
         ("state", obj(vec![])),
         ("beings", obj(vec![])),
     ]);
@@ -682,6 +708,35 @@ pub fn act_via_fold(
         history,
         able_spec_of,
         |op| op_word_via_fold(dir, history, op, &file_of),
+        basis,
+        sign,
+    )
+}
+
+/// `act_via_fold` with INITIAL ctx bindings — the genesis world-anchor seam (see `act_with_ops_bound`).
+/// The genesis reader threads the `$root` / `$heaven` / `$cherub` … anchors it has already created so a
+/// creation Word's parent/target/grant refs resolve to the live ids. The empty-binds case IS
+/// `act_via_fold` (byte-identical for every existing caller).
+#[allow(clippy::too_many_arguments)]
+pub fn act_via_fold_bound(
+    word: &str,
+    actor: &Json,
+    dir: &Path,
+    history: &str,
+    able_spec_of: impl Fn(&str) -> Option<Json>,
+    file_of: impl Fn(&str, Option<&str>) -> Option<String>,
+    binds: &Json,
+    basis: Option<f64>,
+    sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
+) -> Vec<Outcome> {
+    act_with_ops_bound(
+        word,
+        actor,
+        dir,
+        history,
+        able_spec_of,
+        |op| op_word_via_fold(dir, history, op, &file_of),
+        binds,
         basis,
         sign,
     )

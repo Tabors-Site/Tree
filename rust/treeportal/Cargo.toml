@@ -1,0 +1,14 @@
+[package]
+name = "treeportal"
+version = "0.1.0"
+edition = "2021"
+description = "TreeOS Portal — the native Rust moment/act browser. A thin renderer of the current moment: it holds only which view + input mode you're in; everything substantive (address, place, beings, story, the face) IS the moment, taken from the treeos server over WebSocket. Two input modes (stamp = instant acts/chords, manual = type Words word-at-a-time). Sleek, words-first."
+license = "AGPL-3.0"
+
+[dependencies]
+eframe = "0.29"
+tungstenite = "0.24"
+treeaddress = { path = "../treeaddress" }
+treesign = { path = "../treesign" }
+treematter = { path = "../treematter" }
+treehash = { path = "../treehash" }

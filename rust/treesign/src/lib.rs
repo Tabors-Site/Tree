@@ -55,18 +55,24 @@
 // re-exported from treehash for callers that build/parse the payload here:
 //   Json, parse, canonicalize
 
+mod credential;
+mod jwt;
 mod keyfile;
 mod mnemonic;
 mod nameid;
+mod password_lock;
 mod payload;
 mod sign;
 
-pub use keyfile::{load_story_seed, seed_from_pkcs8_pem, KeyFileError};
+pub use keyfile::{load_story_seed, seed_from_pkcs8_pem, seed_to_pkcs8_pem, KeyFileError};
 pub use mnemonic::{
     generate_mnemonic, keypair_from_mnemonic, mnemonic_to_seed, name_id_from_mnemonic,
     seed_to_mnemonic, MnemonicError,
 };
+pub use credential::{credential_key, decrypt_credential, encrypt_credential, hash_password, verify_password};
+pub use jwt::{decode_jwt, sign_jwt_hs256, verify_jwt_hs256};
 pub use nameid::{encode_key_id, is_key_id, key_id_to_pubkey, MAX_KEY_ID_LEN};
+pub use password_lock::{decrypt_with_password, encrypt_with_password, is_password_locked};
 pub use payload::{build_act_sig_payload, build_act_sig_payload_legacy};
 pub use sign::{
     keypair_from_seed, sign_payload, sign_value, verify_act_sig, verify_act_sig_by_name,

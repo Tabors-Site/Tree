@@ -30,11 +30,13 @@ fn get<'a>(v: &'a Json, k: &str) -> Option<&'a Json> {
     }
 }
 
-/// A resolved connection: where to call + how. (`base_url` http only; `key` optional bearer.)
+/// A resolved connection: where to call + how. (`base_url` http only; `key` optional bearer;
+/// `timeout_secs` from internalConfig `llmTimeout`.)
 pub struct Conn {
     pub base_url: String,
     pub model: String,
     pub key: Option<String>,
+    pub timeout_secs: u64,
 }
 
 /// The OpenAI-compatible chat body: the assembled Word prompt is the system message; a minimal user
@@ -167,8 +169,9 @@ pub fn call_connection(conn: &Conn, system_prompt: &str) -> Result<String, CallE
     let body = chat_request_body(&conn.model, system_prompt, true); // token-at-a-time output
 
     let mut stream = TcpStream::connect((host.as_str(), port)).map_err(|e| CallError::timeout(format!("connect {host}:{port}: {e}")))?;
-    stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
-    stream.set_write_timeout(Some(Duration::from_secs(30))).ok();
+    let timeout = Some(Duration::from_secs(conn.timeout_secs.max(1)));
+    stream.set_read_timeout(timeout).ok();
+    stream.set_write_timeout(timeout).ok();
 
     let mut req = format!("POST {path} HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n", body.len());
     if let Some(k) = &conn.key {

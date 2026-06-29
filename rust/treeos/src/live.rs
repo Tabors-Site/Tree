@@ -1,0 +1,134 @@
+// live.rs — LIVE MOMENTS (open stampers). A being that opens a moment (perceives a reel) but has not
+// yet acted is an OPEN STAMPER: the server holds that open perception and, whenever a LATER act changes
+// the face it is looking at, RE-RASTERIZES and pushes a fresh moment down the same socket. The client
+// auto-updates, and the server knows exactly who to notify (the open stampers), with no polling.
+//
+// The FIRST moment's ord is kept as the BASIS (per the user: "keeping ord on first") — staleness is
+// measured from when the eyes opened, so the act the being eventually makes is "N events stale" against
+// the world's now. A push fires only when the face actually CHANGED (canonical compare), so an
+// unrelated act wakes nobody. The rasterize is one-shot re-perception (ibp::handle_wire on the stored
+// moment request) — the same fold the first moment ran, so the pushed face matches a fresh perceive.
+
+use std::net::TcpStream;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+
+use treehash::Json;
+
+use crate::wire::ws_send_text;
+
+static CONN_SEQ: AtomicU64 = AtomicU64::new(1);
+
+/// A fresh per-connection id (the open-stamper key).
+pub fn next_conn_id() -> u64 {
+    CONN_SEQ.fetch_add(1, Ordering::Relaxed)
+}
+
+struct Stamper {
+    conn: u64,
+    writer: Arc<Mutex<TcpStream>>,
+    request: String, // the original moment message, re-run to re-rasterize the face
+    basis_ord: f64,  // the FIRST moment's ord — kept across pushes
+    root: PathBuf,
+    last: Mutex<String>, // last face (canonical) — push only on a real change
+}
+
+fn registry() -> &'static Mutex<Vec<Arc<Stamper>>> {
+    static R: OnceLock<Mutex<Vec<Arc<Stamper>>>> = OnceLock::new();
+    R.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// After a connection's message: register an open moment, or — on an act — close this connection's
+/// open moments (it acted on the face it saw) and wake everyone whose face changed. Called by ws_loop
+/// with the raw message + the reply already sent.
+pub fn after_message(conn: u64, writer: &Arc<Mutex<TcpStream>>, msg: &str, root: &Path, reply: &str) {
+    let req = match treehash::parse(msg.trim()) {
+        Ok(r) => r,
+        Err(_) => return,
+    };
+    let verb = field_str(&req, "verb");
+    if verb.as_deref() == Some("moment") && field(&req, "id").is_some() && field(&req, "op").is_none() {
+        // a reel perceive with no act yet -> an open stamper. basis = the world's now at the open.
+        let basis = treestore::read_ord(root);
+        let s = Arc::new(Stamper {
+            conn,
+            writer: writer.clone(),
+            request: msg.to_string(),
+            basis_ord: basis,
+            root: root.to_path_buf(),
+            last: Mutex::new(reply_face(reply)),
+        });
+        lock(registry()).push(s);
+    } else if verb.as_deref() == Some("act") && reply.contains("\"ok\":true") {
+        // the being ACTED -> its own open moments close; the new fact may change OTHER stampers' faces.
+        close_conn(conn);
+        notify_change();
+    }
+}
+
+/// Drop a connection's open moments (it acted, or it disconnected).
+pub fn close_conn(conn: u64) {
+    lock(registry()).retain(|s| s.conn != conn);
+}
+
+/// A fact landed: re-rasterize every open moment; push a fresh, basis-stamped moment to any whose face
+/// changed. One rasterize per stamper (the same perceive the first moment ran).
+pub fn notify_change() {
+    let stampers: Vec<Arc<Stamper>> = lock(registry()).clone();
+    for s in stampers {
+        let fresh = crate::ibp::handle_wire(&s.request, &s.root);
+        let face = reply_face(&fresh);
+        {
+            let mut last = lock(&s.last);
+            if *last == face {
+                continue; // unchanged -> nobody woken
+            }
+            *last = face;
+        }
+        let pushed = annotate_live(&fresh, s.basis_ord);
+        if let Ok(mut w) = s.writer.lock() {
+            ws_send_text(&mut w, &pushed);
+        }
+    }
+}
+
+/// The perceived face, canonicalized for change-compare (the `view` of a moment reply).
+fn reply_face(reply: &str) -> String {
+    match treehash::parse(reply) {
+        Ok(r) => match field(&r, "view") {
+            Some(v) => treehash::canonicalize(v),
+            None => treehash::canonicalize(&r),
+        },
+        Err(_) => reply.to_string(),
+    }
+}
+
+/// Mark a pushed reply as a LIVE update carrying the first moment's ord as its basis.
+fn annotate_live(reply: &str, basis_ord: f64) -> String {
+    match treehash::parse(reply) {
+        Ok(Json::Obj(mut e)) => {
+            e.push(("live".to_string(), Json::Bool(true)));
+            e.push(("basis".to_string(), Json::Num(basis_ord)));
+            treehash::stringify(&Json::Obj(e))
+        }
+        _ => reply.to_string(),
+    }
+}
+
+fn field<'a>(v: &'a Json, k: &str) -> Option<&'a Json> {
+    match v {
+        Json::Obj(e) => e.iter().find(|(kk, _)| kk == k).map(|(_, x)| x),
+        _ => None,
+    }
+}
+fn field_str(v: &Json, k: &str) -> Option<String> {
+    match field(v, k) {
+        Some(Json::Str(s)) => Some(s.clone()),
+        _ => None,
+    }
+}

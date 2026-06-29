@@ -29,7 +29,7 @@
 #                run_body wiring handoff (mirror able_spec_of: an additive `see` arm, not a rewrite).
 [workspace]
 resolver = "2"
-members = ["treehash", "treefold", "treeverify", "treestore", "treecas", "treeproj", "treesecondary", "treeos", "treeword", "treeval", "treeibp", "treesign", "treegenesis", "treehost", "treecognition", "treewordfold"]
+members = ["treehash", "treefold", "treeverify", "treestore", "treecas", "treeproj", "treesecondary", "treeos", "treeword", "treeval", "treeibp", "treesign", "treegenesis", "treehost", "treecognition", "treewordfold", "treebook", "treeaddress", "treeprotocol", "treematter", "treeportal"]
 # treehash-node (the napi FFI wrapper) is EXCLUDED: it pulls napi from crates.io and builds a cdylib,
 # so it stays out of the zero-dependency determinism-spine workspace. Build it on its own.
 exclude = ["treehash-node"]

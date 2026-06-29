@@ -42,20 +42,30 @@ fn bad(msg: &str) -> (&'static str, &'static str, String) {
     ("400 Bad Request", "application/json", json(&obj(vec![("error", jstr(msg))])))
 }
 
-/// POST /cognize  { actor, able, history?, basis?, face } -> run one moment for this being.
+/// POST /cognize (HTTP) — a thin wrapper over `cognize_view`, the shared moment->cognize->act loop the
+/// WS `cognize` verb also calls.
 pub fn cognize_seam(body: &[u8], root: &Path) -> (&'static str, &'static str, String) {
     let req = match treehash::parse(&String::from_utf8_lossy(body)) {
         Ok(r) => r,
         Err(_) => return bad("invalid JSON body"),
     };
-    let actor = get(&req, "actor").cloned().unwrap_or(Json::Null);
-    let able = match get_str(&req, "able") {
+    match cognize_view(&req, root) {
+        Ok(resp) => ok(json(&resp)),
+        Err(msg) => bad(msg),
+    }
+}
+
+/// Run one moment for a being: route by the able's cognition mode, decide a Word, seal it. Returns the
+/// outcome view (or an Err message for a malformed request). Shared by /cognize (HTTP) + the WS verb.
+pub fn cognize_view(req: &Json, root: &Path) -> Result<Json, &'static str> {
+    let actor = get(req, "actor").cloned().unwrap_or(Json::Null);
+    let able = match get_str(req, "able") {
         Some(a) => a.to_string(),
-        None => return bad("missing 'able'"),
+        None => return Err("cognize needs an 'able'"),
     };
-    let history = get_str(&req, "history").unwrap_or("0");
-    let basis = num_field(&req, "basis");
-    let face = get(&req, "face").cloned().unwrap_or(Json::Null);
+    let history = get_str(req, "history").unwrap_or("0");
+    let basis = num_field(req, "basis");
+    let face = get(req, "face").cloned().unwrap_or(Json::Null);
 
     let ables_dir = Path::new("seed/store/words/ables");
     // the able's folded SPEC (mode + granted vocabulary) and its `.word` flows (the scripted rules).
@@ -68,8 +78,17 @@ pub fn cognize_seam(body: &[u8], root: &Path) -> (&'static str, &'static str, St
     // the LLM transport: a connection from the request `llm:{baseUrl,model,key?}` (http only), run
     // through the failover policy. The connection-store -> chain resolution + HTTPS are follow-ups; the
     // shape is already right (call_with_failover over a connection list).
-    let conn = build_conn(&req);
+    let conn = build_conn(req, root);
+    // SSRF gate: validate the connection's base URL against the story's allowedLlmDomains + own host
+    // (read from the library reel) BEFORE any socket opens. A refusal short-circuits the transport.
+    let ssrf_ok: Result<(), String> = match &conn {
+        Some(c) => treecognition::ssrf::validate_base_url(&c.base_url, &crate::config::allowed_llm_domains(root), crate::config::story_host(root).as_deref()).map(|_| ()),
+        None => Ok(()),
+    };
     let transport = |prompt: &str| -> Result<String, (FailShape, String)> {
+        if let Err(e) = &ssrf_ok {
+            return Err((FailShape::Refused, format!("LLM base URL refused by the SSRF guard: {e}")));
+        }
         match &conn {
             Some(c) => {
                 let mut call = |_id: &str| crate::llm_http::call_connection(c, prompt);
@@ -85,8 +104,8 @@ pub fn cognize_seam(body: &[u8], root: &Path) -> (&'static str, &'static str, St
     let resp = match decision {
         Cognition::Act { content } => {
             // seal the decided Word through the act path (the same one /word uses).
-            let outcomes = seal_word(&content, &actor, root, history, basis);
-            let results: Vec<Json> = outcomes.iter().map(outcome_json).collect();
+            let outcomes = crate::act::run_word(&content, &actor, root, history, basis);
+            let results: Vec<Json> = outcomes.iter().map(crate::act::outcome_json).collect();
             obj(vec![
                 ("ok", Json::Bool(true)),
                 ("engine", jstr("rust")),
@@ -106,53 +125,20 @@ pub fn cognize_seam(body: &[u8], root: &Path) -> (&'static str, &'static str, St
             ("reason", jstr(&reason)),
         ]),
     };
-    ok(json(&resp))
+    Ok(resp)
 }
 
-/// Seal a decided Word through the act path — mirrors /word's setup (the story key signs `I`'s own acts;
-/// a being's own key is client-side, so a being's acts stay unsigned here).
-fn seal_word(word: &str, actor: &Json, root: &Path, history: &str, basis: Option<f64>) -> Vec<treeibp::Outcome> {
-    let ables_dir = Path::new("seed/store/words/ables");
-    let materials_dir = Path::new("seed/materials");
-    let store_words_dir = Path::new("seed/store/words");
+// The act seal lives in `act.rs` (shared with the WS act handler) — cognize seals through act::run_word.
 
-    let actor_is_story = get_str(actor, "nameId") == Some("I") || get_str(actor, "beingId") == Some("I");
-    let story_seed = if actor_is_story { treesign::load_story_seed(Path::new(".story")).ok() } else { None };
-    let signer = story_seed.map(|seed| {
-        move |opening: &Json, fids: &[String]| -> Json {
-            let payload = treesign::build_act_sig_payload(opening, fids);
-            let value = treesign::sign_value(&seed, &payload);
-            Json::Obj(vec![("alg".to_string(), Json::Str("ed25519".to_string())), ("by".to_string(), Json::Str("I".to_string())), ("value".to_string(), Json::Str(value))])
-        }
-    });
-    let sign_ref = signer.as_ref().map(|f| f as &dyn Fn(&Json, &[String]) -> Json);
-
-    treeibp::act_via_fold(
-        word,
-        actor,
-        root,
-        history,
-        |name| treeibp::fold_word_able(name, ables_dir),
-        |op, noun| treeibp::op_word_file(op, noun, materials_dir, store_words_dir),
-        basis,
-        sign_ref,
-    )
-}
-
-fn outcome_json(o: &treeibp::Outcome) -> Json {
-    match o {
-        treeibp::Outcome::Authorized(fact) => obj(vec![("ok", Json::Bool(true)), ("fact", fact.clone())]),
-        treeibp::Outcome::Denied(reason) => obj(vec![("ok", Json::Bool(false)), ("reason", jstr(reason))]),
-    }
-}
-
-/// The LLM connection from the request `llm:{baseUrl,model,key?}` (http only, for now).
-fn build_conn(req: &Json) -> Option<crate::llm_http::Conn> {
+/// The LLM connection from the request `llm:{baseUrl,model,key?}` (http only, for now). The per-call
+/// timeout comes from the library reel (internalConfig `llmTimeout`).
+fn build_conn(req: &Json, root: &Path) -> Option<crate::llm_http::Conn> {
     let llm = get(req, "llm")?;
     Some(crate::llm_http::Conn {
         base_url: get_str(llm, "baseUrl")?.to_string(),
         model: get_str(llm, "model")?.to_string(),
         key: get_str(llm, "key").map(|s| s.to_string()),
+        timeout_secs: crate::config::llm_timeout_secs(root),
     })
 }
 

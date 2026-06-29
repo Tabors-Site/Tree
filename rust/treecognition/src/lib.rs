@@ -17,6 +17,8 @@ pub mod assemble;
 pub mod call;
 pub mod chain;
 pub mod cognize;
+pub mod connect;
+pub mod federation;
 pub mod llm;
 pub mod scripted;
 pub mod ssrf;

@@ -1,0 +1,9 @@
+[package]
+name = "treematter"
+version = "0.1.0"
+edition = "2021"
+description = "Matter type classification (port of seed/materials/matter/classify.js): 'what matter type will this input become?' — pure, claims-driven scoring (mime exact/wildcard, extension, url pattern, scheme, text base, seed floor) over the registered matter types. The type REGISTRY folds from the chain (listMatterTypesFolded); this crate takes the folded types as input, so it stays a pure ranker."
+license = "AGPL-3.0"
+
+[dependencies]
+regex = "1"

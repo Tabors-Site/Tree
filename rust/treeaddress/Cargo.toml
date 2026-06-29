@@ -1,0 +1,9 @@
+[package]
+name = "treeaddress"
+version = "0.1.0"
+edition = "2021"
+description = "The IBP Address grammar (port of seed/ibp/address.js) — the SINGLE source of truth for how a moment/act names what it acts on. Position (where) -> Stance (where + as what being) -> Address (stance :: stance). PURE: parse / format / expand / validate / canonical + the canonical stance-pair lane key. The async being/history resolution is the edge's (it loads projections); this crate is the deterministic grammar both the wire and the act layer share."
+license = "AGPL-3.0"
+
+[dependencies]
+regex = "1"

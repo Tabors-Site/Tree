@@ -3,7 +3,7 @@
 // FOLD of declare-word facts; nothing is hard-declared.
 //
 // A declare-word fact (wordStore.js `bindWord`) is one `do:coin` on the Named being I's reel:
-//   { verb:"do", act:"coin", of:{kind:"being", id:"i-am"},
+//   { verb:"do", act:"coin", of:{kind:"being", id:"I"},
 //     params:{ word:<name>, ownerExtension, binding:{ kind, word:{noun,able,idFrom}, factAction, ... } } }
 // A `do:retire` on the same `params.word` DISABLES the word (it stays on the chain forever; a later
 // re-coin re-enables it). This is the SAME fold getWord / rehydrateWordProjection runs in JS: heaven
@@ -20,10 +20,11 @@ use std::collections::HashMap;
 use std::path::Path;
 use treehash::Json;
 
-/// The Named being I — the seed vocabulary is I's words, declared on I's being reel. On disk the id is
-/// "i-am" (the reel under reels/<history>/being/i-/i-am.reel); the runtime Name sign is "I". The fold
-/// reads I's reel because every declare-word fact lands there (bindWord's actor = I, of = the I being).
-pub const I_BEING: &str = "i-am";
+/// The Named being I — the seed vocabulary is I's words, declared on I's being reel. The I-being's
+/// name IS "I" (the on-disk/JS "i-am" was a WRONG artifact; the Rust genesis plants "I"). The fold
+/// reads I's reel (reels/<history>/being/I/I.reel) because every declare-word fact lands there
+/// (bindWord's actor = I, of = the I being). A fresh Rust-planted Story keys this reel by "I".
+pub const I_BEING: &str = "I";
 const COIN: &str = "coin";
 const RETIRE: &str = "retire";
 
@@ -101,7 +102,16 @@ fn descriptor_from_binding(name: &str, owner: Option<&str>, binding: &Json) -> W
 ///
 /// This is `getWord` / `rehydrateWordProjection` (wordStore.js) in Rust, reading through the kernel
 /// store (treestore::read_reel_file) — it does not reimplement the reel read, and it stays grammar-free.
+/// Reads the runtime I being reel (`I_BEING` == "I"); a caller reading a LEGACY JS store (keyed by the
+/// old "i-am" label) folds it via `fold_word_set_for`.
 pub fn fold_word_set(dir: &Path, history: &str) -> HashMap<String, WordDescriptor> {
+    fold_word_set_for(dir, history, I_BEING)
+}
+
+/// `fold_word_set` with the I being-id chosen explicitly. The vocabulary lands on whatever reel the
+/// genesis planted the I being on: "I" for a fresh Rust Story (`I_BEING`), or the legacy "i-am" for a
+/// pre-existing JS store. The fold logic is identical — only the reel id differs.
+pub fn fold_word_set_for(dir: &Path, history: &str, i_being: &str) -> HashMap<String, WordDescriptor> {
     // heaven "0" is inherited by every history; a branch layers its own facts ON TOP (history
     // precedence: "0" < any branch id), exactly getWord's `histories.flatMap`.
     let mut histories: Vec<&str> = vec!["0"];
@@ -110,7 +120,7 @@ pub fn fold_word_set(dir: &Path, history: &str) -> HashMap<String, WordDescripto
     }
     let mut set: HashMap<String, WordDescriptor> = HashMap::new();
     for h in histories {
-        for f in treestore::read_reel_file(dir, h, "being", I_BEING, None, None) {
+        for f in treestore::read_reel_file(dir, h, "being", i_being, None, None) {
             if get_str(&f, "verb") != Some("do") {
                 continue;
             }
@@ -145,5 +155,10 @@ pub fn fold_word_set(dir: &Path, history: &str) -> HashMap<String, WordDescripto
 /// unbound or disabled on this history. Folds the whole reel — fine for the per-act resolution the
 /// runner does; a hot path can fold once via `fold_word_set` and read the map. Mirrors getWord(name).
 pub fn resolve_word(dir: &Path, history: &str, name: &str) -> Option<WordDescriptor> {
-    fold_word_set(dir, history).remove(name)
+    resolve_word_for(dir, history, name, I_BEING)
+}
+
+/// `resolve_word` with the I being-id chosen explicitly (the legacy-store peer of `fold_word_set_for`).
+pub fn resolve_word_for(dir: &Path, history: &str, name: &str, i_being: &str) -> Option<WordDescriptor> {
+    fold_word_set_for(dir, history, i_being).remove(name)
 }

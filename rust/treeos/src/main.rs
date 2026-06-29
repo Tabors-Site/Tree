@@ -10,13 +10,20 @@
 //   cargo run -p treeos                         # one-shot boot report (read+fold+verify store/past)
 //   cargo run -p treeos -- serve 127.0.0.1:7070 store/past   # serve the chain over http + ws
 
+mod act;
 mod chain;
 mod cognize;
+mod config;
+mod federation;
+mod ibp;
+mod live;
 mod llm_http;
+mod seeops;
 mod wire;
 
 use std::env;
 use std::net::{TcpListener, TcpStream};
+use std::sync::{Arc, Mutex};
 use std::path::Path;
 use std::thread;
 
@@ -32,6 +39,20 @@ fn main() {
         let addr = args.get(2).cloned().unwrap_or_else(|| "127.0.0.1:7070".to_string());
         let root = args.get(3).cloned().unwrap_or_else(|| "store/past".to_string());
         serve(&addr, Path::new(&root));
+    } else if args.get(1).map(String::as_str) == Some("peer-fact") {
+        // emit THIS reality's signed address-fact for a peer to pin in its Peering cache:
+        //   treeos peer-fact <reality-domain> <host> <port> [transport]
+        let reality = args.get(2).cloned().unwrap_or_else(|| "localhost".to_string());
+        let host = args.get(3).cloned().unwrap_or_else(|| "127.0.0.1".to_string());
+        let port: u16 = args.get(4).and_then(|p| p.parse().ok()).unwrap_or(7070);
+        let transport = args.get(5).cloned().unwrap_or_else(|| "ws".to_string());
+        match federation::publish_address_fact(&reality, &host, port, &transport) {
+            Ok(fact) => println!("{}", treehash::stringify(&fact)),
+            Err(e) => {
+                eprintln!("treeos peer-fact: {e}");
+                std::process::exit(1);
+            }
+        }
     } else {
         let root = args.get(1).cloned().unwrap_or_else(|| "store/past".to_string());
         std::process::exit(boot_report(Path::new(&root)));
@@ -148,6 +169,8 @@ fn route(req: &Request, root: &Path) -> (&'static str, &'static str, String) {
     if req.method == "POST" && segs == ["cognize"] {
         return cognize::cognize_seam(&req.body, root);
     }
+    // SEE ops are MOMENTS now, not REST routes — reach classify-matter / address over WS:
+    //   {"verb":"moment","op":"classify-matter","args":{…}}
     if get && (segs.is_empty() || segs == ["health"]) {
         return ok(json(&health(root)));
     }
@@ -261,19 +284,29 @@ fn get_str<'a>(v: &'a Json, k: &str) -> Option<&'a str> {
     }
 }
 
+// The WS lane carries the TWO IBP primitives: a `moment` (perceive — SEE ops + reads) and an `act`
+// (one Word). ibp::handle_wire dispatches; a non-JSON line falls back to the legacy read. The socket
+// is also a LIVE channel: a `writer` clone (behind a mutex) lets the open-stampers registry (live.rs)
+// push a fresh moment when a later act changes the face — replies and pushes serialize on the mutex.
 fn ws_loop(stream: &mut TcpStream, root: &Path) {
-    ws_send_text(stream, &json(&health(root))); // greet with the boot summary
-    while let Some(msg) = ws_read_text(stream) {
-        let segs: Vec<&str> = msg.trim().trim_matches('/').split('/').filter(|s| !s.is_empty()).collect();
-        let reply = if segs == ["reels"] {
-            json(&reels(root))
-        } else if segs.len() == 3 {
-            json(&reel(root, segs[0], segs[1], segs[2]))
-        } else {
-            json(&err("ws: send 'history/kind/id' or 'reels'"))
-        };
-        ws_send_text(stream, &reply);
+    let conn = live::next_conn_id();
+    let writer = match stream.try_clone() {
+        Ok(w) => Arc::new(Mutex::new(w)),
+        Err(_) => return,
+    };
+    {
+        let mut w = writer.lock().unwrap_or_else(|e| e.into_inner());
+        ws_send_text(&mut w, &json(&health(root))); // greet with the boot summary
     }
+    while let Some(msg) = ws_read_text(stream) {
+        let reply = ibp::handle_wire(&msg, root);
+        {
+            let mut w = writer.lock().unwrap_or_else(|e| e.into_inner());
+            ws_send_text(&mut w, &reply);
+        }
+        live::after_message(conn, &writer, &msg, root, &reply);
+    }
+    live::close_conn(conn); // the eyes closed — drop its open moments
 }
 
 fn ok(body: String) -> (&'static str, &'static str, String) {

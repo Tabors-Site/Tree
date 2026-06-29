@@ -636,6 +636,33 @@ pub fn story_root_id(root: &Path) -> Option<String> {
     None
 }
 
+// ── heaven-space discovery (projections.js findByHeavenSpace, on-disk) ───────────────────────────────
+/// The id of the heaven space whose `heavenSpace` marker is `kind` (e.g. "histories" / "ables"), or
+/// None when it is not planted. Heaven NEVER branches, so heaven spaces live on MAIN ("0") only (the JS
+/// findHeavenSpace pins to "0"); the bridge discovers it on disk by folding the history-"0" space reels
+/// (the SAME index-free scan story_root_id makes), staying independent of the maintained heavenSpace
+/// index. This is the peer of `findByHeavenSpace(kind, "0")` / `findPointersSpaceId()`.
+pub fn heaven_space_id(root: &Path, kind: &str) -> Option<String> {
+    for id in treeproj::list_by_type(root, "0", "space") {
+        let row = load_row(root, "0", "space", &id);
+        if get_str(&row, "heavenSpace") == Some(kind) {
+            return Some(id);
+        }
+    }
+    None
+}
+
+/// The folded `qualities` object of the heaven space whose marker is `kind`, paired with its id, or
+/// None when the space is not planted. Composes heaven_space_id + load_row, reading the heaven space's
+/// state directly (the JS readPointers reads `proj.state.qualities`). Returns `(id, qualities)` where
+/// `qualities` is the folded object (Json::Null when the space has no qualities namespace).
+pub fn heaven_space_qualities(root: &Path, kind: &str) -> Option<(String, Json)> {
+    let id = heaven_space_id(root, kind)?;
+    let row = load_row(root, "0", "space", &id);
+    let quals = get(&row, "qualities").cloned().unwrap_or(Json::Null);
+    Some((id, quals))
+}
+
 /// The live matter NAMES in one (space, parentMatter) FOLDER (projections.js listMatterNamesInFolder):
 /// scan the history's live matter ids (cross-history), keep those whose folded (spaceId, parentMatterId)
 /// matches. Composes treeproj::list_by_type + load_row. The rename-matter uniqueness gate + the

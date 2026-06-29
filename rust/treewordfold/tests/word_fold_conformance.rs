@@ -4,17 +4,23 @@
 // set. No mocks — it reads the repo's `store/past` directly.
 
 use std::path::PathBuf;
-use treewordfold::{fold_word_set, resolve_word};
+use treewordfold::{fold_word_set_for, resolve_word_for};
 
 /// the repo's on-disk store root (where the I being reel + its declare-word facts live).
 fn store_root() -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../store/past"))
 }
 
+/// The repo's `store/past` is the LEGACY JS store: it keys the I being reel by the old "i-am" label
+/// (the wrong artifact a fresh Rust Story replaces with "I"). This conformance test reads that legacy
+/// store, so it folds the "i-am" reel explicitly via `*_for`. A fresh Rust-planted store keys by "I"
+/// (the default `I_BEING`), proven in the treebook genesis test, not here.
+const LEGACY_I_BEING: &str = "i-am";
+
 #[test]
 fn folds_the_genesis_vocabulary_from_chain() {
     let root = store_root();
-    let set = fold_word_set(&root, "0");
+    let set = fold_word_set_for(&root, "0", LEGACY_I_BEING);
     assert!(
         set.len() > 100,
         "the genesis fold should declare the whole seed vocabulary (got {})",
@@ -23,30 +29,30 @@ fn folds_the_genesis_vocabulary_from_chain() {
 
     // the 4 the OLD hardcoded fold_op_word match knew — they MUST still resolve, now FROM the fold.
     for op in ["set-being", "set-space", "end-space", "set-matter"] {
-        let d = resolve_word(&root, "0", op).unwrap_or_else(|| panic!("{op} unresolved from the fold"));
+        let d = resolve_word_for(&root, "0", op, LEGACY_I_BEING).unwrap_or_else(|| panic!("{op} unresolved from the fold"));
         assert!(d.is_op(), "{op} is a kind:op word");
     }
 
     // set-being's descriptor carries what the JS binding.word held — driven by the chain, not code.
-    let sb = resolve_word(&root, "0", "set-being").unwrap();
+    let sb = resolve_word_for(&root, "0", "set-being", LEGACY_I_BEING).unwrap();
     assert_eq!(sb.noun.as_deref(), Some("being"), "set-being targets the being noun");
     assert_eq!(sb.id_from.as_deref(), Some("beingId"), "set-being idFrom beingId");
     assert_eq!(sb.fact_action_or_name(), "set-being", "set-being's auto-fact act");
 
     // a NON-hardcoded op (never in the old match) resolves PURELY from the fold — the keystone claim.
     for op in ["set-owner", "create-matter", "end-matter", "rename-matter"] {
-        let d = resolve_word(&root, "0", op).unwrap_or_else(|| panic!("{op} unresolved from the fold"));
+        let d = resolve_word_for(&root, "0", op, LEGACY_I_BEING).unwrap_or_else(|| panic!("{op} unresolved from the fold"));
         assert!(d.is_op(), "{op} resolves as an op word from the chain, not a hardcoded list");
     }
 
     // a concept word (kind:"concept", e.g. "chain") folds too but is NOT an op — the runner grounds it
     // in the engine, never as a `.word` body.
-    if let Some(c) = resolve_word(&root, "0", "chain") {
+    if let Some(c) = resolve_word_for(&root, "0", "chain", LEGACY_I_BEING) {
         assert!(!c.is_op(), "a concept word is not an op");
     }
 
     // an undeclared word resolves to None (no code default).
-    assert!(resolve_word(&root, "0", "no-such-word-xyzzy").is_none());
+    assert!(resolve_word_for(&root, "0", "no-such-word-xyzzy", LEGACY_I_BEING).is_none());
 
     println!("  treewordfold: folded {} words from chain; set-being + set-owner + create-matter resolve FROM the fold  OK", set.len());
 }

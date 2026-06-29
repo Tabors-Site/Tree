@@ -35,3 +35,16 @@ bip39 = { version = "2.2.2", default-features = false, features = ["alloc"] }
 # OS entropy for generate_mnemonic (fresh 32 bytes). 0.2.x is already in the
 # lock graph (transitive); pinning it keeps generate_mnemonic on the same crate.
 getrandom = "0.2.17"
+# The password-lock floor (materials/name/passwordKey.js): scrypt(N=2^14,r=8,p=1)->32-byte key, then
+# AES-256-GCM over the private-key PEM. RustCrypto, byte-compatible with the on-disk `pw:` blob.
+scrypt = { version = "0.11", default-features = false, features = ["std"] }
+aes-gcm = "0.10"
+hex = "0.4"
+# The credential floor (materials/name/credentials.js): HKDF-SHA256 derives the at-rest credential key
+# from JWT_SECRET; scrypt hashes passwords (`scrypt$...`); subtle gives the timing-safe compare.
+hkdf = "0.12"
+sha2 = "0.10"
+subtle = "2.5"
+# HS256 session tokens (materials/being/identity/credentials.js signJwtHS256): HMAC-SHA256 over
+# base64url(header).base64url(body), the body serialized via treehash::stringify (== JSON.stringify).
+hmac = "0.12"

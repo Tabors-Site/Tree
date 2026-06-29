@@ -9,3 +9,4 @@ license = "AGPL-3.0"
 treehash = { path = "../treehash" }
 treeword = { path = "../treeword" }
 treeval = { path = "../treeval" }
+treeaddress = { path = "../treeaddress" }

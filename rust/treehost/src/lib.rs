@@ -48,12 +48,17 @@ use treehash::Json;
 
 pub mod toolkit;
 
+mod able_manager;
+mod acquisition;
 mod being;
 mod birth;
 mod cherub;
 mod config;
+mod credential;
 mod flow;
+mod key;
 mod grant;
+mod history_pointers;
 mod inheritation;
 mod matter;
 mod model;
@@ -66,12 +71,20 @@ mod render;
 mod space;
 mod worldsignal;
 
+pub use able_manager::{author_able, remove_able};
+pub use acquisition::{able_request, asked_policy, grant_internal};
 pub use being::resolve_set_being_spec;
 pub use birth::resolve_birth_being;
 pub use cherub::{resolve_kill, resolve_switch, resolve_truename};
 pub use config::{resolve_config_delete, resolve_config_set};
+pub use credential::{mint_credential, read_credential, reel_head_of};
 pub use flow::resolve_set_being_flow_spec;
+pub use key::{load_key, paper_form};
 pub use grant::resolve_grant;
+pub use history_pointers::{
+    delete_pointer_map, find_pointers_space_id, read_pointers, set_pointer_map, valid_canonical,
+    valid_pointer_name,
+};
 pub use inheritation::resolve_inheritation;
 pub use matter::{resolve_create_matter, resolve_end_matter, resolve_set_matter_spec};
 pub use model::{may_set_model, resolve_model_block};
@@ -440,6 +453,33 @@ impl HostResolver for Resolvers {
             "signal-field" => signal_field(root, history, args, ctx),
             "signal-fact" => signal_fact(root, history, args, ctx),
             "story-root" => story_root(root, history, args, ctx),
+            // history-pointers: the pointer-name/canonical gates + the .histories heaven reads + the
+            // map merge/prune (historyManagerHost.js; set-pointer.word / delete-pointer.word).
+            "valid-pointer-name" => valid_pointer_name(root, history, args, ctx),
+            "valid-canonical" => valid_canonical(root, history, args, ctx),
+            "find-pointers-space-id" => find_pointers_space_id(root, history, args, ctx),
+            "read-pointers" => read_pointers(root, history, args, ctx),
+            "set-pointer-map" => set_pointer_map(root, history, args, ctx),
+            "delete-pointer-map" => delete_pointer_map(root, history, args, ctx),
+            // acquisition: the asked policy + the grant-record build + the able-request payload
+            // (acquisitionHost.js; ask-able.word / take-able.word).
+            "asked-policy" => asked_policy(root, history, args, ctx),
+            "grant-internal" => grant_internal(root, history, args, ctx),
+            "able-request" => able_request(root, history, args, ctx),
+            // able-manager: the live able-authoring spec + the remove spec (ableManagerHost.js;
+            // set-able.word / delete-able.word). The manifest write + hot-register are seal deferrals.
+            "author-able" => author_able(root, history, args, ctx),
+            "remove-able" => remove_able(root, history, args, ctx),
+            // credential reset/read (credentialHost.js): the chain-head read + the credential SPECs.
+            // reel-head-of is a pure substrate read; read-credential returns the encrypted blob spec
+            // (the seal decrypts); mint-credential returns the mint spec (the seal mints + encrypts).
+            "reel-head-of" => reel_head_of(root, history, args, ctx),
+            "read-credential" => read_credential(root, history, args, ctx),
+            "mint-credential" => mint_credential(root, history, args, ctx),
+            // key-export (keyHost.js): the signing-key load SPEC (the seal loads the live PEM) + the
+            // BIP39 paper form (deterministic via treesign; deferred since its input is the load-key PEM).
+            "load-key" => load_key(root, history, args, ctx),
+            "paper-form" => paper_form(root, history, args, ctx),
             other => Err(HostError::invalid(format!(
                 "host: unknown see-op \"{other}\" (SEE_FLOOR reject-unknown)"
             ))),

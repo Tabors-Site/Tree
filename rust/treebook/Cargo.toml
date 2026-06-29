@@ -1,0 +1,32 @@
+[package]
+name = "treebook"
+version = "0.1.0"
+edition = "2021"
+description = "The GUARDED BOOK-READER: I reads a book (a sequence of .word statements) SEQUENTIALLY, word by word, each word ONE act on chain, via the runner (treeibp::act over the word-fold). Two guards let us find and fix broken words as we read: GUARD 1 (one-word-one-act) refuses a run-on (a word laying more than one fact); GUARD 2 (missing-logic) refuses a word whose `see <host-op>` escape names a host op no resolver has REGISTERED (treehost::Resolvers). Registry = identification, NOT a declared host/improv table. A STORE/word component, NOT the kernel spine."
+license = "AGPL-3.0"
+
+[dependencies]
+# Json + the parser (to find a statement's `see` host-op escapes for GUARD 2).
+treehash = { path = "../treehash" }
+treeword = { path = "../treeword" }
+# the RUNNER's GATE: treeibp::authorize (the I-bypass + able-walk) gates each acting word.
+treeibp = { path = "../treeibp" }
+# rasterize an acting node to its fact spec (the same lowering the runner does).
+treeval = { path = "../treeval" }
+# seal one acting word as a MOMENT (act-first, signed) — the doctrine-correct write path.
+treestore = { path = "../treestore" }
+# the host see-op REGISTRY (GUARD 2 probes whether a host op is registered/reserved).
+treehost = { path = "../treehost" }
+# the turtle plants genesis ("I") — full_genesis ignites the world before reading the whole book.
+treegenesis = { path = "../treegenesis" }
+# full_genesis signs the book's coins + the creation acts with the story key (as treeos does).
+treesign = { path = "../treesign" }
+
+[dev-dependencies]
+# the foundation FOLDS back from the chain after I reads the book (the resolve-from-fold proof).
+treewordfold = { path = "../treewordfold" }
+treeverify = { path = "../treeverify" }
+
+[lib]
+name = "treebook"
+path = "src/lib.rs"

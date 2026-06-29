@@ -278,18 +278,173 @@ here so the gap is enumerated end-to-end:
 
 | HOST op(s) | JS host body | Why HOST (not substrate) |
 |---|---|---|
-| `able-spec-for-grant`, `asked-policy`, `already-holds`, `grant-internal`, `owner-of`, `able-request`, `is-grabbable` | `acquisitionHost.js` | the able-walk / able-registry fold (`getAbleSpecForGrant` walks the ancestor-chain ables + the in-memory registry — the able-word fold is not yet ported) + a SUMMON (`able-request` queues an owner inbox call: transport, not a substrate fact). `owner-of` here is a SUMMON-target read inside the acquisition flow (distinct from the ported `owner.rs` ownership reads). |
-| `author-able`, `remove-able`, `grant-internal` | `able-manager` set-able / delete-able hosts | the ABLE-WORD authoring/fold (the registry the able grammar produces — the "all rules fold" engine the other agent owns). |
-| `resolve-llm-config`, `resolve-connection`, `resolve-connection-update`, `resolve-connection-removal`, `resolve-slot-assignment` | `llmAssignerHost.js` / `llmHost.js` (`connect.js`) | the LLM SESSION + connection-key ENCRYPTION (SSRF gate + `encryptedApiKey` mint; `resolveLlmConfigSpec` / `resolveConnectionSpec` are crypto + cognition, not a read). |
-| `verifyPassword`, `generateToken`, `mint-credential`, `read-credential`, `load-key`, `paper-form`, `reel-head-of` | `credentialHost.js` / `keyHost.js` | the CRYPTO floor (scrypt/AES KDF, signing-key load, mnemonic mint). `reel-head-of` is the revoke-cutoff chain-head read inside the credential flow. |
-| `resolve-federation-spec`, `dispatch-federation-intent` | `federationManagerHost.js` | the cross-story MEMBRANE (a `call` into ANOTHER story — `crossStoryDispatch`; not a do-fact). |
-| `find-pointers-space-id`, `read-pointers`, `set-pointer-map`, `delete-pointer-map`, `valid-canonical`, `valid-pointer-name` | `pointersHost.js` | the history-pointer map I/O (the history-manager's pointer index — its own storage surface, the other agent's call on substrate-vs-host). |
+| `able-spec-for-grant`, `already-holds`, `owner-of`, `is-grabbable` | `acquisitionHost.js` | the able-walk / able-registry fold (`getAbleSpecForGrant` walks the ancestor-chain ables + the in-memory registry — the able-word fold is not yet ported) + a SUMMON-target read (`owner-of` reaches the owner the queue path `call`s). These are `.word` PREDICATES the treeword parser does not yet lower, so the survey does not see them (no `see` IR); they bottom out inline. (`asked-policy`/`grant-internal`/`able-request` MOVED to substrate — see WAVE 1.) |
+| `resolve-llm-config`, `resolve-connection`, `resolve-connection-update`, `resolve-connection-removal`, `resolve-slot-assignment` | `llmAssignerHost.js` / `llmHost.js` (`connect.js`) | the LLM SESSION + connection-key ENCRYPTION (SSRF gate + `encryptedApiKey` mint; `resolveLlmConfigSpec` / `resolveConnectionSpec` are crypto + cognition, not a read). WAVE 2: ASSESSED + FLAGGED-FOR-COGNITION (still NOT ported — see the WAVE 2 LLM ASSESSMENT below). |
+| `verifyPassword`, `generateToken` | `being/identity/credentials.js` | the session/token CRYPTO floor (scrypt verify, JWT issuance) — not a `.word` see-op the survey reaches; left to the session agent. (`mint-credential` / `read-credential` / `load-key` / `paper-form` / `reel-head-of` PORTED in WAVE 2 below as the see→SPEC + seal-deferral split.) |
+| `resolve-federation-spec`, `dispatch-federation-intent` | `federationManagerHost.js` | the cross-story MEMBRANE (a `call` into ANOTHER story — `crossStoryDispatch`; not a do-fact). FLAGGED-FOR-WIRE — see WAVE 1 federation assessment. |
 | `searchByName`, `findBeingCandidatesByName`, `extractTargetName` | the session walk | the cognition/session target-name resolution. |
 
 (The portal `has-address` / `valid-address` and any other pure regex/shape see-op are Word-grammar
-conditions, not host reads — neither ported nor flagged.)
+conditions, not host reads — neither ported nor flagged. The history-pointer map ops + the able-manager
+authoring ops MOVED to substrate in WAVE 1 — they are pure folds, not the other agent's I/O.)
 
-## Tests (`tests/resolvers.rs`) -- 41 tests, all green
+## WAVE 1 — the PURE-SUBSTRATE host handlers (history-pointers / acquisition / able-manager)
+
+The genesis-book survey (`treebook::survey_genesis`) found 33 missing-logic words reaching 22
+unregistered host see-ops. WAVE 1 ports the SUBSTRATE families — the floor reads/computes that are pure
+folds of the on-disk store, no transport, no crypto, no LLM. 11 ops registered; the survey's
+missing-logic count dropped **33 -> 19 broken words** and **22 -> 11 distinct ops** (the 6 target `.word`
+files went fully clean: `history-manager`, `delete-pointer`, `ask-able`, `take-able`, `set-able`,
+`delete-able`).
+
+| Rust resolver (`module.rs`) | JS host body | see-op | unblocks `.word` | composes |
+|---|---|---|---|---|
+| `valid_pointer_name` (`history_pointers`) | `historyManagerHost.js` `isPointerName` | `valid-pointer-name` | history-manager + delete-pointer | a hand-rolled twin of `POINTER_NAME_RE` (trim + lowercase normalize) |
+| `valid_canonical` (`history_pointers`) | `historyManagerHost.js` `CANONICAL_PATH_RE` | `valid-canonical` | history-manager | a hand-rolled scanner of `/^(?:0|\d+(?:[a-z]+\d+)*(?:[a-z]+)?)$/` (verified against the JS regex on a 36-case battery) |
+| `find_pointers_space_id` (`history_pointers`) | `findPointersSpaceId` | `find-pointers-space-id` | history-manager + delete-pointer | `toolkit::heaven_space_id` (the `.histories` heaven space, MAIN-pinned) |
+| `read_pointers` (`history_pointers`) | `readPointers` | `read-pointers` | history-manager + delete-pointer | `toolkit::heaven_space_qualities` (`qualities.pointers`, `main` defaulted to "0") |
+| `set_pointer_map` (`history_pointers`) | the merge compute | `set-pointer-map` | history-manager | a pure map merge `{ map, previous }` (NO fact) |
+| `delete_pointer_map` (`history_pointers`) | the prune compute | `delete-pointer-map` | delete-pointer | a pure map prune `{ map }` / null (NO fact) |
+| `asked_policy` (`acquisition`) | `acquisitionHost.js` `normalizeAcquisition` | `asked-policy` | ask-able | reads `found.spec.acquisition.asked` ("auto"/"queue"/false closed default) |
+| `grant_internal` (`acquisition`) | `internalGrant.js` `buildInternalGrant` | `grant-internal` | ask-able + take-able | the FLAT grant record `{ granteeBeingId, able, anchorSpaceId, anchorBeingId, grantedBy }` (no `grantedAt`: chain seq is the when; `grantedBy ?? I`) |
+| `able_request` (`acquisition`) | `acquisitionHost.js` `able-request` | `able-request` | ask-able | the inbox payload + `toolkit::load_row` (the asker being's folded `name`) |
+| `author_able` (`able_manager`) | `ableManagerHost.js` `author-able` | `author-able` | set-able | collapses the canSee/canDo/canCall/canBe picker inputs into the canonical `can` granted-word-set + the able qualities; reads `.ables` heaven scaffold |
+| `remove_able` (`able_manager`) | `ableManagerHost.js` `remove-able` | `remove-able` | delete-able | validates name + reads `.ables` scaffold; returns the remove block |
+
+**The honest-impurity DEFERRAL (able-manager).** In JS, `author-able` / `remove-able` are NOT pure
+reads — they WRITE the `.ables/<name>` manifest child (`addManifestChild` / `removeManifestChild` = a
+`do:create-space` / `do:end-space` chain write on the `.ables` reel) AND hot-(un)register the able in an
+in-memory registry (live without a restart). A treehost resolver lays NO fact, and the Rust able-word
+fold + in-memory registry are not yet ported. So this bridge ports the VALIDATION + the manifest-child
+SPEC (the `ableQualities` + `manifestName` the seal needs) and DEFERS: the manifest WRITE to the
+caller-side seal (the SAME cut `config.rs` / `model.rs` make for the 5D NAME-ACT seal), and the
+hot-register to when the able-word fold ports (`hotRegistered: true` is the byte-compatible return the
+`.word` reads). The `.ables` parent-space read is the read-half of that write (a missing scaffold is an
+`Internal` refusal). The `.word`'s OWN gates (`valid-able-name` / `able-registered` / ...) are inline
+PREDICATES the parser does not lower — enforced in the word, invisible to the survey, not resolvers.
+
+**Why the predicates are not ported.** The treeword parser does not yet lower an inline-predicate
+condition (`If is-reserved-pointer(x)`, `If already-holds(...)`, `If not valid-able-name(name)`) to IR —
+it parses to empty. So `is-reserved-pointer` / `already-holds` / `is-grabbable` / `valid-able-name` /
+`valid-able-cognition` / `able-registered` / `able-deletable` / `able-blocks-delete` are NOT host see-op
+escapes the survey sees, and need no resolver. (Same artifact hides `able-spec-for-grant` / `owner-of`:
+the splitter joins the `When …:` header with the first body statement, so that `see` parses to empty —
+those are the able-walk/registry reads WAVE 2's able-word fold owns anyway.)
+
+### FEDERATION ASSESSMENT — `resolve-federation-spec`: FLAGGED-FOR-WIRE (NOT ported)
+
+`resolve-federation-spec` (7 `.word`s: offer-template / offer-being / request-template / accept-template
+/ reject-template / fulfill-request / refuse-request) is NOT a substrate read — it is the cross-story
+WIRE lane, and porting it here would cross into the other agent's `treeprotocol`/`treeaddress` surface.
+Reasons (`federationManagerHost.js`):
+
+1. **It exists to drive `dispatch-federation-intent`** — a `call` into ANOTHER story carried by
+   `crossStoryDispatch` (the cross-story membrane OUT). Each resolver returns `{ managerId, writes,
+   dispatch }` whose `dispatch.payload` is the bundle/intent pushed to a peer. The spec is inseparable
+   from the transport it feeds.
+2. **The bundle capture is cross-story I/O**: `captureTemplate` (book/seedTemplate) + `captureGraft`
+   (book/graft) compute a `bundleHash` over a serialized subtree/being bundle — the graft/template
+   capture lane, not a fold-of-the-store read.
+3. **`resolveSubtreeSpaceId` is the address lane**: it calls `parseWithContext` / `expand` /
+   `resolveStance` (`ibp/address.js` + `ibp/resolver.js`) — the IBP address parser the OTHER agent owns
+   (`treeaddress`), explicitly off-limits here.
+4. **Non-reproducible mints**: each call mints a `uuidv4()` negotiationId and stamps an `iso(ctx)` wall
+   clock — a resolver READ must be reproducible; these are write-time identity/clock concerns the seal
+   owns, not a deterministic substrate read.
+
+The substrate-shaped fragments inside it (`managerBeingId` = `findByName("being","federation-manager")`,
+`readNegotiation` = a `qualities.federation.<bucket>[id]` fold) ARE pure reads and COULD be exposed as
+narrow see-ops later — but the op as the `.word`s invoke it (`resolve-federation-spec(params, caller)`
+returning the dispatch spec) is the wire, so it stays with the federation/transport agent.
+
+### WAVE 2 REMAINDER (the state AT THE START of WAVE 2 — crypto credential/key + llm)
+
+The 19 still-broken words / 11 still-missing ops after WAVE 1 (WAVE 2 closed the crypto half; the LLM +
+federation halves are FLAGGED — the other agent's domain):
+- **crypto credential/key** (5 ops) [PORTED in WAVE 2]: `load-key`, `paper-form` (key.word),
+  `mint-credential`, `read-credential`, `reel-head-of` (credential-read/credential-reset.word). The
+  scrypt/AES KDF, the signing-key load, the mnemonic mint, the revoke-cutoff chain-head read. The
+  reproducible reads run in the see; the non-reproducible crypto defers to the seal (see WAVE 2 above).
+- **llm** (5 ops) [ASSESSED → FLAGGED-FOR-COGNITION]: `resolve-llm-config` (set-being/space/story-llm
+  .word), `resolve-connection`, `resolve-connection-update`, `resolve-connection-removal`,
+  `resolve-slot-assignment` (llm-connection/*.word). The LLM session + connection-key encryption (SSRF
+  gate + `encryptedApiKey` mint), in `present/cognition/llm/connect.js` — the cognition agent's surface.
+- **federation** (1 op): `resolve-federation-spec` (7 words) — flagged-for-wire above.
+
+**AFTER WAVE 2:** missing-logic = **14 words / 6 distinct ops** = the LLM (5) + federation (1) ops, ALL
+the other agent's domain (cognition/transport). The crypto credential/key half is clean.
+
+## WAVE 2 — the CRYPTO credential/key host handlers (credential.rs / key.rs) [PORTED]
+
+WAVE 2 ports the FIVE crypto credential/key see-ops. The established pattern for non-reproducible
+crypto (the be:birth credential deferral; config.rs/model.rs's 5D NAME-ACT cut): the `see` resolver
+returns the SPEC (a reproducible READ), and the actual non-reproducible effect (minting a fresh
+keypair, AES-encrypting, decrypting, loading the live-session PEM) defers to SEAL. The see stays inert.
+Missing-logic dropped **19 -> 14 broken words** and **11 -> 6 distinct ops** (the 3 target `.word`s went
+clean: `key`, `credential-read`, `credential-reset`). The remaining 6 ops are LLM (5) + federation (1)
+— the other agent's domain. Composes treestore (reel head + reel read) + treefold (fold the row) +
+the toolkit name catalog + treesign (the deterministic mnemonic); reimplements no crypto; lays no fact.
+
+| Rust resolver (`module.rs`) | JS host body | see-op | `.word` | see → seal split |
+|---|---|---|---|---|
+| `reel_head_of` (`credential`) | `credentialHost.js` `reel-head-of` → reelHeads.js readHead | `reel-head-of` | credential-reset | PURE substrate read: `treestore::read_reel_head(root,"0","being",id).head` (the `tokensInvalidBefore` chain position; a seq, NEVER a clock — the time-purge). Reproducible; runs in the see verbatim. `targetIdOf` normalizes a `{kind,id}` / string / stance target. |
+| `read_credential` (`credential`) | `credentialHost.js` `read-credential` | `read-credential` | credential-read | SEE returns the SPEC `{ has, blob, deferred:"decrypt-credential" }` — the ENCRYPTED blob (`qualities.auth.credentialPlain`, folded from the being row on "0") + the gate the `.word`'s `If plaintext` keys on. The DECRYPT (AES over the live JWT_SECRET-HKDF key the spine does not hold) DEFERS to the seal. The see carries NO cleartext. |
+| `mint_credential` (`credential`) | `credentialHost.js` `mint-credential` → mintCredentialSpec | `mint-credential` | credential-reset | SEE returns `{ deferred:"mint-credential" }` (INERT, reproducible — two calls byte-identical). The actual fresh-keypair mint (crypto.randomBytes(32) plaintext + a random scrypt salt + a random AES IV → `hash`/`plain`/`plaintext`) is NON-REPRODUCIBLE and DEFERS to the seal (the be:birth pattern: do NOT mint in the see). |
+| `load_key` (`key`) | `keyHost.js` `load-key` → actSig.loadSigningKey | `load-key` | key | SEE returns `{ nameId, isI, locked, hasEnc, deferred:"load-key" }` — the substrate SHAPE of the owner Name's signing key (is `i-am` / is it key-bearing → the catalog `privateKeyEnc` / is it password-LOCKED). The actual load (the in-session PEM for a locked Name / the AES decrypt for a system key / the story key) is NON-REPRODUCIBLE and DEFERS to the seal. The see carries NO raw private key. |
+| `paper_form` (`key`) | `keyHost.js` `paper-form` → entropyToMnemonic(seedFromPrivateKeyPem) | `paper-form` | key | DETERMINISTIC via `treesign::seed_from_pkcs8_pem` → `seed_to_mnemonic` (the 24-word entropy IS the 32-byte seed, NEVER to_seed()). The split is INPUT-driven: its input `privateKey` is the load-key value the SEAL binds, so the wired path returns `{ deferred:"paper-form" }`; a direct-bridge call that threads a real PEM derives the mnemonic verbatim (compose, never reimplement). PEM-only / non-seed-derivable → null (the JS try/catch). |
+
+**Note (a pre-existing, out-of-lane seam):** `credential-read.word` / `credential-reset.word` open with
+`see resolve-target-being(target)`, which is ALREADY registered (cherub `resolve_kill`) — so the survey
+counts it clean and it was NOT in WAVE 2's five. BUT the cherub `resolve-target-being` does
+`findByName("being", name)` (a NAME→id lookup), whereas the credential word's `target` is the WORD-SOLE
+standard trigger bound as `{kind:"being", id}` and wants `targetIdOf` (a SHAPE normalize). When wired,
+the credential word's `see resolve-target-being` would route to the cherub resolver and return Null on
+an object target. The credential resolvers carry their own `targetIdOf` (`credential::target_id_of`)
+so the seam is a register-time disambiguation (route `resolve-target-being` by the calling word, or
+give the credential variant its own op name); flagged for the run_body wiring, not a treehost bug.
+
+### LLM ASSESSMENT — `resolve-llm-config` / `resolve-connection{,-update,-removal}` / `resolve-slot-assignment`: FLAGGED-FOR-COGNITION (NOT ported)
+
+All FIVE LLM see-ops (`llmAssignerHost.js` / `llmHost.js`) delegate to
+`present/cognition/llm/connect.js` (`resolveLlmConfigSpec` / `resolveConnectionSpec` /
+`resolveConnectionUpdate` / `resolveConnectionRemoval` / `resolveSlotAssignment`) — the OTHER agent's
+cognition crate surface. They are NOT substrate reads. The precise reasons (the same port-or-flag
+discipline that flagged federation):
+
+1. **Connection-key ENCRYPTION (`encryptedApiKey`)** — `resolveConnectionSpec` / `resolveConnectionUpdate`
+   call `encrypt(apiKey)`: AES-256-CBC with a random `crypto.randomBytes(16)` IV, keyed by the live
+   `CUSTOM_LLM_API_SECRET_KEY` env the spine does not hold. Non-reproducible crypto (a resolver READ
+   must be reproducible), exactly the `encryptedApiKey` mint the WAVE-2 flag named.
+2. **SSRF gate** — every connection runs `resolveAndValidateHost(hostname)` against an allowlist + a live
+   DNS resolution (`ssrf.js`). A NETWORK-POLICY validation, not a fold-of-the-store read.
+3. **Non-reproducible `uuidv4()` connection ids** — `resolveConnectionSpec` mints `connectionId =
+   uuidv4()` and stamps `createdAt: new Date()`; write-time identity/clock the seal owns, not a read.
+4. **It lives in the cognition crate** — connect.js is `present/cognition/llm/`, the in-flight cognition/
+   config surface the lane forbids touching. Its substrate-shaped fragments (the connection-cap read, the
+   slot fold, the per-mode target resolve) ARE pure reads and COULD be exposed as narrow see-ops later,
+   but the ops AS the `.word`s invoke them (returning the encrypted set-being params) are the crypto +
+   cognition lane, so they stay with the cognition/session agent.
+
+`resolve-slot-assignment` is the closest to substrate (a slot + connection-exists validation, no
+encrypt) BUT it too lives in connect.js and resolves via `loadOrFold` + `detectTargetKind` inside the
+cognition module; porting it alone would fork the connect.js spec across two crates while its four
+siblings stay there. Flagged WITH its siblings for one coherent cognition-agent handoff.
+
+## Tests (`tests/resolvers.rs`) -- 56 tests, all green (41 prior + 9 WAVE 1 + 6 WAVE 2)
+
+WAVE 2 adds 6 tests (5 crypto resolvers + the wave-2 dispatch-table routing), each driving a REAL
+on-disk store and asserting the SEE-vs-SEAL split: `reel-head-of` reads the chain position (and a
+string + `{kind,id}` target normalize alike, unknown → 0); `read-credential` returns the CIPHERTEXT +
+`deferred:"decrypt-credential"` and NO cleartext; `mint-credential` is byte-identical across two calls
+(inert) + carries no key material; `load-key` reads the key SHAPE (i-am / system-encrypted / password-
+locked / undeclared) and defers the load; `paper-form` defers an absent PEM and derives a DETERMINISTIC
+24-word mnemonic from a real PKCS8 PEM via treesign (same seed → same words, every host). The being
+credential blob is planted via a `set-being qualities.auth.credentialPlain` fact; the key-bearing Name
+via a `name:declare` library fact carrying `spec.privateKeyEnc` (refold builds the catalog).
+
+## Tests (the WAVE 1 + original baseline, retained below)
+
+(historical) -- 50 tests, all green (41 prior + 9 WAVE 1)
 
 Plants rows the **same way `treeproj`/`treefold`'s write-half tests do**: stamp a reel
 (`treestore::seal_moment` + `write_fact_doc`), then `treeproj::refold` it into a `.proj` snapshot (which
@@ -311,10 +466,17 @@ facts on a position reel, a library `name:declare`/`name:banish` (the names cata
   authority + revoke-skips-the-name-gate), owner (claim / reassign / heaven / remove), grant (the kebab
   shape gate), and the three cherub hosts (target resolve, history missing/paused/deleted, name catalog).
 - The dispatch table routes ALL the new see-op names (and still rejects an unknown one).
+- WAVE 1 (9 tests): the pointer-name/canonical gates (normalize + the bad-shape battery), the
+  `.histories` heaven reads (unplanted default, planted re-pointed main, missing-main default), the
+  set/delete map merge/prune, the acquisition asked-policy / grant-internal / able-request (asker-name
+  fold), the able-manager author/remove specs (the collapsed `can` set + deduped permissions + the
+  `.ables`-scaffold gate), and the wave-1 dispatch-table routing. Each drives a REAL on-disk store
+  (`.histories` / `.ables` heaven spaces planted via stamp + refold, qualities via a `qualities.pointers`
+  set-space fact).
 
 ```
-cargo test -p treehost      # 26 passed
-cargo build --workspace     # green (treeibp / treeval / treeos untouched, still build)
+cargo test -p treehost      # 50 passed
+cargo build --workspace     # green
 ```
 
 ---

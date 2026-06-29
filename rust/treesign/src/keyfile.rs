@@ -90,6 +90,19 @@ pub fn seed_from_pkcs8_pem(pem: &str) -> Result<[u8; 32], KeyFileError> {
     Ok(seed)
 }
 
+/// The inverse of `seed_from_pkcs8_pem`: wrap a 32-byte ed25519 seed as a PKCS8 `PRIVATE KEY` PEM (the
+/// fixed 16-byte prefix || seed, base64'd, armored) — byte-identical to Node's
+/// `privateKey.export({type:"pkcs8",format:"pem"})`. The 48-byte DER base64s to exactly 64 chars, so
+/// the body is one line (matching the on-disk story key). Use this to render a Name's seed back to the
+/// PEM the credential layer stores / `password_lock` locks / `paper_form` reads — no hand-rolled base64.
+pub fn seed_to_pkcs8_pem(seed: &[u8; 32]) -> String {
+    let mut der = Vec::with_capacity(PKCS8_ED25519_LEN);
+    der.extend_from_slice(&PKCS8_ED25519_PREFIX);
+    der.extend_from_slice(seed);
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&der);
+    format!("-----BEGIN PRIVATE KEY-----\n{b64}\n-----END PRIVATE KEY-----\n")
+}
+
 /// Read `<story_dir>/story.key` and decode it to the 32-byte ed25519 seed. The
 /// story key is the custodial key I (the story) signs every act with; loading
 /// its seed lets a Rust seal produce the byte-identical signature the live JS
@@ -129,6 +142,16 @@ mod tests {
         // and that seed derives the on-disk story public key (the SPKI .pub).
         let kp = keypair_from_seed(&seed);
         assert_eq!(kp.raw_pub, hex32(STORY_PUB_HEX), "seed -> the story pubkey");
+    }
+
+    #[test]
+    fn seed_to_pem_round_trips_and_byte_matches_node() {
+        let seed = hex32(STORY_SEED_HEX);
+        // byte-identical to Node's PKCS8 export (the inline story key PEM is Node-written).
+        assert_eq!(seed_to_pkcs8_pem(&seed), STORY_KEY_PEM);
+        // round-trip: seed -> PEM -> seed for arbitrary seeds.
+        let s2 = [7u8; 32];
+        assert_eq!(seed_from_pkcs8_pem(&seed_to_pkcs8_pem(&s2)).unwrap(), s2);
     }
 
     #[test]

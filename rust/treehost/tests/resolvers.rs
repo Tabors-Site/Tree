@@ -13,13 +13,16 @@ use treecas::{put_content, Meta};
 use treehash::{canonicalize, Json};
 use treehost::toolkit::{get, get_str};
 use treehost::{
-    may_set_model, parse_signal_value, resolve_config_delete, resolve_config_set,
-    resolve_containing_space, resolve_create_matter, resolve_create_space, resolve_end_matter,
-    resolve_end_space_spec, resolve_grant, resolve_inheritation, resolve_kill, resolve_model_block,
-    resolve_move, resolve_owner, resolve_purge, resolve_rename_matter, resolve_set_being_flow_spec,
-    resolve_set_being_spec, resolve_set_matter_spec, resolve_set_space_spec, resolve_switch,
-    resolve_truename, signal_fact, signal_field, story_root, validate_render_block, AuthCtx,
-    HostResolver, Reason, Resolvers,
+    able_request, asked_policy, author_able, delete_pointer_map, find_pointers_space_id,
+    grant_internal, load_key, may_set_model, mint_credential, paper_form, parse_signal_value,
+    read_credential, read_pointers, reel_head_of, remove_able,
+    resolve_config_delete, resolve_config_set, resolve_containing_space, resolve_create_matter,
+    resolve_create_space, resolve_end_matter, resolve_end_space_spec, resolve_grant,
+    resolve_inheritation, resolve_kill, resolve_model_block, resolve_move, resolve_owner,
+    resolve_purge, resolve_rename_matter, resolve_set_being_flow_spec, resolve_set_being_spec,
+    resolve_set_matter_spec, resolve_set_space_spec, resolve_switch, resolve_truename,
+    set_pointer_map, signal_fact, signal_field, story_root, valid_canonical, valid_pointer_name,
+    validate_render_block, AuthCtx, HostResolver, Reason, Resolvers,
 };
 use treeproj::refold;
 use treestore::{read_reel_head, seal_moment, write_fact_doc, FactSpec};
@@ -1899,4 +1902,487 @@ fn part3_ops_route_through_table() {
     // an unknown op still rejects.
     let err = table.resolve("resolve-nope", &[], &dir, "0", &AuthCtx::default()).unwrap_err();
     assert!(err.message.contains("unknown see-op"), "unknown op rejects");
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// WAVE 1 substrate families: history-pointers / acquisition / able-manager
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+
+/// Plant a heaven space with an explicit `heavenSpace` marker AND a `qualities.pointers` map: a
+/// create-space (with heavenSpace) then a set-space fact that folds qualities.pointers. Mirrors the
+/// `.histories` heaven space the pointer registry reads.
+fn plant_histories_space(dir: &Path, id: &str, pointers: Option<Json>, ord: f64) {
+    plant_space(dir, id, ".histories", "space-root", None, Some("histories"), ord);
+    if let Some(p) = pointers {
+        let set = obj(vec![
+            ("through", jstr("i-am")),
+            ("verb", jstr("do")),
+            ("act", jstr("set-space")),
+            ("of", obj(vec![("kind", jstr("space")), ("id", jstr(id))])),
+            ("params", obj(vec![
+                ("field", jstr("qualities.pointers")),
+                ("value", p),
+                ("merge", Json::Bool(false)),
+            ])),
+        ]);
+        stamp(dir, "space", id, &set, ord + 0.5);
+        refold(dir, "0", "space", id).expect("refold histories space");
+    }
+}
+
+// ── history-pointers ──────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn history_pointers_valid_name_and_canonical() {
+    let dir = fresh("hp-validate");
+    // valid-pointer-name: normalizes (trim+lowercase), gates the grammar.
+    let v = valid_pointer_name(&dir, "0", &args(vec![jstr("  Main  ")]), &AuthCtx::caller("be1")).unwrap();
+    assert!(matches!(&v, Json::Str(s) if s == "main"), "normalizes Main -> main");
+    let v = valid_pointer_name(&dir, "0", &args(vec![jstr("release-v2")]), &AuthCtx::caller("be1")).unwrap();
+    assert!(matches!(&v, Json::Str(s) if s == "release-v2"));
+    // the gate: bad shapes -> null (consecutive/trailing hyphen, leading digit, empty).
+    for bad in ["m--ain", "feature-", "1main", "", "-main"] {
+        let r = valid_pointer_name(&dir, "0", &args(vec![jstr(bad)]), &AuthCtx::caller("be1")).unwrap();
+        assert!(matches!(r, Json::Null), "pointer name {bad:?} must refuse (null)");
+    }
+
+    // valid-canonical: trims, gates the HISTORY_RE path shape.
+    for good in ["0", "1", "1a", "7b3", "12a3b", "3ab"] {
+        let r = valid_canonical(&dir, "0", &args(vec![jstr(good)]), &AuthCtx::caller("be1")).unwrap();
+        assert!(matches!(&r, Json::Str(s) if s == good), "canonical {good:?} must pass");
+    }
+    for bad in ["1-", "1a-", "main", "a", "", " "] {
+        let r = valid_canonical(&dir, "0", &args(vec![jstr(bad)]), &AuthCtx::caller("be1")).unwrap();
+        assert!(matches!(r, Json::Null), "canonical {bad:?} must refuse (null)");
+    }
+}
+
+#[test]
+fn history_pointers_heaven_reads() {
+    let dir = fresh("hp-heaven");
+    // no .histories space planted: find-pointers-space-id -> null, read-pointers -> the default { main:"0" }.
+    let id = find_pointers_space_id(&dir, "0", &[], &AuthCtx::caller("be1")).unwrap();
+    assert!(matches!(id, Json::Null), "unplanted -> null id");
+    let map = read_pointers(&dir, "0", &[], &AuthCtx::caller("be1")).unwrap();
+    assert_eq!(get_str(&map, "main"), Some("0"), "unplanted -> default main:0");
+
+    // plant the .histories space with a pointers map (note main re-pointed, plus a custom pointer).
+    plant_histories_space(
+        &dir,
+        "hist1",
+        Some(obj(vec![("main", jstr("3a")), ("prod", jstr("7"))])),
+        10.0,
+    );
+    let id = find_pointers_space_id(&dir, "0", &[], &AuthCtx::caller("be1")).unwrap();
+    assert!(matches!(&id, Json::Str(s) if s == "hist1"), "finds the .histories id");
+    let map = read_pointers(&dir, "0", &[], &AuthCtx::caller("be1")).unwrap();
+    assert_eq!(get_str(&map, "main"), Some("3a"), "reads the re-pointed main");
+    assert_eq!(get_str(&map, "prod"), Some("7"), "reads the custom pointer");
+
+    // a planted space whose pointers map is MISSING main -> read-pointers defaults main back to 0.
+    let dir2 = fresh("hp-heaven-nomain");
+    plant_histories_space(&dir2, "hist2", Some(obj(vec![("prod", jstr("7"))])), 10.0);
+    let map = read_pointers(&dir2, "0", &[], &AuthCtx::caller("be1")).unwrap();
+    assert_eq!(get_str(&map, "main"), Some("0"), "missing main defaulted to 0");
+    assert_eq!(get_str(&map, "prod"), Some("7"));
+}
+
+#[test]
+fn history_pointers_set_and_delete_map() {
+    let dir = fresh("hp-maps");
+    let current = obj(vec![("main", jstr("0")), ("prod", jstr("7"))]);
+
+    // set-pointer-map: add a new pointer (previous = null).
+    let out = set_pointer_map(
+        &dir, "0",
+        &args(vec![current.clone(), jstr("staging"), jstr("3a")]),
+        &AuthCtx::caller("be1"),
+    ).unwrap();
+    let map = get(&out, "map").unwrap();
+    assert_eq!(get_str(map, "staging"), Some("3a"));
+    assert_eq!(get_str(map, "main"), Some("0"), "existing pointers preserved");
+    assert!(matches!(get(&out, "previous"), Some(Json::Null)), "new pointer -> previous null");
+
+    // set-pointer-map: re-point an existing pointer (previous = the old target).
+    let out = set_pointer_map(
+        &dir, "0",
+        &args(vec![current.clone(), jstr("prod"), jstr("9b")]),
+        &AuthCtx::caller("be1"),
+    ).unwrap();
+    assert_eq!(get_str(get(&out, "map").unwrap(), "prod"), Some("9b"));
+    assert_eq!(get_str(&out, "previous"), Some("7"), "re-point surfaces the previous target");
+
+    // delete-pointer-map: present -> the pruned map.
+    let out = delete_pointer_map(
+        &dir, "0",
+        &args(vec![current.clone(), jstr("prod")]),
+        &AuthCtx::caller("be1"),
+    ).unwrap();
+    let map = get(&out, "map").unwrap();
+    assert!(get(map, "prod").is_none(), "prod pruned");
+    assert_eq!(get_str(map, "main"), Some("0"), "main kept");
+
+    // delete-pointer-map: absent -> null (the no-op the .word reads `If no outcome:` for).
+    let out = delete_pointer_map(
+        &dir, "0",
+        &args(vec![current, jstr("never-existed")]),
+        &AuthCtx::caller("be1"),
+    ).unwrap();
+    assert!(matches!(out, Json::Null), "absent name -> null (no-op)");
+}
+
+// ── acquisition ─────────────────────────────────────────────────────────────────────────────────────
+
+/// A `found` block: { spec, anchor, able } the able-spec lookup returns.
+fn found_block(asked: Option<&str>, anchor: &str) -> Json {
+    let acquisition = match asked {
+        Some(a) => obj(vec![("acquisition", obj(vec![("asked", jstr(a))]))]),
+        None => obj(vec![]),
+    };
+    obj(vec![("spec", acquisition), ("anchor", jstr(anchor))])
+}
+
+#[test]
+fn acquisition_asked_policy() {
+    let dir = fresh("acq-asked");
+    // "auto" / "queue" survive; absent / garbage -> false (the closed default).
+    let r = asked_policy(&dir, "0", &args(vec![found_block(Some("auto"), "sp1")]), &AuthCtx::caller("be1")).unwrap();
+    assert!(matches!(&r, Json::Str(s) if s == "auto"));
+    let r = asked_policy(&dir, "0", &args(vec![found_block(Some("queue"), "sp1")]), &AuthCtx::caller("be1")).unwrap();
+    assert!(matches!(&r, Json::Str(s) if s == "queue"));
+    // no acquisition block -> false.
+    let r = asked_policy(&dir, "0", &args(vec![found_block(None, "sp1")]), &AuthCtx::caller("be1")).unwrap();
+    assert!(matches!(r, Json::Bool(false)), "absent policy -> false (closed default)");
+    // a garbage value -> false.
+    let r = asked_policy(&dir, "0", &args(vec![found_block(Some("maybe"), "sp1")]), &AuthCtx::caller("be1")).unwrap();
+    assert!(matches!(r, Json::Bool(false)), "unknown policy -> false");
+}
+
+#[test]
+fn acquisition_grant_internal() {
+    let dir = fresh("acq-grant");
+    let block = grant_internal(
+        &dir, "0",
+        &args(vec![jstr("be1"), jstr("judge"), found_block(Some("auto"), "sp1")]),
+        &AuthCtx::caller("be1"),
+    ).unwrap();
+    assert_eq!(get_str(&block, "granteeBeingId"), Some("be1"));
+    assert_eq!(get_str(&block, "able"), Some("judge"));
+    assert_eq!(get_str(&block, "anchorSpaceId"), Some("sp1"));
+    assert!(matches!(get(&block, "anchorBeingId"), Some(Json::Null)), "no anchorBeingId");
+    assert_eq!(get_str(&block, "grantedBy"), Some("be1"), "grantedBy = the caller");
+
+    // an empty caller -> grantedBy defaults to I ("i-am").
+    let block = grant_internal(
+        &dir, "0",
+        &args(vec![Json::Null, jstr("judge"), found_block(None, "")]),
+        &AuthCtx::default(),
+    ).unwrap();
+    assert_eq!(get_str(&block, "grantedBy"), Some("i-am"), "empty caller -> grantedBy I");
+    assert!(matches!(get(&block, "anchorSpaceId"), Some(Json::Null)), "empty anchor -> null");
+}
+
+#[test]
+fn acquisition_able_request() {
+    let dir = fresh("acq-request");
+    plant_space(&dir, "sp1", "room", "space-root", None, None, 1.0);
+    plant_being(&dir, "be1", "Alice", "sp1", None);
+
+    let block = able_request(
+        &dir, "0",
+        &args(vec![jstr("judge"), found_block(Some("queue"), "sp1"), jstr("be1")]),
+        &AuthCtx::caller("be1"),
+    ).unwrap();
+    assert_eq!(get_str(&block, "able"), Some("judge"));
+    assert_eq!(get_str(&block, "anchorSpaceId"), Some("sp1"));
+    assert_eq!(get_str(&block, "askerBeingId"), Some("be1"));
+    assert_eq!(get_str(&block, "askerName"), Some("Alice"), "folds the asker being's name");
+    assert!(matches!(get(&block, "reason"), Some(Json::Null)), "reason null");
+
+    // an unknown asker -> askerName null (no being row).
+    let block = able_request(
+        &dir, "0",
+        &args(vec![jstr("judge"), found_block(Some("queue"), "sp1"), jstr("ghost")]),
+        &AuthCtx::caller("ghost"),
+    ).unwrap();
+    assert!(matches!(get(&block, "askerName"), Some(Json::Null)), "unknown asker -> null name");
+}
+
+// ── able-manager ────────────────────────────────────────────────────────────────────────────────────
+
+/// Plant the `.ables` heaven space (the manifest parent the author/remove specs read).
+fn plant_ables_space(dir: &Path, id: &str, ord: f64) {
+    plant_space(dir, id, ".ables", "space-root", None, Some("ables"), ord);
+}
+
+#[test]
+fn able_manager_author_able() {
+    let dir = fresh("am-author");
+    plant_ables_space(&dir, "ables1", 1.0);
+
+    let params = obj(vec![
+        ("name", jstr("judge")),
+        ("requiredCognition", jstr("llm")),
+        ("canSee", jstr("see-case\nsee-evidence")),
+        ("canDo", jstr("rule")),
+        ("canCall", jstr("clerk")),
+        ("canBe", jstr("")),
+        ("prompt", jstr("You are a judge.")),
+    ]);
+    let block = author_able(&dir, "0", &args(vec![params]), &AuthCtx::caller("be1")).unwrap();
+    assert!(matches!(get(&block, "written"), Some(Json::Bool(true))));
+    assert_eq!(get_str(&block, "name"), Some("judge"));
+    assert_eq!(get_str(&block, "origin"), Some("live"));
+    assert!(matches!(get(&block, "hotRegistered"), Some(Json::Bool(true))));
+
+    // the built able qualities: requiredCognition + the collapsed `can` granted-word set.
+    let quals = get(&block, "ableQualities").expect("ableQualities");
+    assert_eq!(get_str(quals, "requiredCognition"), Some("llm"));
+    assert_eq!(get_str(quals, "origin"), Some("live"));
+    let can = match get(quals, "can") { Some(Json::Arr(a)) => a.clone(), _ => panic!("can array") };
+    // 2 see + 1 do + 1 call + 0 be (the empty canBe drops) = 4 entries.
+    assert_eq!(can.len(), 4, "collapsed granted-word entries: {can:?}");
+    assert_eq!(get_str(&can[0], "verb"), Some("see"));
+    assert_eq!(get_str(&can[0], "word"), Some("see-case"));
+    assert_eq!(get_str(&can[2], "verb"), Some("do"));
+    assert_eq!(get_str(&can[3], "verb"), Some("call"));
+    // permissions: the deduped verb set (see, do, call).
+    let perms = match get(quals, "permissions") { Some(Json::Arr(a)) => a.clone(), _ => panic!("perms") };
+    assert_eq!(perms.len(), 3, "see/do/call deduped: {perms:?}");
+
+    // an empty name refuses.
+    let err = author_able(&dir, "0", &args(vec![obj(vec![("name", jstr("  "))])]), &AuthCtx::caller("be1")).unwrap_err();
+    assert_eq!(err.reason, Reason::InvalidInput);
+
+    // no .ables scaffold -> internal refusal.
+    let dir2 = fresh("am-author-noscaffold");
+    let err = author_able(&dir2, "0", &args(vec![obj(vec![("name", jstr("judge"))])]), &AuthCtx::caller("be1")).unwrap_err();
+    assert_eq!(err.reason, Reason::Internal, "missing .ables -> internal");
+}
+
+#[test]
+fn able_manager_remove_able() {
+    let dir = fresh("am-remove");
+    plant_ables_space(&dir, "ables1", 1.0);
+
+    let block = remove_able(&dir, "0", &args(vec![jstr("judge")]), &AuthCtx::caller("be1")).unwrap();
+    assert!(matches!(get(&block, "deleted"), Some(Json::Bool(true))));
+    assert_eq!(get_str(&block, "name"), Some("judge"));
+
+    // empty name refuses.
+    let err = remove_able(&dir, "0", &args(vec![jstr("")]), &AuthCtx::caller("be1")).unwrap_err();
+    assert_eq!(err.reason, Reason::InvalidInput);
+
+    // no scaffold -> internal.
+    let dir2 = fresh("am-remove-noscaffold");
+    let err = remove_able(&dir2, "0", &args(vec![jstr("judge")]), &AuthCtx::caller("be1")).unwrap_err();
+    assert_eq!(err.reason, Reason::Internal);
+}
+
+// ── dispatch table routes the wave-1 ops ────────────────────────────────────────────────────────────
+#[test]
+fn wave1_ops_route_through_table() {
+    let dir = fresh("wave1-table");
+    plant_being(&dir, "be1", "Alice", "sp1", None);
+    let table = Resolvers;
+    for op in [
+        "valid-pointer-name", "valid-canonical", "find-pointers-space-id", "read-pointers",
+        "set-pointer-map", "delete-pointer-map", "asked-policy", "grant-internal", "able-request",
+        "author-able", "remove-able",
+    ] {
+        let r = table.resolve(op, &args(vec![jstr("x"), jstr("y"), jstr("z")]), &dir, "0", &AuthCtx::caller("be1"));
+        if let Err(e) = &r {
+            assert!(!e.message.contains("unknown see-op"), "op {op} hit the unknown-op fallback: {e:?}");
+        }
+    }
+}
+
+// ── WAVE 2 — crypto credential/key resolvers (credentialHost.js / keyHost.js) ────────────────────────
+//
+// Each tests the happy substrate read + the SEE-vs-SEAL split: the reproducible see returns the SPEC
+// (the encrypted blob / the mint marker / the load shape), and the non-reproducible crypto (decrypt /
+// keypair mint / AES encrypt / live-session PEM) is asserted to be ABSENT from the see (it defers to
+// the seal — the be:birth credential deferral).
+
+/// Build the PKCS8 ed25519 PEM for a 32-byte seed (the inverse of treesign::seed_from_pkcs8_pem): the
+/// fixed 16-byte DER prefix || the seed, standard-base64'd, in `-----BEGIN PRIVATE KEY-----` armor.
+fn pkcs8_ed25519_pem(seed: &[u8; 32]) -> String {
+    const PREFIX: [u8; 16] = [
+        0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20,
+    ];
+    let mut der = PREFIX.to_vec();
+    der.extend_from_slice(seed);
+    let b64 = base64_std(&der);
+    format!("-----BEGIN PRIVATE KEY-----\n{b64}\n-----END PRIVATE KEY-----\n")
+}
+
+/// Minimal standard (RFC 4648) base64 encoder for the test PEM (no dev-dep).
+fn base64_std(bytes: &[u8]) -> String {
+    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let b = [
+            chunk[0],
+            *chunk.get(1).unwrap_or(&0),
+            *chunk.get(2).unwrap_or(&0),
+        ];
+        let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | (b[2] as u32);
+        out.push(A[((n >> 18) & 63) as usize] as char);
+        out.push(A[((n >> 12) & 63) as usize] as char);
+        out.push(if chunk.len() > 1 { A[((n >> 6) & 63) as usize] as char } else { '=' });
+        out.push(if chunk.len() > 2 { A[(n & 63) as usize] as char } else { '=' });
+    }
+    out
+}
+
+/// Stamp a set-being fact onto a being's reel (a deep qualities path) + refold.
+fn set_being_field(dir: &Path, id: &str, field: &str, value: Json, ord: f64) {
+    let f = obj(vec![
+        ("through", jstr("i-am")),
+        ("verb", jstr("do")),
+        ("act", jstr("set-being")),
+        ("of", target("being", id)),
+        ("params", obj(vec![("field", jstr(field)), ("value", value)])),
+    ]);
+    stamp(dir, "being", id, &f, ord);
+    refold(dir, "0", "being", id).expect("refold set-being");
+}
+
+/// Plant a library name entry carrying a privateKeyEnc (the key-bearing Name catalog) + refold.
+fn plant_name_with_key(dir: &Path, domain: &str, name_id: &str, enc: Json, ord: f64) {
+    let declare = obj(vec![
+        ("through", jstr("i-am")),
+        ("verb", jstr("name")),
+        ("act", jstr("declare")),
+        ("of", obj(vec![("kind", jstr("library")), ("id", jstr(domain))])),
+        // reduce_library keys on params.nameId; fold_name reads the identity from params.spec.
+        ("params", obj(vec![
+            ("nameId", jstr(name_id)),
+            ("spec", obj(vec![("privateKeyEnc", enc)])),
+        ])),
+    ]);
+    stamp(dir, "library", domain, &declare, ord);
+    refold(dir, "0", "library", domain).expect("refold library key");
+}
+
+#[test]
+fn reel_head_of_reads_chain_position() {
+    let dir = fresh("reel-head-of");
+    plant_being(&dir, "be1", "Alice", "sp1", None); // birth advances the head to 1.
+    set_being_field(&dir, "be1", "qualities.auth.tokensInvalidBefore", jnum(0.0), 2.0);
+
+    // The reel head is the CHAIN POSITION (a seq, never a clock) — the credential-reset cutoff.
+    let head = reel_head_of(&dir, "0", &args(vec![target("being", "be1")]), &AuthCtx::caller("x")).unwrap();
+    let n = match head { Json::Num(n) => n, other => panic!("reel head not a number: {other:?}") };
+    assert!(n >= 2.0, "the head advanced past the writes (got {n})");
+
+    // A bare-string target normalizes the SAME (targetIdOf): same head.
+    let head2 = reel_head_of(&dir, "0", &args(vec![jstr("be1")]), &AuthCtx::caller("x")).unwrap();
+    assert_eq!(canonicalize(&head2), canonicalize(&head), "string + {{kind,id}} target normalize alike");
+
+    // An unknown being -> head 0 (the JS readHead `|| 0`).
+    let zero = reel_head_of(&dir, "0", &args(vec![jstr("nobody")]), &AuthCtx::caller("x")).unwrap();
+    assert_eq!(canonicalize(&zero), canonicalize(&jnum(0.0)));
+}
+
+#[test]
+fn read_credential_returns_blob_spec_not_cleartext() {
+    let dir = fresh("read-credential");
+    plant_being(&dir, "be1", "Alice", "sp1", None);
+    // The stored credential is an ENCRYPTED blob (the see never sees the plaintext).
+    set_being_field(&dir, "be1", "qualities.auth.credentialPlain", jstr("ZW5jcnlwdGVkLWJsb2I="), 2.0);
+
+    let block = read_credential(&dir, "0", &args(vec![target("being", "be1")]), &AuthCtx::caller("x")).unwrap();
+    // SEE-vs-SEAL: the see returns the ENCRYPTED blob + has=true; the DECRYPT defers to the seal.
+    assert!(matches!(get(&block, "has"), Some(Json::Bool(true))), "has=true when the blob exists");
+    assert_eq!(get_str(&block, "blob"), Some("ZW5jcnlwdGVkLWJsb2I="), "the see returns the CIPHERTEXT verbatim");
+    assert_eq!(get_str(&block, "deferred"), Some("decrypt-credential"), "the decrypt is the seal's");
+    // The see carries NO cleartext key (no decrypt happened in the read).
+    assert!(get(&block, "plaintext").is_none(), "the see must not produce the cleartext");
+
+    // No blob -> has=false, blob null (the .word's `If plaintext` fails).
+    plant_being(&dir, "be2", "Bob", "sp1", None);
+    let none = read_credential(&dir, "0", &args(vec![target("being", "be2")]), &AuthCtx::caller("x")).unwrap();
+    assert!(matches!(get(&none, "has"), Some(Json::Bool(false))));
+    assert!(matches!(get(&none, "blob"), Some(Json::Null)));
+}
+
+#[test]
+fn mint_credential_defers_the_mint_to_seal() {
+    let dir = fresh("mint-credential");
+    // SEE-vs-SEAL: a resolver READ is reproducible, so the see does NOT mint. It returns the marker;
+    // the keypair + scrypt hash + AES encrypt (the non-reproducible crypto) defer to the seal.
+    let a = mint_credential(&dir, "0", &args(vec![]), &AuthCtx::caller("x")).unwrap();
+    let b = mint_credential(&dir, "0", &args(vec![]), &AuthCtx::caller("y")).unwrap();
+    // Reproducible: two calls are byte-identical (no random bytes minted in the see).
+    assert_eq!(canonicalize(&a), canonicalize(&b), "the see is inert/reproducible (no fresh mint)");
+    assert_eq!(get_str(&a, "deferred"), Some("mint-credential"), "the mint is the seal's");
+    // The see carries NO secret material.
+    assert!(get(&a, "hash").is_none() && get(&a, "plain").is_none() && get(&a, "plaintext").is_none(),
+        "the see must produce no key material");
+}
+
+#[test]
+fn load_key_reads_key_shape_and_defers_the_load() {
+    let dir = fresh("load-key");
+
+    // i-am -> the story key shape (the seal reads .story/story.key). No PEM in the see.
+    let i = load_key(&dir, "0", &args(vec![jstr("i-am")]), &AuthCtx::caller("x")).unwrap();
+    assert!(matches!(get(&i, "isI"), Some(Json::Bool(true))));
+    assert_eq!(get_str(&i, "deferred"), Some("load-key"), "the load defers to the seal");
+    assert!(get(&i, "privateKey").is_none(), "the see carries no raw private key");
+
+    // A key-bearing Name with a SYSTEM-encrypted privateKeyEnc -> hasEnc true, locked false.
+    plant_name_with_key(&dir, "story.test", "zSystemKey", jstr("system-encrypted-blob"), 1.0);
+    let sys = load_key(&dir, "0", &args(vec![jstr("zSystemKey")]), &AuthCtx::caller("x")).unwrap();
+    assert!(matches!(get(&sys, "hasEnc"), Some(Json::Bool(true))));
+    assert!(matches!(get(&sys, "locked"), Some(Json::Bool(false))), "system-encrypted is not session-locked");
+
+    // A PASSWORD-locked Name -> locked true (the server can't decrypt; the seal reads the live session).
+    plant_name_with_key(&dir, "story.test", "zLockedKey",
+        obj(vec![("scheme", jstr("password"))]), 2.0);
+    let locked = load_key(&dir, "0", &args(vec![jstr("zLockedKey")]), &AuthCtx::caller("x")).unwrap();
+    assert!(matches!(get(&locked, "locked"), Some(Json::Bool(true))), "password-locked is session-bound");
+    assert_eq!(get_str(&locked, "deferred"), Some("load-key"));
+
+    // An undeclared Name -> hasEnc false (the .word's `If privateKey` fails).
+    let none = load_key(&dir, "0", &args(vec![jstr("zNobody")]), &AuthCtx::caller("x")).unwrap();
+    assert!(matches!(get(&none, "hasEnc"), Some(Json::Bool(false))));
+}
+
+#[test]
+fn paper_form_is_deterministic_via_treesign_and_defers_when_absent() {
+    let dir = fresh("paper-form");
+
+    // The wired path: the PEM is the load-key value the seal binds, not in the see's hand -> deferred.
+    let deferred = paper_form(&dir, "0", &args(vec![jstr("z-not-a-pem")]), &AuthCtx::caller("x")).unwrap();
+    assert_eq!(get_str(&deferred, "deferred"), Some("paper-form"), "absent PEM -> defer to the seal");
+
+    // The direct-bridge path: a REAL ed25519 PEM derives the mnemonic DETERMINISTICALLY (treesign:
+    // the 24-word entropy IS the 32-byte seed, never to_seed()). Compose, never reimplement.
+    let seed = [7u8; 32];
+    let pem = pkcs8_ed25519_pem(&seed); // the SAME 48-byte DER seed_from_pkcs8_pem unwraps.
+    let words = paper_form(&dir, "0", &args(vec![jstr(&pem)]), &AuthCtx::caller("x")).unwrap();
+    let want = treesign::seed_to_mnemonic(&seed);
+    assert_eq!(canonicalize(&words), canonicalize(&jstr(&want)), "deterministic 24-word paper form");
+    // Same seed -> same mnemonic, every host (the determinism the seal relies on).
+    let words2 = paper_form(&dir, "0", &args(vec![jstr(&pem)]), &AuthCtx::caller("y")).unwrap();
+    assert_eq!(canonicalize(&words2), canonicalize(&words));
+}
+
+// ── dispatch table routes the wave-2 crypto ops ──────────────────────────────────────────────────────
+#[test]
+fn wave2_crypto_ops_route_through_table() {
+    let dir = fresh("wave2-table");
+    plant_being(&dir, "be1", "Alice", "sp1", None);
+    let table = Resolvers;
+    for op in ["reel-head-of", "read-credential", "mint-credential", "load-key", "paper-form"] {
+        let r = table.resolve(op, &args(vec![jstr("be1")]), &dir, "0", &AuthCtx::caller("be1"));
+        if let Err(e) = &r {
+            assert!(!e.message.contains("unknown see-op"), "op {op} hit the unknown-op fallback: {e:?}");
+        }
+    }
+    // an unknown op still rejects.
+    let bad = table.resolve("not-a-real-op", &args(vec![]), &dir, "0", &AuthCtx::caller("be1"));
+    assert!(bad.is_err());
 }
