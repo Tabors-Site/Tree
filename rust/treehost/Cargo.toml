@@ -15,6 +15,21 @@ treecas = { path = "../treecas" }
 # it for the DETERMINISTIC mnemonic derivation, reimplementing no crypto. The non-reproducible mints
 # (the fresh keypair + AES encrypt) still DEFER to the seal — the credential/key sees stay inert.
 treesign = { path = "../treesign" }
+# treecognition carries the LLM CONNECTION resolver bodies (connect.rs: resolve_connection /
+# resolve_connection_update / resolve_connection_removal / resolve_slot_assignment / resolve_llm_config)
+# and the SSRF gate (ssrf::validate_base_url). treehost COMPOSES them behind the same HostResolver seam
+# the wave-1/2 substrate resolvers use — it reimplements none of the validation/normalization. The
+# dependency is one-way (treecognition is pure: treehash/treeword/treeval/treeaddress only; it does NOT
+# depend on treehost), so no cycle.
+treecognition = { path = "../treecognition" }
+# AES-256-CBC for the LLM api-key encryptor INJECTED into resolve_connection / resolve_connection_update.
+# The JS floor (connect.js) encrypts the key as `ivHex:ciphertextHex` (aes-256-cbc, 16-byte random IV)
+# under CUSTOM_LLM_API_SECRET_KEY so the stored ciphertext stays decryptable by the JS reality. treesign
+# only carries AES-GCM (a different cipher), so the CBC primitive lives here, scoped to the LLM seam.
+cbc = "0.4"
+aes = "0.8"
+hex = "0.4"
+getrandom = "0.2"
 
 # The resolver tests plant rows the SAME way treeproj/treefold's write-half tests do: stamp a reel
 # (treestore seal_moment + write_fact_doc) then refold it into a .proj snapshot (treeproj), so the

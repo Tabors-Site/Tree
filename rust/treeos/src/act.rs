@@ -26,7 +26,6 @@ fn get_str<'a>(v: &'a Json, k: &str) -> Option<&'a str> {
     }
 }
 
-const ABLES_DIR: &str = "seed/store/words/ables";
 const MATERIALS_DIR: &str = "seed/materials";
 const STORE_WORDS_DIR: &str = "seed/store/words";
 
@@ -45,14 +44,16 @@ fn story_signer(actor: &Json) -> Option<impl Fn(&Json, &[String]) -> Json> {
     })
 }
 
-/// Run a raw Word as an act (genesis act / do-op): parse -> authorize -> rasterize -> stamp.
+/// Run a raw Word as an act (genesis act / do-op): parse -> authorize -> rasterize -> stamp. After the
+/// seal, the PRESENT-LOOP Phase-2 hook fires (subscription wakes + inbox eviction) over the sealed facts.
 pub fn run_word(word: &str, actor: &Json, root: &Path, history: &str, basis: Option<f64>) -> Vec<treeibp::Outcome> {
-    let ables_dir = Path::new(ABLES_DIR);
+    let ables_dir = crate::config::ables_dir();
+    let ables_dir = ables_dir.as_path();
     let materials_dir = Path::new(MATERIALS_DIR);
     let store_words_dir = Path::new(STORE_WORDS_DIR);
     let signer = story_signer(actor);
     let sign_ref = signer.as_ref().map(|f| f as &dyn Fn(&Json, &[String]) -> Json);
-    treeibp::act_via_fold(
+    let outcomes = treeibp::act_via_fold(
         word,
         actor,
         root,
@@ -61,7 +62,46 @@ pub fn run_word(word: &str, actor: &Json, root: &Path, history: &str, basis: Opt
         |op, noun| treeibp::op_word_file(op, noun, materials_dir, store_words_dir),
         basis,
         sign_ref,
-    )
+    );
+    after_seal(&outcomes, root);
+    outcomes
+}
+
+/// THE PRESENT-LOOP Phase-2 emit hook. After an act seals, walk its AUTHORIZED facts and:
+///   1. EVICT any inbox row an answering act closed (params.answers: <correlation> -> scheduler::evict).
+///   2. WAKE every subscriber whose attention covers each fact (subscriptions::emit_facts) — ORD-DRIVEN
+///      (the wake's basis IS the fact's append ord; NO timer, NO clock, NO sleep).
+/// The chain is the truth; both the inbox queue and the subscription registry are projections this hook
+/// keeps current. CLOCK-FREE end to end. Idempotent: a settled replay re-emits the same wakes/evictions.
+fn after_seal(outcomes: &[treeibp::Outcome], root: &Path) {
+    let facts: Vec<Json> = outcomes
+        .iter()
+        .filter_map(|o| match o {
+            treeibp::Outcome::Authorized(fact) => Some(fact.clone()),
+            _ => None,
+        })
+        .collect();
+    if facts.is_empty() {
+        return;
+    }
+    // 1. inbox eviction: an answering act carries `params.answers` (the correlation it closes).
+    for fact in &facts {
+        if let Some(corr) = answered_correlation(fact) {
+            crate::scheduler::evict(&corr);
+        }
+    }
+    // 2. subscription wakes: each sealed fact may match a being's standing attention.
+    crate::subscriptions::emit_facts(&facts, root);
+}
+
+/// The correlation an act answers (closeInboxOnAnswer): the sealed fact's `params.answers`, when present.
+/// None = not an answering act. A pure read, no clock.
+fn answered_correlation(fact: &Json) -> Option<String> {
+    let params = get(fact, "params")?;
+    match get(params, "answers") {
+        Some(Json::Str(s)) if !s.is_empty() => Some(s.clone()),
+        _ => None,
+    }
 }
 
 /// Invoke a MATERIALS op by name + a trigger ({target, field, value, merge, branch, …}). Loads the op's
@@ -69,7 +109,8 @@ pub fn run_word(word: &str, actor: &Json, root: &Path, history: &str, basis: Opt
 /// is seeded as bindings, the `see resolve-X` reads resolve through treehost, the `Return` builds the
 /// do-fact, and it authorizes + seals on the one moment-seal path.
 pub fn run_op(op: &str, trigger: &Json, actor: &Json, root: &Path, history: &str, basis: Option<f64>) -> Vec<treeibp::Outcome> {
-    let ables_dir = Path::new(ABLES_DIR);
+    let ables_dir = crate::config::ables_dir();
+    let ables_dir = ables_dir.as_path();
     let materials_dir = Path::new(MATERIALS_DIR);
     let store_words_dir = Path::new(STORE_WORDS_DIR);
     let noun = get(trigger, "target").and_then(|t| get_str(t, "kind"));
@@ -79,7 +120,9 @@ pub fn run_op(op: &str, trigger: &Json, actor: &Json, root: &Path, history: &str
     };
     let signer = story_signer(actor);
     let sign_ref = signer.as_ref().map(|f| f as &dyn Fn(&Json, &[String]) -> Json);
-    treeibp::run_op_word(&word, actor, trigger, root, history, |name| treeibp::fold_word_able(name, ables_dir), basis, sign_ref)
+    let outcomes = treeibp::run_op_word(&word, actor, trigger, root, history, |name| treeibp::fold_word_able(name, ables_dir), basis, sign_ref);
+    after_seal(&outcomes, root);
+    outcomes
 }
 
 /// One act outcome as a wire row (the stamped fact, or a denial reason).

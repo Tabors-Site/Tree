@@ -5,6 +5,10 @@ edition = "2021"
 description = "Standalone Rust boot of the TreeOS chain: read (treestore) + fold (treefold) + verify (treeverify) the on-disk reels, with NO Node, NO napi, NO FFI. The determinism spine as one bootable program — the 'anyone can boot' entry point seed. http/ws + the Word runtime are the remaining layers."
 license = "AGPL-3.0"
 
+[lib]
+name = "treeos_lib"
+path = "src/lib.rs"
+
 [[bin]]
 name = "treeos"
 path = "src/main.rs"
@@ -17,6 +21,7 @@ treestore = { path = "../treestore" }
 treeword = { path = "../treeword" }
 treeval = { path = "../treeval" }
 treeibp = { path = "../treeibp" }
+treesecondary = { path = "../treesecondary" }
 treecognition = { path = "../treecognition" }
 treematter = { path = "../treematter" }
 treeaddress = { path = "../treeaddress" }
@@ -24,3 +29,9 @@ treeprotocol = { path = "../treeprotocol" }
 # the binary is the EDGE that holds the story key: it loads .story/story.key and signs the story's (I)
 # own acts. Crypto lives here + in treesign, never in the spine/treeibp lib (which takes the closure).
 treesign = { path = "../treesign" }
+
+[dev-dependencies]
+treecognition = { path = "../treecognition" }
+# the present-loop SEAL proof births a real genesis world (vocabulary coined so an op-word deed
+# resolves) before summoning a being whose flow deed stamps. Test-only — the runtime never plants.
+treebook = { path = "../treebook" }

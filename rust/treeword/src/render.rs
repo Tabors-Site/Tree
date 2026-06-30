@@ -292,8 +292,15 @@ fn render_act_effect(eff: &Json) -> Option<String> {
     if s(eff, "verb") == "do" {
         let mut out = format!("do {act}");
         if let Some(of) = get(eff, "of") {
-            if !s(of, "kind").is_empty() && !s(of, "ref").is_empty() {
-                out.push_str(&format!(" on the {} {}", s(of, "kind"), s(of, "ref")));
+            // parse_do_target builds `the <kind> <ref>` (a kinded target) OR a bare `{ref}` (no kind).
+            // Render the kinded form back as "on the <kind> <ref>", the bare form as "on <ref>"; both
+            // re-parse to the SAME target, so a deed's `of.ref` is never dropped.
+            let r = s(of, "ref");
+            if !r.is_empty() {
+                match s(of, "kind") {
+                    "" => out.push_str(&format!(" on {r}")),
+                    kind => out.push_str(&format!(" on the {kind} {r}")),
+                }
             }
         }
         if let Some(p) = get(eff, "params") {
@@ -649,12 +656,20 @@ fn render_kindverb(node: &Json) -> String {
 }
 
 /// The genesis life-register acts (rule 9): i-am, make (being/space), stand, give.
+///
+/// Each genesis act is keyed on `of.id` (the genesis RULES build `of:{kind,id}`, never a `ref`), so a
+/// branch fires ONLY when the node is the genesis SHAPE. A flow-body `do <op>` deed of the same op carries
+/// `of:{kind,ref}` + `params` instead (do_op_act / parse_do_target); it has no `of.id`, so it falls
+/// through to None and renders via render_effect_word's body path (render_act_effect), which keeps the
+/// deed's ref + params. Without the `of.id` guard a deed like `do create-space on the place root with {…}`
+/// would mis-render to the genesis "I make ." and DROP its target + params.
 fn render_act(node: &Json) -> Option<String> {
     let verb = s(node, "verb");
     let act = s(node, "act");
+    let has_id = !of_id(node).is_empty();
     match (verb, act) {
         ("name", "i-am") => Some("I am \"what?\" I am.".to_string()),
-        ("be", "birth") => {
+        ("be", "birth") if has_id => {
             // "I make <Capitalized>[, <description>]." — of.id carries the case the parser keys on.
             let id = of_id(node);
             match get(node, "params").and_then(|p| get(p, "description")) {
@@ -662,7 +677,7 @@ fn render_act(node: &Json) -> Option<String> {
                 _ => Some(format!("I make {id}.")),
             }
         }
-        ("do", "create-space") => {
+        ("do", "create-space") if has_id => {
             let id = of_id(node);
             match get(node, "params").and_then(|p| get(p, "gloss")) {
                 Some(Json::Str(g)) if !g.is_empty() => Some(format!("I make {id}, {g}.")),
@@ -671,8 +686,66 @@ fn render_act(node: &Json) -> Option<String> {
         }
         // the stand-in genesis always has a target (a space to stand in); a bare `do move` (no target)
         // is an imperative deed, not a genesis — let it fall through to render_inline.
-        ("do", "move") if !of_id(node).is_empty() => Some(format!("I stand in {}.", of_id(node))),
-        ("do", "give") => Some(format!("I give the {} to {}.", of_id(node), s(node, "to"))),
+        ("do", "move") if has_id => Some(format!("I stand in {}.", of_id(node))),
+        ("do", "give") if has_id => Some(format!("I give the {} to {}.", of_id(node), s(node, "to"))),
         _ => None, // a bare do-op deed / be / see / call — rendered by render_effect_word's body path
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{parse, render::render, render::render_effect_word};
+    use treehash::{canonicalize, Json};
+
+    fn flow_effect(src: &str) -> Json {
+        let flow = parse(src).remove(0);
+        let effects = if let Json::Obj(e) = &flow {
+            e.iter().find(|(k, _)| k == "effects").map(|(_, v)| v.clone())
+        } else {
+            None
+        };
+        match effects {
+            Some(Json::Arr(a)) => a.into_iter().next().expect("at least one effect"),
+            _ => panic!("no effects"),
+        }
+    }
+
+    /// A parameterized flow-body deed (`do <op> on the <noun> <id> with {…}`) must SPEAK a Word that
+    /// re-parses to the very same IR; its target + params are carried, not dropped. This is the
+    /// scripted decider's exact path: render_effect_word(effect) -> parse(word) == [effect].
+    #[test]
+    fn parameterized_flow_deed_round_trips_through_the_spoken_word() {
+        for src in [
+            // a kinded target + object params
+            "When the sky is summoned:\n  do set-being on the being b1 with { field: \"mood\", value: \"calm\" }.",
+            // create-space deed: must NOT collapse to the genesis \"I make .\" (the bug this guards)
+            "When the sky is summoned:\n  do create-space on the place root with { name: \"grove\", type: \"home-territory\" }.",
+            // a kinded space target
+            "When the sky is summoned:\n  do create-space on the space grove with { name: \"grove\" }.",
+            // give deed (genesis `give` shares the op)
+            "When the sky is summoned:\n  do give on the matter apple with { to: \"Bob\" }.",
+            // move deed with a target (genesis `move` shares the op)
+            "When the sky is summoned:\n  do move on the space grove.",
+        ] {
+            let eff = flow_effect(src);
+            let word = render_effect_word(&eff).expect("a parameterized deed must speak");
+            let reparsed = canonicalize(&Json::Arr(parse(&word)));
+            let want = canonicalize(&Json::Arr(vec![eff.clone()]));
+            assert_eq!(reparsed, want, "spoken word {word:?} dropped params/target for {src}");
+        }
+    }
+
+    /// The genesis SHAPE (`of.id`, e.g. parsed from "I make grove.") still renders to its genesis text;
+    /// the of.id guard disambiguates the genesis act from the same-op flow deed.
+    #[test]
+    fn genesis_shape_still_renders_to_its_genesis_text() {
+        for (src, expect) in [
+            ("I make grove.", "I make grove."),
+            ("I stand in grove.", "I stand in grove."),
+            ("I give the apple to Bob.", "I give the apple to Bob."),
+        ] {
+            let node = parse(src).remove(0);
+            assert_eq!(render(&node).as_deref(), Some(expect));
+        }
     }
 }

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=TreeOS Portal
+Comment=The moment / act browser
+Exec=/home/tabor/github/Tree/rust/treeportal/launch.sh
+Icon=utilities-terminal
+Terminal=false
+Categories=Network;Utility;

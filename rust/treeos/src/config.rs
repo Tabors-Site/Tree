@@ -16,6 +16,16 @@ use treestore::read_reel_file;
 /// The story domain = the library reel id (matches treeibp::STORY; a config follow-up: env/domain).
 const STORY: &str = "localhost";
 
+/// The seed ables vocabulary dir (the `.word` cognition flows + folded able specs). `$TREE_ABLES_DIR`
+/// overrides (a relocated checkout / a test scratch dir), else the cwd-relative `seed/store/words/ables`
+/// the binary serves from. No wall-clock; a pure path lookup.
+pub fn ables_dir() -> std::path::PathBuf {
+    match std::env::var("TREE_ABLES_DIR") {
+        Ok(d) if !d.is_empty() => std::path::PathBuf::from(d),
+        _ => std::path::PathBuf::from("seed/store/words/ables"),
+    }
+}
+
 fn get<'a>(v: &'a Json, k: &str) -> Option<&'a Json> {
     match v {
         Json::Obj(e) => e.iter().find(|(kk, _)| kk == k).map(|(_, x)| x),

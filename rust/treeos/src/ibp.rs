@@ -69,6 +69,10 @@ pub fn handle_wire(msg: &str, root: &Path) -> String {
         match get_str(&req, "verb").as_deref() {
             Some("moment") => return json(&moment(&req, root)),
             Some("act") => return json(&act(&req, root)),
+            // a SUMMON: being A calls being B -> B wakes (the present-loop conductor runs B's moment, B
+            // decides + acts). The summon-driven wake of the present-loop runtime (Phase 1). CLOCK-FREE:
+            // B wakes on this real event, not on a timer. Composes scheduler::wake over the conductor.
+            Some("summon") | Some("call") => return json(&summon(&req, root)),
             // cognize = the autonomous loop (moment -> decide a Word -> act), built on the two primitives.
             Some("cognize") => {
                 return json(&match crate::cognize::cognize_view(&req, root) {
@@ -128,6 +132,52 @@ fn act(req: &Json, root: &Path) -> Json {
     // redact secrets from the stamped facts before they leave (a set-being password fact, etc.).
     let results: Vec<Json> = outcomes.iter().map(|o| treeprotocol::redact::redact_secrets(&crate::act::outcome_json(o))).collect();
     obj(vec![("verb", jstr("act")), ("ok", Json::Bool(true)), ("engine", jstr("rust")), ("results", Json::Arr(results))])
+}
+
+/// A SUMMON: wake a being. The present-loop runtime's entry from the wire — a real EVENT (a summon),
+/// never a timer, drives the wake. The summon names the `being` to wake; the optional `able`/`space`/
+/// `event`/`payload`/`from` ride into the moment's inner-face (so a scripted `When event:` flow fires).
+/// By default the wake runs SYNCHRONOUSLY (the reply carries the moment outcomes the caller asked for);
+/// `detach:true` fires it on the being's own run-loop thread and returns immediately (parallel beings).
+/// CLOCK-FREE: nothing here reads a wall-clock. Composes scheduler::wake / wake_sync over the conductor.
+fn summon(req: &Json, root: &Path) -> Json {
+    let being = match get_str(req, "being").or_else(|| get_str(req, "to")) {
+        Some(b) => b,
+        None => return IbpError::new(code::INVALID_INPUT, "summon needs a 'being' (or 'to')").envelope(),
+    };
+    let entry = crate::scheduler::Entry {
+        correlation: get_str(req, "correlation").unwrap_or_else(|| being.clone()),
+        from: get_str(req, "from"),
+        able: get_str(req, "able"),
+        space: get_str(req, "space"),
+        event: get_str(req, "event"),
+        payload: get(req, "payload").cloned(),
+        history: get_str(req, "history").unwrap_or_else(|| "0".to_string()),
+        basis: num_field(req, "basis"),
+        prev: get_str(req, "prev"),
+        flows: None, // wire summons parse the able's `.word` flows; injection is an in-process seam.
+        priority: get_str(req, "priority"), // drain ranks by priorityRank; clock-free count sort.
+    };
+    let root_buf = root.to_path_buf();
+    let detach = matches!(get(req, "detach"), Some(Json::Bool(true)));
+    if detach {
+        let accepted = crate::scheduler::wake(&being, entry, &root_buf);
+        return obj(vec![
+            ("verb", jstr("summon")),
+            ("being", jstr(&being)),
+            ("woke", Json::Bool(accepted)),
+            ("detached", Json::Bool(true)),
+        ]);
+    }
+    // synchronous wake: run the being's moment(s) inline so the reply carries the outcome.
+    let reports = crate::scheduler::wake_sync(&being, entry, &root_buf);
+    let moments: Vec<Json> = reports.iter().map(|r| r.view()).collect();
+    obj(vec![
+        ("verb", jstr("summon")),
+        ("being", jstr(&being)),
+        ("woke", Json::Bool(true)),
+        ("moments", Json::Arr(moments)),
+    ])
 }
 
 /// Legacy text read (pre-moment/act): `reels` | `history/kind/id`. Kept so existing WS readers work.
