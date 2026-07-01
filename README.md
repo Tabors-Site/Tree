@@ -6,32 +6,79 @@ Plant a seed on a host. It stores and grows a federated and cryptographically si
 
 It also provides a "5th dimensional" Library that Names can act in to share books of histories, and Search all Stories they are peered with.
 
-## Run it
+## Run it (Rust)
 
-TreeOS boots on Rust. The kernel (content hash, chain verify, fold, the append only store) is a zero dependency Rust binary that reads, verifies, folds, and serves a Story with no Node in the loop. The Word runtime, the language that writes new acts, runs as a worker behind the front door. That worker is Node today and is being ported to Rust, the goal being one self contained binary anyone can boot.
-
-Needs a Rust toolchain (rustup). Node.js 18+ runs the Word worker and genesis for now.
+TreeOS boots on Rust. One self-contained binary reads, verifies, folds, writes, and serves a Story with no Node in the loop. You need a Rust toolchain ([rustup](https://rustup.rs)).
 
 ```bash
 git clone https://github.com/Tabors-Site/Tree.git
 cd Tree
 
-# build the Rust kernel, then boot it (serves the chain over HTTP + WebSocket)
+# build the binaries → rust/target/release/{treeos, treeportal}
 cargo build --release --manifest-path rust/Cargo.toml
+```
+
+### Make a store (plant a fresh Story)
+
+`genesis` reads the seed's genesis words (`seed/store/genesis-*.word`) and plants a brand-new world — the Name "I", the being "Am", the vocabulary, the spaces, the delegates — into an empty store directory:
+
+```bash
+# treeos genesis <store-dir> <seed-dir>   (both optional; default store/past + seed)
+./rust/target/release/treeos genesis store/past seed
+```
+
+The store directory is where your Story lives (its chain + projections). Name it something else (`store/mystory`) to spin up a fresh, isolated Story — its own chain, like a new database. Genesis refuses if the directory already exists (delete it first to replant).
+
+### Serve it
+
+```bash
+# treeos serve <host:port> <store-dir>   (defaults 127.0.0.1:7070 + store/past)
 ./rust/target/release/treeos serve 127.0.0.1:7070 store/past
 ```
 
-`treeos serve` reads, verifies, and folds the chain in Rust and exposes it: `GET /health`, `/reels`, `/reel/<history>/<kind>/<id>`, a `/ws` stream, and `POST /word`, the write seam that delegates to the JS Word worker and stamps the result onto the chain.
+`serve` exposes the chain over HTTP + WebSocket: `GET /health`, `/reels`, `/reel/<history>/<kind>/<id>`, a `/ws` stream, and `POST /word` — the write seam that runs a Word and stamps the resulting fact onto the chain, all in Rust.
 
-For writes and for planting a fresh Story (genesis and the Portal UI), the Node side seeds through `npm install && npm run build:native && npm start`, until genesis ports across. Open the URL it prints to use your Portal.
+Want a one-shot integrity check instead? Run the binary with no subcommand to read + fold + verify a store and print a boot report:
+
+```bash
+./rust/target/release/treeos store/past
+```
+
+### The Portal (the UI)
+
+`treeportal` is the native window onto a running `treeos`. Start the server, then:
+
+```bash
+# connects to ws://127.0.0.1:7070/ws by default; pass another URL to point elsewhere
+./rust/target/release/treeportal
+# or:  ./rust/target/release/treeportal ws://host:port/ws
+```
+
+Sign in with a Name + password, drive a being, and move through the world: the 2D map, first-person 3D, the Story render, the 4D branch tree, and the Rain.
+
+### Where the binaries are
+
+After `cargo build --release`:
+
+- **Linux / macOS:** `rust/target/release/treeos` and `rust/target/release/treeportal`
+- **Windows:** `rust\target\release\treeos.exe` and `rust\target\release\treeportal.exe` — same `cargo build --release` command in a Windows shell (PowerShell / cmd)
+
+Copy a binary anywhere and run it — no toolchain, no Node, no `node_modules`.
+
+## Config (first-boot settings)
+
+A Story's boot-critical identity — its outward domain, port, store name, display name, and token secret — is the first-boot config: the equivalent of what you'd set on an OS's first boot. Today these live in **`.env`** (see `.env.example`); the canonical values fold onto the Story's **library reel** once the store is open, and runtime knobs live in the `.config` heaven space.
+
+> Status: the Rust runtime currently defaults the Story domain to `localhost` and doesn't yet read `.env`. Wiring the Rust genesis to read these settings (or a native Rust config) and stamp a custom domain / name / secret into the library on first boot is the next step. Until then, `.env` holds the intended settings and the Rust binary runs a local `localhost` Story.
 
 ## Read deeper
 
-- [`seed/FACTORY.md`](seed/FACTORY.md), the seed in its own words
+- [`seed/FACTORY.md`](seed/FACTORY.md), the seed in its own words (the JS reference implementation)
 - [`philosophy/`](philosophy/), the doctrine
-- [`philosophy/I_AM.md`](philosophy/I.md), the cryptographic root
+- [`philosophy/I.md`](philosophy/I.md), the cryptographic root
 - [`philosophy/theorems.md`](philosophy/theorems.md), the formal results
-- [`resources/README.md`](resources/README.md), building extensions
+
+The `seed/` tree is the original JS implementation, kept as the reference the Rust port is proven against.
 
 ## License
 

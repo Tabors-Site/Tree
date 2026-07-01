@@ -42,10 +42,15 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
                     }
                 }
                 Mode::Stamp => {
-                    ui.label(egui::RichText::new("hold a chord, release to send it as an act  ·  the server reads it  ·  Esc → manual").weak());
-                    if !p.st.last_act.is_empty() {
-                        ui.add_space(8.0);
-                        ui.colored_label(egui::Color32::from_rgb(230, 170, 70), egui::RichText::new(format!("⌘ {}", p.st.last_act)).monospace().small());
+                    // NOT a separate area — the pressed key shows RIGHT HERE in the same word slot a said
+                    // Word uses, and the next key replaces it (the "reset after every key" feel). Each key
+                    // is one act; the server reads it. Esc → type Words.
+                    if p.st.last_act.is_empty() {
+                        ui.label(egui::RichText::new("press a key — each keypress is one act    ·    Esc → type Words").weak());
+                    } else {
+                        let amber = egui::Color32::from_rgb(230, 170, 70);
+                        ui.label(egui::RichText::new(&p.st.last_act).monospace().strong().color(amber));
+                        ui.label(egui::RichText::new("▏").monospace().color(amber));
                     }
                 }
             }

@@ -65,7 +65,7 @@ pub fn handle_wire_conn(msg: &str, root: &Path, conn: u64) -> String {
                         }
                     }
                     Some("act") => {
-                        if let Err(e) = gate_act(&req, conn) {
+                        if let Err(e) = gate_act(&req, conn, root) {
                             return json(&e.envelope());
                         }
                     }
@@ -153,8 +153,9 @@ fn gate_being_password(req: &Json, root: &Path) -> Result<(), IbpError> {
 /// on this conn. No open moment -> REJECTED (you cannot act without a moment). `I`'s acts are exempt
 /// (custodial). The act still carries its own signature for the FACT's chain provenance, verified
 /// downstream in the seal; this gate is the SESSION check, not the fact-sig check.
-fn gate_act(req: &Json, conn: u64) -> Result<(), IbpError> {
-    let name_id = get(req, "actor").and_then(actor_name_id);
+fn gate_act(req: &Json, conn: u64, root: &Path) -> Result<(), IbpError> {
+    let actor = get(req, "actor");
+    let name_id = actor.and_then(actor_name_id);
     let name_id = match name_id {
         Some(n) => n,
         None => return Ok(()), // an actor-less act (genesis/legacy) — the edge signer governs it
@@ -162,14 +163,36 @@ fn gate_act(req: &Json, conn: u64) -> Result<(), IbpError> {
     if is_story(&name_id) {
         return Ok(()); // I: custodial
     }
-    if crate::live::is_authenticated(conn, &name_id) {
-        Ok(()) // the key was proven at the open moment — the act rides it
-    } else {
-        Err(IbpError::new(
+    if !crate::live::is_authenticated(conn, &name_id) {
+        return Err(IbpError::new(
             code::UNAUTHORIZED,
             format!("act by '{name_id}' has no open authenticated moment (open a moment with the Name's key first)"),
-        ))
+        ));
     }
+    // OWNERSHIP (the "you are not I" security floor): if the act DRIVES a being, the Name must OWN it
+    // (trueName) or hold a live delegation (has_authority_over) — you can only act THROUGH beings you are
+    // mother/father of, or that are delegated to you. The sole exception is the SHARED @arrival being,
+    // which any beingless visitor rides (and whose able only permits calling @cherub to be born). A Name
+    // with no being of its own is @arrival — it cannot borrow another's being. Enforced SERVER-SIDE; the
+    // client only reacts.
+    let history = get_str(req, "history").unwrap_or_else(|| "0".to_string());
+    if let Some(being) = actor.and_then(|a| get_str(a, "beingId")).filter(|b| !b.is_empty() && b != "I") {
+        if !is_arrival_being(root, &history, &being) && !treeibp::has_authority_over(root, &history, &name_id, &being) {
+            return Err(IbpError::new(
+                code::UNAUTHORIZED,
+                format!("Name '{name_id}' may not act through being '{being}' — you can only act through beings you own or that are delegated to you"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The shared @arrival being — the entry stance every beingless visitor rides (many Names at once). Its
+/// folded `name` is "arrival". Driving it is allowed for anyone; its ABLE still restricts it to calling
+/// @cherub to be born, so the shared body can do nothing else.
+fn is_arrival_being(root: &Path, history: &str, being_id: &str) -> bool {
+    let facts = treestore::read_reel_file(root, history, "being", being_id, None, None);
+    matches!(get_str(&treefold::fold("being", &facts), "name").as_deref(), Some("arrival"))
 }
 
 /// The actor's Name id (its pubkey/key-id, per the id-derivation rule). Reads `nameId`, else `beingId`

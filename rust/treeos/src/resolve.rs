@@ -155,9 +155,16 @@ pub fn resolve(input: &str, ctx_history: &str, at: Option<f64>, root: &Path) -> 
     Ok(Resolved { space_id: cur, chain: chain_v, history, being })
 }
 
-/// Resolve an @being NAME to a beingId (a being whose folded name matches), on the history, as of `at`.
+/// Resolve an @being NAME to a beingId, on the history, as of `at`. The name IS the being (Tabor): a
+/// being whose folded `name` matches, OR whose ID matches case-insensitively — so `@cherub` resolves to
+/// the being `Cherub` (address-cased vs Word-cased) with NO stored `name` needed at a bare birth. The
+/// handle is DERIVED from the being id, not crammed into birth.
 fn resolve_being(root: &Path, history: &str, at: Option<f64>, name: &str) -> Option<String> {
-    all_of_kind(root, history, "being", at).into_iter().find(|(_, s)| sget(s, "name").as_deref() == Some(name)).map(|(id, _)| id)
+    let want = name.to_lowercase();
+    all_of_kind(root, history, "being", at)
+        .into_iter()
+        .find(|(id, s)| sget(s, "name").as_deref() == Some(name) || id.to_lowercase() == want)
+        .map(|(id, _)| id)
 }
 
 /// The scene descriptor for a resolved address: the place + its children (spaces), occupants (beings
@@ -167,12 +174,7 @@ pub fn scene(input: &str, ctx_history: &str, at: Option<f64>, root: &Path) -> Re
     let spaces = all_of_kind(root, &r.history, "space", at);
     let self_name = spaces.iter().find(|(id, _)| *id == r.space_id).and_then(|(_, s)| sget(s, "name"));
 
-    let children: Vec<Json> = spaces
-        .iter()
-        .filter(|(_, s)| sget(s, "parent").as_deref() == Some(&r.space_id))
-        .map(|(id, s)| node("space", id, s))
-        .collect();
-
+    // occupants (beings positioned here), each with its freshest deed folded into a speech bubble.
     let beings: Vec<Json> = all_of_kind(root, &r.history, "being", at)
         .into_iter()
         .filter(|(_, s)| sget(s, "position").as_deref() == Some(&r.space_id))
@@ -190,10 +192,51 @@ pub fn scene(input: &str, ctx_history: &str, at: Option<f64>, root: &Path) -> Re
         })
         .collect();
 
-    let matters: Vec<Json> = all_of_kind(root, &r.history, "matter", at)
-        .into_iter()
-        .filter(|(_, s)| sget(s, "spaceId").as_deref() == Some(&r.space_id))
-        .map(|(id, s)| node("matter", &id, &s))
+    // A child's coord is its place INSIDE this parent space. When the fold carries none, the PARENT
+    // derives one — a ring around the crowd centre (the average of the beings' coords) — so the child
+    // renders WITH the beings in both 2D and 3D. (A coordless child used to vanish in 3D and sit at the
+    // far origin in 2D, which is why spaces and beings never appeared together.)
+    let (mut cx, mut cy, mut cn) = (0.0f64, 0.0f64, 0.0f64);
+    for b in &beings {
+        if let Some(c) = get(b, "coord") {
+            if let (Some(Json::Num(x)), Some(Json::Num(y))) = (get(c, "x"), get(c, "y")) {
+                cx += x;
+                cy += y;
+                cn += 1.0;
+            }
+        }
+    }
+    let centre = if cn > 0.0 { (cx / cn, cy / cn) } else { (0.0, 0.0) };
+    let with_derived_coord = |mut node: Json, i: usize, total: usize, radius: f64| -> Json {
+        if matches!(get(&node, "coord"), None | Some(Json::Null)) {
+            let ang = i as f64 / (total.max(1) as f64) * std::f64::consts::TAU;
+            let coord = obj(vec![("x", Json::Num(centre.0 + ang.cos() * radius)), ("y", Json::Num(centre.1 + ang.sin() * radius))]);
+            if let Json::Obj(e) = &mut node {
+                e.retain(|(k, _)| k != "coord");
+                e.push(("coord".to_string(), coord));
+            }
+        }
+        node
+    };
+
+    let child_spaces: Vec<(String, Json)> = spaces
+        .iter()
+        .filter(|(_, s)| sget(s, "parent").as_deref() == Some(&r.space_id))
+        .map(|(id, s)| (id.clone(), s.clone()))
+        .collect();
+    let nspaces = child_spaces.len();
+    let children: Vec<Json> = child_spaces
+        .iter()
+        .enumerate()
+        .map(|(i, (id, s))| with_derived_coord(node("space", id, s), i, nspaces, 4.0))
+        .collect();
+
+    let matter_states: Vec<(String, Json)> = all_of_kind(root, &r.history, "matter", at).into_iter().filter(|(_, s)| sget(s, "spaceId").as_deref() == Some(&r.space_id)).collect();
+    let nmatter = matter_states.len();
+    let matters: Vec<Json> = matter_states
+        .iter()
+        .enumerate()
+        .map(|(i, (id, s))| with_derived_coord(node("matter", id, s), i, nmatter, 5.5))
         .collect();
 
     let path_by_names = format!("/{}", r.chain.iter().skip(1).map(|(n, _)| n.clone()).collect::<Vec<_>>().join("/"));
@@ -260,7 +303,15 @@ pub fn timeline(history: &str, at: Option<f64>, root: &Path) -> Json {
 /// List the histories/branches the story has — `main` (path "0", no registry row) plus every live
 /// registry row `{path, label, parent}`. The portal draws these as the branch tree/switcher.
 pub fn branches(root: &Path) -> Json {
-    let mut list = vec![obj(vec![("path", jstr("0")), ("label", jstr("main")), ("parent", Json::Null)])];
+    // forkOrd (where it split from its parent) + tip (its own head) place each branch on the ord axis so
+    // the portal's 4D view can draw a time-accurate git-graph, not just the parent tree.
+    let mut list = vec![obj(vec![
+        ("path", jstr("0")),
+        ("label", jstr("main")),
+        ("parent", Json::Null),
+        ("forkOrd", Json::Num(0.0)),
+        ("tip", Json::Num(branch_tip(root, "0"))),
+    ])];
     for p in treestore::list_live_histories(root) {
         if p == "0" {
             continue;
@@ -269,9 +320,77 @@ pub fn branches(root: &Path) -> Json {
         let label = row.as_ref().and_then(|r| sget(r, "label")).filter(|s| !s.is_empty()).unwrap_or_else(|| p.clone());
         // a main-child row stores parent=null; show it as a child of "0" for the tree.
         let parent = row.as_ref().and_then(|r| sget(r, "parent")).filter(|s| !s.is_empty()).unwrap_or_else(|| "0".to_string());
-        list.push(obj(vec![("path", jstr(&p)), ("label", jstr(&label)), ("parent", jstr(&parent))]));
+        list.push(obj(vec![
+            ("path", jstr(&p)),
+            ("label", jstr(&label)),
+            ("parent", jstr(&parent)),
+            ("forkOrd", Json::Num(fork_ord_of(root, &p, &parent))),
+            ("tip", Json::Num(branch_tip(root, &p))),
+        ]));
     }
     obj(vec![("kind", jstr("branches")), ("histories", Json::Arr(list))])
+}
+
+/// A branch's OWN tip: the max fact ord in its floored lineage view. Unlike `now_ord` this is NOT floored
+/// by the global counter, so it's where THIS branch's head actually sits on the ord axis (the 4D graph).
+fn branch_tip(root: &Path, history: &str) -> f64 {
+    let lineage = lineage_of(root, history);
+    let mut mx = 0.0f64;
+    let mut seen: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
+    for (h, k, id) in list_reels(root) {
+        if !lineage.contains(&h) || !seen.insert((k.clone(), id.clone())) {
+            continue;
+        }
+        for f in read_lineage_facts(root, history, &k, &id) {
+            if let Some(o) = fact_ord(&f) {
+                if o > mx {
+                    mx = o;
+                }
+            }
+        }
+    }
+    mx
+}
+
+/// The ord where `history` forked from its parent: the max ord among the parent facts at (seq ≤) the
+/// stored per-reel branchPoint — the divergence point on the ord axis. `0` for main / an unknown fork.
+fn fork_ord_of(root: &Path, history: &str, parent: &str) -> f64 {
+    if history == "0" {
+        return 0.0;
+    }
+    let row = match treestore::load_history(root, history) {
+        Some(r) => r,
+        None => return 0.0,
+    };
+    let bp = match get(&row, "branchPoint") {
+        Some(Json::Obj(m)) => m.clone(),
+        _ => return 0.0,
+    };
+    let mut mx = 0.0f64;
+    for (key, sv) in &bp {
+        let seq = match sv {
+            Json::Num(n) => *n,
+            _ => continue,
+        };
+        let (k, id) = match key.split_once(':') {
+            Some(x) => x,
+            None => continue,
+        };
+        for f in treestore::read_reel_file(root, parent, k, id, None, None) {
+            let fs = match get(&f, "seq") {
+                Some(Json::Num(n)) => *n,
+                _ => continue,
+            };
+            if fs <= seq {
+                if let Some(o) = fact_ord(&f) {
+                    if o > mx {
+                        mx = o;
+                    }
+                }
+            }
+        }
+    }
+    mx
 }
 
 /// Fork a NEW history off MAIN at `at` (None = now). Each main reel's floor is its max seq ≤ `at`; the

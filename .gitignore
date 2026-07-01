@@ -22,6 +22,8 @@ store
 # real sits here. Created by story/scripts/mirror-mount.mjs.
 mirror
 
+.shared
+
 # Rust port: ignore only build output + tooling noise, NOT the source.
 # Keep Cargo.toml / Cargo.lock / src/ (the actual port); drop target/ and backups.
 /rust/target/

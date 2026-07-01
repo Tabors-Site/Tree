@@ -387,6 +387,33 @@ const RULES = [
       },
     }),
   ],
+  // I make [the] <space> [in [the] <parent>] at <x>, <y>.  -> create a space AT a coord, optionally
+  // INSIDE a parent. A child's coord is its spot inside the parent (the parent assigns it); the coord
+  // folds onto the space, `parent` -> position. This is the "I make X in Y" grammar the flat seed
+  // flagged as the follow-up, now spoken.
+  [
+    /^I make (?:the )?([a-z][\w.-]*)(?: in (?:the )?([a-z][\w.-]*))? at (-?\d+), ?(-?\d+)\.$/,
+    (m) => ({
+      kind: "act",
+      verb: "do",
+      act: "create-space",
+      by: "I",
+      of: { kind: "space", id: m[1] },
+      params: { coord: { x: Number(m[3]), y: Number(m[4]) }, ...(m[2] ? { parent: m[2] } : {}) },
+    }),
+  ],
+  // I make [the] <space> in [the] <parent>.  -> create a space under a parent (parent -> position), no coord.
+  [
+    /^I make (?:the )?([a-z][\w.-]*) in (?:the )?([a-z][\w.-]*)\.$/,
+    (m) => ({
+      kind: "act",
+      verb: "do",
+      act: "create-space",
+      by: "I",
+      of: { kind: "space", id: m[1] },
+      params: { parent: m[2] },
+    }),
+  ],
   [
     /^I make (?:the )?([a-z][\w.-]*)(?:, (.+?))?\.$/,
     (m) => ({

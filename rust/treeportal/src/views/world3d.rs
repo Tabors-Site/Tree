@@ -54,6 +54,20 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
     }
     let centre = if sum.2 > 0.0 { (sum.0 / sum.2, sum.1 / sum.2) } else { (0.0, 0.0) };
 
+    // every node's ground position: its coord, else a ring around the crowd centre — so child spaces /
+    // matter that carry NO folded coord still stand in the scene instead of vanishing (they used to be
+    // skipped, which is why spaces didn't render in 3D).
+    let ncount = nodes.len().max(1) as f32;
+    let place = |i: usize, n: &super::scene::Node| -> (f32, f32) {
+        match world_of(n) {
+            Some(c) => c,
+            None => {
+                let ang = i as f32 / ncount * std::f32::consts::TAU;
+                (centre.0 + ang.cos() * CELL * 3.0, centre.1 + ang.sin() * CELL * 3.0)
+            }
+        }
+    };
+
     // ── the camera: FIRST-PERSON at your driven being's coord (you look out of its eyes); else a vantage
     //    pulled back from the centre, looking in. Only YAW is local (the mouse turns your head); your
     //    ground position IS your being's folded position — walk by saying the move Word. ──
@@ -75,15 +89,12 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
     draw_grid(&painter, &cam, 12);
 
     let mut placed: Vec<(f32, egui::Pos2, egui::Pos2, &super::scene::Node)> = Vec::new();
-    for node in &nodes {
+    for (i, node) in nodes.iter().enumerate() {
         // don't draw the body you're looking OUT of (first-person)
         if my_coord.is_some() && my_id.as_deref() == Some(node.id.as_str()) {
             continue;
         }
-        let (wx, wz) = match world_of(node) {
-            Some(c) => c,
-            None => continue,
-        };
+        let (wx, wz) = place(i, node);
         let h = body_height(&node.kind);
         if let (Some((base, depth)), Some((top, _))) = (cam.project(wx, 0.0, wz), cam.project(wx, h, wz)) {
             placed.push((depth, base, top, node));
@@ -117,6 +128,16 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
     painter.line_segment([cross - egui::vec2(0.0, 6.0), cross + egui::vec2(0.0, 6.0)], egui::Stroke::new(1.0, cc));
     if let Some(Json::Str(name)) = get(&face, "name") {
         painter.text(rect.center_top() + egui::vec2(0.0, 16.0), egui::Align2::CENTER_CENTER, name, egui::FontId::monospace(13.0), egui::Color32::from_gray(150));
+    }
+    // your coord — first-person means you never see your OWN body, so the ticking (x,y) is the proof you
+    // moved. "not in this place" if your body isn't in the perceived scene (a stale address).
+    if let Some((_, nm)) = &p.active_being {
+        let my_grid = my_id.as_ref().and_then(|bid| nodes.iter().find(|n| &n.id == bid)).and_then(|n| n.coord);
+        let txt = match my_grid {
+            Some((x, y)) => format!("@{nm}  ({}, {})", x as i64, y as i64),
+            None => format!("@{nm}  · not in this place"),
+        };
+        painter.text(rect.right_top() + egui::vec2(-12.0, 16.0), egui::Align2::RIGHT_CENTER, txt, egui::FontId::monospace(12.0), egui::Color32::from_rgb(255, 214, 90));
     }
     let hud = match &p.st.target_being {
         Some((_, nm)) => format!("drag to look · say the Word (bottom bar) · calling @{nm}"),

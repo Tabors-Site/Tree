@@ -139,10 +139,55 @@ fn facet_resolve(spec: &Json, actor: &Json) -> Json {
     if let Some(parent) = get_str(actor, "beingId").filter(|b| !b.is_empty() && *b != I_AM) {
         params = set_field(&params, "parentBeingId", jstr(parent));
     }
+    // a being is ALWAYS born INTO a space (user doctrine — never spaceless). treeos enriches the actor
+    // with `homeSpace` (the actor's current space, else the story's place root); spawn the being there.
+    // The COORD is not hardcoded here — `with_default_placement` gives any un-placed creation a derived
+    // spot, so future words get it for free.
+    if let Some(home) = get_str(actor, "homeSpace").filter(|h| !h.is_empty()) {
+        params = set_field(&params, "homeSpace", jstr(home));
+        params = set_field(&params, "position", jstr(home));
+    }
     let s = set_field(spec, "of", obj(vec![("kind", jstr("being")), ("id", jstr(&being_id))]));
     let s = set_field(&s, "by", jstr(&name_id));
     let s = set_field(&s, "through", jstr(&being_id));
     set_field(&s, "params", params)
+}
+
+/// A DETERMINISTIC pseudo-random ground spot for an id (clock-free — NO Math.random). Two hash bytes →
+/// x,y in 0..99. Same id always lands the same place; different ids spread out. This is how any new
+/// space/being "just gets a position" without hardcoding, and future words inherit it for free.
+fn derive_coord(id: &str) -> (f64, f64) {
+    let h = treehash::sha256_hex(id.as_bytes());
+    let x = u32::from_str_radix(h.get(0..4).unwrap_or("0"), 16).unwrap_or(0) % 100;
+    let y = u32::from_str_radix(h.get(4..8).unwrap_or("0"), 16).unwrap_or(0) % 100;
+    (x as f64, y as f64)
+}
+
+/// DEFAULT PLACEMENT (user doctrine: "the word just gives them values"): any creation that lands a being
+/// or a space and carries NO coord gets a derived-random one; a NEW space with no parent defaults under
+/// the actor's current space (`homeSpace`). Explicit values a later word set (`… at 0,0`, `… in heaven`)
+/// always win — this only fills what's absent. General over ALL make/birth words, present and future.
+fn with_default_placement(spec: &Json, actor: &Json) -> Json {
+    let placeable = matches!(
+        (get_str(spec, "verb"), get_str(spec, "act")),
+        (Some("be"), Some("birth")) | (Some("do"), Some("create-space"))
+    );
+    if !placeable {
+        return spec.clone();
+    }
+    let id = get(spec, "of").and_then(|o| get_str(o, "id")).unwrap_or("").to_string();
+    let mut params = get(spec, "params").cloned().unwrap_or_else(|| obj(vec![]));
+    if get(&params, "coord").is_none() {
+        let (x, y) = derive_coord(&id);
+        params = set_field(&params, "coord", obj(vec![("x", Json::Num(x)), ("y", Json::Num(y))]));
+    }
+    // a new SPACE with no parent falls under the actor's current space (the "current parent" default).
+    if get_str(spec, "act") == Some("create-space") && get(&params, "parent").is_none() {
+        if let Some(home) = get_str(actor, "homeSpace").filter(|h| !h.is_empty()) {
+            params = set_field(&params, "parent", jstr(home));
+        }
+    }
+    set_field(spec, "params", params)
 }
 
 /// True when the actor is a real Name (a facet of I), not the bare story "I" and not a bodiless nobody.
@@ -835,6 +880,8 @@ fn seal_specs(
     for spec in specs {
         // "I" = the acting Name's facet: a Name's be:birth makes its OWN being (by/trueName/through = it).
         let mut spec = facet_resolve(spec, actor);
+        // any un-placed being/space gets a derived-random coord + default parent (never hardcoded).
+        spec = with_default_placement(&spec, actor);
         let (k, i) = match get(&spec, "of") {
             Some(o) => (
                 get_str(o, "kind").unwrap_or("being").to_string(),
@@ -862,7 +909,16 @@ fn seal_specs(
         // exactly as the genesis I births "Am". facet_resolve forced trueName = the Name (and the id is
         // per-Name), so the being is provably its own; no grant needed. Every OTHER act runs the able-walk.
         let name_self_be = verb == "be" && matches!(op, Some("birth") | Some("connect")) && actor_name_facet(actor).is_some();
-        if !name_self_be && !ok_true(&authorize(verb, op, Some(&i), audit_being, actor, dir, history, &able_spec_of)) {
+        // A being moving its OWN body (do:move whose target is the actor's own being) is inherently
+        // allowed — you control where you stand; no grant needed. move.word set the target to $caller.
+        let own_body = get_str(actor, "beingId").map_or(false, |b| !b.is_empty() && b != I_AM && b == i);
+        let self_move = verb == "do" && op == Some("move") && own_body;
+        // renaming YOUR OWN being (My name is X) is inherently allowed — you name yourself.
+        let self_rename = verb == "do"
+            && op == Some("set-being")
+            && own_body
+            && get(&spec, "params").and_then(|p| get_str(p, "field")) == Some("name");
+        if !name_self_be && !self_move && !self_rename && !ok_true(&authorize(verb, op, Some(&i), audit_being, actor, dir, history, &able_spec_of)) {
             out.push(Outcome::Denied(format!("not authorized: {verb}:{}", op.unwrap_or(""))));
             continue;
         }
@@ -986,6 +1042,44 @@ fn expand_one(
 ) -> Option<Result<Vec<Json>, HostError>> {
     if get_str(node, "kind") != Some("act") || get_str(node, "verb") != Some("do") {
         return None;
+    }
+    // THE BEING STEP: `do move` carrying a `direction` (the WASD/compass step) is the actor's own walk.
+    // Produce the do:move DIRECTLY on the actor's being — its coord is the FOLD of these steps (the
+    // position reducer shifts by the direction's cell). No op-word needed; the direction is already
+    // validated by the parser, and there is no bounds gate for a being step (resolve_move_being doesn't
+    // impose one). This is the reliable path the move.word's matter+being composite couldn't produce.
+    if get_str(node, "act") == Some("move") {
+        if let Some(dir) = get(node, "params").and_then(|p| get_str(p, "direction")) {
+            if let Some(being) = get_str(actor, "beingId").filter(|b| !b.is_empty() && *b != I_AM) {
+                let spec = obj(vec![
+                    ("kind", jstr("act")),
+                    ("verb", jstr("do")),
+                    ("act", jstr("move")),
+                    ("of", obj(vec![("kind", jstr("being")), ("id", jstr(being))])),
+                    ("params", obj(vec![("direction", jstr(dir))])),
+                ]);
+                return Some(Ok(vec![spec]));
+            }
+        }
+    }
+    // SELF RENAME: `do set-being` on the `name` field with no target is "My name is X" — the actor
+    // renaming its OWN being. Set it directly on $caller's being (the fold sets `name`). Only `name` is
+    // short-circuited here — a targeted set-being on someone else still goes through the op-word + auth.
+    if get_str(node, "act") == Some("set-being")
+        && get(node, "of").is_none()
+        && get(node, "params").and_then(|p| get_str(p, "field")) == Some("name")
+    {
+        if let Some(being) = get_str(actor, "beingId").filter(|b| !b.is_empty() && *b != I_AM) {
+            let params = get(node, "params").cloned().unwrap_or_else(|| obj(vec![]));
+            let spec = obj(vec![
+                ("kind", jstr("act")),
+                ("verb", jstr("do")),
+                ("act", jstr("set-being")),
+                ("of", obj(vec![("kind", jstr("being")), ("id", jstr(being))])),
+                ("params", params),
+            ]);
+            return Some(Ok(vec![spec]));
+        }
     }
     let body = get_str(node, "act").and_then(op_word_of)?;
     let trigger = derive_trigger(node, ctx, actor, history);

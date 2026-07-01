@@ -32,7 +32,7 @@ fn copy_dir(src: &std::path::Path, dst: &std::path::Path) {
 
 #[test]
 fn a_new_name_births_its_own_first_being() {
-    let src = std::path::Path::new("../../store/past");
+    let src = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../store/past"));
     if !src.exists() {
         eprintln!("skip: no ../../store/past");
         return;

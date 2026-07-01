@@ -30,6 +30,10 @@ treeprotocol = { path = "../treeprotocol" }
 # the binary is the EDGE that holds the story key: it loads .story/story.key and signs the story's (I)
 # own acts. Crypto lives here + in treesign, never in the spine/treeibp lib (which takes the closure).
 treesign = { path = "../treesign" }
+# treebook reads the genesis BOOK (the I coins the vocabulary + speaks the world into being). The SERVING
+# runtime never plants — but the explicit `treeos genesis` recovery subcommand does (guarded: it refuses
+# if the store already exists, so it only ever plants a FRESH world, never overwrites a live one).
+treebook = { path = "../treebook" }
 # OUTBOUND HTTPS at the edge: ureq (blocking, rustls — no OpenSSL, tiny surface) lets cognize POST a
 # chat-completion to an OpenAI-compatible cloud provider over TLS. This is the OUTBOUND edge ONLY (a
 # being's LLM able reaching its connected provider); the INBOUND wire stays plain WS (IBP). The local

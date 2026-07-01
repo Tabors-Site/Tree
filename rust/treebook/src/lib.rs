@@ -432,27 +432,26 @@ fn read_one_word(
         }
     }
 
-    // lower the statement to its acting fact specs (a declaration -> one coin; an acting word -> its
-    // deed(s); a `see` -> none). GUARD 1: a single word lays EXACTLY one fact (or zero for an inert see).
+    // lower the statement to its acting fact specs (a declaration -> one coin; a `see` -> none; a
+    // WORD-DRIVEN act or COMPOSITE -> one or more deeds).
     let specs = acting_specs(reader_name, target_being, statement);
-    match specs.len() {
-        0 => {
-            return Ok(WordRead {
-                statement: statement.to_string(),
-                fact_id: None, // an inert read (a `see`-only word; no acting word in this statement)
-            })
-        }
-        1 => {}
-        n => {
-            return Err(BookError::RunOn {
-                word: statement.to_string(),
-                facts: n,
-                crammed: specs.iter().map(spec_verb_act).collect(),
-            })
+    if specs.is_empty() {
+        // an inert read (a `see`-only word / pure prose; no acting word) — no fact.
+        return Ok(WordRead { statement: statement.to_string(), fact_id: None });
+    }
+    // THE COMPOSITE UNFOLD (WORD-DRIVEN-PARSER.md "A WORD IS FOLDED"): a statement may unfold into SEVERAL
+    // acts — `I am Cherub in root, a cherub in root, an angel in heaven` = birth + grant + grant — each its
+    // OWN moment = its OWN one-fact seal (the entailment test: separable deeds sequence into moments). This
+    // is NOT a run-on: a run-on is ONE act laying >1 fact (one moment, N facts), which the SEAL refuses.
+    // Here each spec is a single act -> a single moment, laid one at a time (the chain re-folds between).
+    let mut first_fact: Option<String> = None;
+    for spec in &specs {
+        let wr = lay_one_spec(reader_name, statement, spec, dir, history, sign)?;
+        if first_fact.is_none() {
+            first_fact = wr.fact_id;
         }
     }
-    let spec = &specs[0];
-    lay_one_spec(reader_name, statement, spec, dir, history, sign)
+    Ok(WordRead { statement: statement.to_string(), fact_id: first_fact })
 }
 
 /// Seal one acting word's lone spec: AUTHORIZE it (treeibp's gate - I bypasses, the bootstrap axiom),

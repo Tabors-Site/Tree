@@ -55,24 +55,57 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
 
     // Every node's WORLD position: its folded coord, else a stable ring around the origin (by index, so a
     // coordless face still lays out and doesn't jitter frame-to-frame).
+    // the crowd centre: the average of everyone who HAS a real folded coord (beings sit at their coord;
+    // child spaces / matter usually have none). Coordless nodes ring THIS centre — not the far origin —
+    // and the camera falls back to it, so beings and spaces stay together in one view.
+    let (mut sx, mut sy, mut sc) = (0.0f32, 0.0f32, 0.0f32);
+    for node in &nodes {
+        if let Some((x, y)) = node.coord {
+            sx += x as f32;
+            sy += y as f32;
+            sc += 1.0;
+        }
+    }
+    let crowd = if sc > 0.0 { (sx / sc, sy / sc) } else { (0.0, 0.0) };
+
     let world_of = |i: usize, node: &Node| -> (f32, f32) {
         match node.coord {
             Some((x, y)) => (x as f32, y as f32),
             None => {
                 let ang = i as f32 / n as f32 * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
-                (ang.cos() * 2.6, ang.sin() * 2.6)
+                (crowd.0 + ang.cos() * 3.0, crowd.1 + ang.sin() * 3.0)
             }
         }
     };
 
-    // ── the camera FOLLOWS your driven being: centre on its world position, so it sits at screen centre
-    //    and the rest of the place slides around it. No body yet → centre on the origin (look in). ──
+    // ── the camera: a DEAD-ZONE follow of your driven being. Your body moves FREELY within a centre box
+    //    (so you SEE it walk); the camera only scrolls once you near the edge, and SNAPS on a big jump (a
+    //    space change). This replaces the old hard-follow that pinned your body to dead-centre — which is
+    //    exactly why walking looked like nothing moved. No body / no coord → centre on the crowd. ──
     let my_id = p.active_being.as_ref().map(|(bid, _)| bid.clone());
-    let cam = my_id
-        .as_ref()
-        .and_then(|bid| nodes.iter().enumerate().find(|(_, node)| &node.id == bid))
-        .map(|(i, node)| world_of(i, node))
-        .unwrap_or((0.0, 0.0));
+    let my_coord = my_id.as_ref().and_then(|bid| nodes.iter().find(|node| &node.id == bid)).and_then(|node| node.coord);
+    let cam_id = egui::Id::new("map2d_cam");
+    let cam = match my_coord {
+        Some((cx, cy)) => {
+            let (bx, by) = (cx as f32, cy as f32);
+            let mut c = ui.data(|d| d.get_temp::<(f32, f32)>(cam_id)).unwrap_or((bx, by));
+            let (dx, dy) = (bx - c.0, by - c.1);
+            if (dx * dx + dy * dy).sqrt() > 8.0 {
+                c = (bx, by); // a big jump (new place / teleport) → recentre on you at once
+            } else {
+                let r = 3.5; // dead-zone radius in world cells: you roam this far before the camera moves
+                if dx.abs() > r {
+                    c.0 = bx - r * dx.signum();
+                }
+                if dy.abs() > r {
+                    c.1 = by - r * dy.signum();
+                }
+            }
+            ui.data_mut(|d| d.insert_temp(cam_id, c));
+            c
+        }
+        None => crowd,
+    };
     let to_screen = |wx: f32, wy: f32| center + egui::vec2((wx - cam.0) * cell, (wy - cam.1) * cell);
 
     draw_grid(&painter, rect, cell, to_screen(0.0, 0.0));
@@ -127,6 +160,16 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
     // ── HUD: the place name (top) + a hint. ──
     if let Some(Json::Str(name)) = get(&face, "name") {
         painter.text(rect.center_top() + egui::vec2(0.0, 16.0), egui::Align2::CENTER_CENTER, name, egui::FontId::monospace(13.0), egui::Color32::from_gray(150));
+    }
+    // your coord — the plain proof you moved: this number ticks each step (so a move you can't yet SEE is
+    // still legible). If your body isn't in the place you're perceiving, say so — a stale address then
+    // reads as "elsewhere", not "stuck".
+    if let Some((_, nm)) = &p.active_being {
+        let txt = match my_coord {
+            Some((x, y)) => format!("@{nm}  ({}, {})", x as i64, y as i64),
+            None => format!("@{nm}  · not in this place"),
+        };
+        painter.text(rect.right_top() + egui::vec2(-12.0, 16.0), egui::Align2::RIGHT_CENTER, txt, egui::FontId::monospace(12.0), egui::Color32::from_rgb(255, 214, 90));
     }
     if nodes.is_empty() {
         painter.text(center + egui::vec2(0.0, 22.0), egui::Align2::CENTER_CENTER, "· empty place ·", egui::FontId::monospace(12.0), egui::Color32::from_gray(90));

@@ -1,33 +1,36 @@
-// views/fourd.rs — the 4D view: every history/branch of the story drawn as a TREE from `0` (main). This
-// is the timeline-of-timelines: navigate between branches and their past moments. It centres on the
-// branch you're on (your being's history tip, or wherever you've rewound the history bar to), scroll to
-// zoom out to the whole tree / in to see a branch clearly, drag to pan. Click a branch to SWITCH onto it
-// (your acts land there); the moment dots under your current branch scrub the world to a past moment;
-// "fork" makes a new branch here. All real ops (switch / fork / scrub) go through the same paths the
-// branch menu uses. (Data today: path/label/parent + the CURRENT branch's moments. A time-accurate
-// git-graph — fork ords, per-branch tips, every branch's moments — waits on the server sending those.)
+// views/fourd.rs — the 4D view: the story's histories drawn as a time-accurate GIT-GRAPH. The vertical
+// axis is ord (genesis at top, now at the bottom); each branch is a lane, drawn as a segment from where
+// it FORKED off its parent (forkOrd) down to its own TIP, with an elbow back to the parent lane at the
+// fork. It centres on the branch you're on at your current position (your tip, or where you've rewound
+// the history bar to), so you always start "where your being is". Scroll to zoom the ord axis (out =
+// the whole tree, in = moments clear), drag to pan. Click a branch to SWITCH onto it; the moment dots on
+// your current lane scrub the world to a past moment; "fork" makes a new branch here. forkOrd + tip come
+// from the server's branches() reply. (Per-branch moment dots load for the branch you're ON; other
+// branches show their span — fetch-on-focus for every branch's moments is the next refinement.)
 
 use eframe::egui;
 use std::collections::HashMap;
 
 use crate::Portal;
 
+const GOLD: egui::Color32 = egui::Color32::from_rgb(255, 214, 90);
+
 pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
-    // snapshot what we draw so the painter closures don't hold a borrow while we apply clicks after.
     let branches = p.st.branches.clone();
     let cur = p.history.clone();
     let now = p.st.now_ord;
     let at = p.st.at_ord;
     let timeline = p.st.timeline.clone();
+    let cur_ord = at.unwrap_or(now);
 
-    // ── toolbar: real fork + honest-disabled affordances for the ops the Rust server doesn't have yet ──
+    // ── toolbar: real fork + honest-disabled ops the Rust server doesn't have yet ──
     let mut fork = false;
     ui.horizontal(|ui| {
         if ui.button("⑂ fork a new branch here").clicked() {
             fork = true;
         }
         ui.separator();
-        ui.weak(format!("on #{cur} · {} histories · scroll to zoom · drag to pan · click a branch to switch", branches.len().max(1)));
+        ui.weak(format!("on #{cur} · {} histories · scroll = zoom time · drag = pan · click a branch to switch", branches.len().max(1)));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             for (name, why) in [
                 ("pause", "pause/unpause a branch — needs the server act (in the JS seed, not yet in the Rust server)"),
@@ -48,7 +51,7 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
         return;
     }
 
-    // ── zoom (scroll/pinch) + pan (drag), persisted per-view like the other canvases ──
+    // ── zoom (scroll/pinch) + pan (drag), persisted per-view ──
     let (zoom_id, pan_id) = (egui::Id::new("fourd_zoom"), egui::Id::new("fourd_pan"));
     let mut zoom = ui.data(|d| d.get_temp::<f32>(zoom_id).unwrap_or(1.0));
     let mut pan = ui.data(|d| d.get_temp::<egui::Vec2>(pan_id).unwrap_or(egui::Vec2::ZERO));
@@ -60,7 +63,7 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
         if pinch != 1.0 {
             zoom *= pinch;
         }
-        zoom = zoom.clamp(0.25, 3.0);
+        zoom = zoom.clamp(0.2, 6.0);
     }
     if resp.dragged() {
         pan += resp.drag_delta();
@@ -70,112 +73,96 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
         d.insert_temp(pan_id, pan);
     });
 
-    // ── tidy tree layout: x by leaf order, y by depth (parent → children below). ──
-    let mut children: HashMap<String, Vec<String>> = HashMap::new();
+    // ── lanes: main "0" at lane 0, every other branch its own lane in listing order ──
+    let mut lane: HashMap<String, f32> = HashMap::new();
+    lane.insert("0".to_string(), 0.0);
+    let mut li = 1.0;
     for b in &branches {
-        if let Some(par) = &b.parent {
-            children.entry(par.clone()).or_default().push(b.path.clone());
+        if b.path != "0" {
+            lane.entry(b.path.clone()).or_insert_with(|| {
+                let v = li;
+                li += 1.0;
+                v
+            });
         }
     }
-    let mut pos: HashMap<String, (f32, f32)> = HashMap::new();
-    let mut xc = 0.0f32;
-    layout_tree("0", 0.0, &children, &mut xc, &mut pos);
-    for b in &branches {
-        // any branch not reached from "0" (orphan / future branch-of-branch beyond the walk) still lays out
-        if !pos.contains_key(&b.path) {
-            layout_tree(&b.path, 0.0, &children, &mut xc, &mut pos);
-        }
-    }
+    let cur_lane = lane.get(&cur).copied().unwrap_or(0.0);
 
-    // centre the CURRENT branch (+ the user's pan). hs/vs are world→pixel at zoom 1.
-    let cur_pos = pos.get(&cur).copied().unwrap_or((0.0, 0.0));
-    let (hs, vs) = (168.0f32, 104.0f32);
-    let to_screen = |tx: f32, ty: f32| rect.center() + pan + egui::vec2((tx - cur_pos.0) * hs, (ty - cur_pos.1) * vs) * zoom;
+    // the ord axis: fit [0, max tip] to ~80% of the height at zoom 1, then zoom spreads it.
+    let max_ord = branches.iter().filter_map(|b| b.tip).fold(now, f64::max).max(1.0);
+    let ord_px = (rect.height() * 0.8) / max_ord as f32;
+    let y = |ord: f64| rect.center().y + pan.y + (ord as f32 - cur_ord as f32) * ord_px * zoom;
+    let x = |ln: f32| rect.center().x + pan.x + (ln - cur_lane) * 132.0 * zoom.clamp(0.4, 2.2);
 
-    // ── edges (parent → child) ──
-    for b in &branches {
-        if let (Some(par), Some(cp)) = (b.parent.as_ref(), pos.get(&b.path)) {
-            if let Some(pp) = pos.get(par) {
-                let a = to_screen(pp.0, pp.1) + egui::vec2(0.0, 16.0 * zoom);
-                let z = to_screen(cp.0, cp.1) - egui::vec2(0.0, 16.0 * zoom);
-                painter.line_segment([a, z], egui::Stroke::new(1.5, egui::Color32::from_gray(70)));
-            }
-        }
-    }
+    // a faint "you are now here" horizontal line across time
+    let now_y = y(cur_ord);
+    painter.line_segment([egui::pos2(rect.left(), now_y), egui::pos2(rect.right(), now_y)], egui::Stroke::new(1.0, egui::Color32::from_rgb(40, 38, 22)));
 
-    // ── branch nodes ──
     let hover = resp.hover_pos();
-    let node_w = 120.0 * zoom.clamp(0.5, 1.5);
-    let node_h = 34.0 * zoom.clamp(0.5, 1.5);
     let mut switch_to: Option<String> = None;
     for b in &branches {
-        let tp = match pos.get(&b.path) {
+        let ln = match lane.get(&b.path) {
             Some(v) => *v,
             None => continue,
         };
-        let c = to_screen(tp.0, tp.1);
-        if !rect.expand(80.0).contains(c) {
-            continue;
-        }
+        let fo = b.fork_ord.unwrap_or(0.0);
+        let tp = b.tip.unwrap_or(if b.path == "0" { now } else { fo });
+        let bx = x(ln);
+        let (y0, y1) = (y(fo), y(tp).max(y(fo) + 2.0));
         let is_cur = b.path == cur;
-        let nrect = egui::Rect::from_center_size(c, egui::vec2(node_w, node_h));
-        let hovered = hover.map_or(false, |h| nrect.contains(h));
-        let fill = if is_cur {
-            egui::Color32::from_rgb(60, 52, 24)
-        } else if hovered {
-            egui::Color32::from_rgb(40, 46, 66)
-        } else {
-            egui::Color32::from_rgb(28, 32, 46)
-        };
-        painter.rect_filled(nrect, 6.0, fill);
-        let border = if is_cur { egui::Color32::from_rgb(255, 214, 90) } else { egui::Color32::from_gray(80) };
-        painter.rect_stroke(nrect, 6.0, egui::Stroke::new(if is_cur { 2.0 } else { 1.0 }, border));
+        let col = if is_cur { GOLD } else { egui::Color32::from_rgb(120, 150, 220) };
+        let w = if is_cur { 3.5 } else { 2.0 };
 
-        if zoom > 0.4 {
-            let lcol = if is_cur { egui::Color32::from_rgb(255, 224, 150) } else { egui::Color32::from_gray(210) };
-            painter.text(c - egui::vec2(0.0, 5.0), egui::Align2::CENTER_CENTER, &b.label, egui::FontId::proportional(12.0 * zoom.clamp(0.7, 1.3)), lcol);
-            painter.text(c + egui::vec2(0.0, 9.0), egui::Align2::CENTER_CENTER, format!("#{}", b.path), egui::FontId::monospace(9.0 * zoom.clamp(0.7, 1.3)), egui::Color32::from_gray(130));
+        // the fork elbow back to the parent lane, then the branch's own segment
+        if let Some(par) = &b.parent {
+            if let Some(pl) = lane.get(par) {
+                painter.line_segment([egui::pos2(x(*pl), y0), egui::pos2(bx, y0)], egui::Stroke::new(1.5, egui::Color32::from_gray(95)));
+            }
         }
-        // "you are here" on the current branch: your position (tip, or where you've rewound to)
-        if is_cur {
-            let here = match at {
-                Some(o) => format!("▸ you are here · rewound to ord {}", o as i64),
-                None => format!("▸ you are here · tip · ord {}", now as i64),
-            };
-            painter.text(egui::pos2(c.x, nrect.top() - 6.0), egui::Align2::CENTER_BOTTOM, here, egui::FontId::proportional(11.0), egui::Color32::from_rgb(255, 214, 90));
+        painter.line_segment([egui::pos2(bx, y0), egui::pos2(bx, y1)], egui::Stroke::new(w, col));
+        painter.circle_filled(egui::pos2(bx, y0), w * 0.9, col); // fork point
+        painter.circle_filled(egui::pos2(bx, y1), w * 1.1, col); // tip
+
+        if zoom > 0.3 {
+            let lcol = if is_cur { egui::Color32::from_rgb(255, 224, 150) } else { egui::Color32::from_gray(205) };
+            painter.text(egui::pos2(bx + 9.0, y1), egui::Align2::LEFT_CENTER, format!("{}  #{}", b.label, b.path), egui::FontId::proportional(12.0 * zoom.clamp(0.7, 1.3)), lcol);
         }
-        if hovered && resp.clicked() && !is_cur {
+
+        // click anywhere along the lane to switch onto that branch
+        let near = hover.map_or(false, |h| (h.x - bx).abs() < 10.0 && h.y > y0 - 6.0 && h.y < y1 + 6.0);
+        if near && resp.clicked() && !is_cur {
             switch_to = Some(b.path.clone());
         }
     }
 
-    // ── moment dots for the CURRENT branch: navigate its past moments (scrub the world) ──
+    // ── you-are-here marker on the current lane at your position ──
+    let (me_x, me_y) = (x(cur_lane), y(cur_ord));
+    painter.circle_stroke(egui::pos2(me_x, me_y), 7.0, egui::Stroke::new(2.0, GOLD));
+    let here = match at {
+        Some(o) => format!("▸ you · rewound to ord {}", o as i64),
+        None => format!("▸ you · tip · ord {}", now as i64),
+    };
+    painter.text(egui::pos2(me_x + 12.0, me_y - 12.0), egui::Align2::LEFT_CENTER, here, egui::FontId::proportional(11.0), GOLD);
+
+    // ── moment dots along the CURRENT lane: click one to scrub the world to that moment ──
     let mut scrub: Option<f64> = None;
-    if zoom > 0.55 && !timeline.is_empty() {
-        let cc = to_screen(cur_pos.0, cur_pos.1);
-        let strip_y = cc.y + node_h * 0.5 + 22.0;
-        let n = timeline.len();
-        let span = (node_w * 2.4).min(rect.width() * 0.8);
-        let x0 = cc.x - span * 0.5;
-        for (i, (ord, phrase)) in timeline.iter().enumerate() {
-            let x = if n > 1 { x0 + span * (i as f32 / (n - 1) as f32) } else { cc.x };
-            let dp = egui::pos2(x, strip_y);
-            // current position: the scrubbed ord (or now) sits on this dot
+    if zoom > 0.45 && !timeline.is_empty() {
+        for (ord, phrase) in &timeline {
+            let dp = egui::pos2(me_x, y(*ord));
             let on = at.map_or(*ord >= now, |a| (a - *ord).abs() < 0.5);
-            let col = if on { egui::Color32::from_rgb(255, 214, 90) } else { egui::Color32::from_gray(120) };
-            let dot_hover = hover.map_or(false, |h| h.distance(dp) < 6.0);
-            painter.circle_filled(dp, if dot_hover || on { 5.0 } else { 3.0 }, col);
-            if dot_hover {
-                painter.text(egui::pos2(x, strip_y + 12.0), egui::Align2::CENTER_TOP, phrase, egui::FontId::proportional(11.0), egui::Color32::from_gray(200));
+            let col = if on { GOLD } else { egui::Color32::from_gray(150) };
+            let dh = hover.map_or(false, |h| h.distance(dp) < 6.0);
+            painter.circle_filled(dp, if dh || on { 5.0 } else { 3.0 }, col);
+            if dh {
+                painter.text(egui::pos2(me_x - 12.0, y(*ord)), egui::Align2::RIGHT_CENTER, phrase, egui::FontId::proportional(11.0), egui::Color32::from_gray(215));
                 if resp.clicked() {
                     scrub = Some(*ord);
                 }
             }
         }
-        painter.line_segment([egui::pos2(x0, strip_y), egui::pos2(x0 + span, strip_y)], egui::Stroke::new(1.0, egui::Color32::from_gray(60)));
     }
 
-    // ── apply the interactions (after the painter borrow) ──
+    // ── apply interactions after the painter borrow ──
     if let Some(path) = switch_to {
         p.switch_history(&path);
     } else if let Some(ord) = scrub {
@@ -186,24 +173,5 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
     if fork {
         let n = branches.len();
         p.create_branch(&format!("branch-{n}"));
-    }
-}
-
-/// Assign each branch a tree position: `x` by leaf order (so subtrees don't overlap), `y` by depth.
-/// Returns the node's own `x` (the centre of its subtree).
-fn layout_tree(path: &str, depth: f32, children: &HashMap<String, Vec<String>>, xc: &mut f32, out: &mut HashMap<String, (f32, f32)>) -> f32 {
-    match children.get(path) {
-        Some(ch) if !ch.is_empty() => {
-            let xs: Vec<f32> = ch.iter().map(|c| layout_tree(c, depth + 1.0, children, xc, out)).collect();
-            let x = (xs.first().copied().unwrap_or(0.0) + xs.last().copied().unwrap_or(0.0)) * 0.5;
-            out.insert(path.to_string(), (x, depth));
-            x
-        }
-        _ => {
-            let x = *xc;
-            *xc += 1.0;
-            out.insert(path.to_string(), (x, depth));
-            x
-        }
     }
 }

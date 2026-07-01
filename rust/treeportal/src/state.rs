@@ -19,7 +19,7 @@ pub enum View {
 impl View {
     pub fn label(self) -> &'static str {
         match self {
-            View::Map2d => "2D/3D", // the spatial view renders 2D and 3D side by side
+            View::Map2d => "2D",
             View::Story => "Story",
             View::World3d => "3D",
             View::Rain => "Rain",
@@ -43,6 +43,8 @@ pub struct Branch {
     pub label: String,
     pub parent: Option<String>,
     pub fork_ord: Option<f64>,
+    /// the branch's own head ord (its tip on the ord axis) — placed with fork_ord in the 4D git-graph.
+    pub tip: Option<f64>,
 }
 
 pub struct PortalState {
@@ -57,6 +59,12 @@ pub struct PortalState {
     /// the LEFT stance buffer (who you are: `@being#history/path`) — editable; editing #history switches
     /// your branch, @being switches the being you drive, the path moves your position.
     pub left_stance: String,
+    /// IBPA mode: false = SIMPLE (default) — LEFT and RIGHT MIRROR (same story+history+space, since you
+    /// stand in the place you perceive), so the bar reads `@being #history :: /position` and editing
+    /// either side moves you + your view together. true = ADVANCED — the full dual
+    /// `story#history/path@being` on BOTH sides (cross-world / through a portal, where they diverge). One
+    /// at a time; advanced is off until portals + cross-world land.
+    pub advanced_ibpa: bool,
     /// the history scrubber: `at_ord` = a past global ord being viewed (None = live/now); `now_ord` = the
     /// world's now (the timeline's right edge), read from each scene. Shared across all views.
     pub at_ord: Option<f64>,
@@ -107,6 +115,7 @@ impl Default for PortalState {
             nav_stack: vec!["/".to_string()],
             nav_index: 0,
             left_stance: "@I#0".to_string(),
+            advanced_ibpa: false, // SIMPLE mirrored bar by default
             at_ord: None,
             now_ord: 1.0,
             side_being: None,

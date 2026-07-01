@@ -16,6 +16,8 @@ use std::collections::HashSet;
 use std::sync::LazyLock;
 
 pub mod render; // the INVERSE of parse: a Word IR node -> Word text (the generative / output-Word side)
+pub mod vocab; // READ THE DECLARED VERBS from verbs.word (WORD-DRIVEN-PARSER.md) — kills the hardcoded verb list
+pub mod reader; // THE WORD-DRIVEN READER (WIP): resolve the verb from the vocab, read the sentence generically
 use treehash::Json;
 
 fn jstr(s: &str) -> Json {
@@ -227,26 +229,22 @@ fn rules() -> &'static [(Regex, Builder)] {
                 ("verse", Json::Bool(true)),
             ]),
         ),
-        // I am <Capitalized>[, <description>].   -> BIRTH the being that expresses this Name (the identity
-        // form the user names: "I am Tabor" makes an empty being Tabor that BECOMES Tabor through every fact
-        // it later gives itself). Same be:birth as "I make <Capitalized>" — the session-Name twin of the
-        // genesis verse "I am … I am". A real Name's facet_resolve (treeibp) then makes it the Name's OWN
-        // (by/trueName = the Name). Placed AFTER the quoted genesis verse so the verse still wins.
+        // ── `I am <Name> [in <space>]` (birth a being, homed by `in`) IS NOW THE WORD-DRIVEN READER ──
+        // reader.rs::read_act resolves `am`->`be` from the vocabulary and reads the sentence generically.
+        // The two hardcoded regexes that used to live HERE were DELETED: they were frozen snapshots of what
+        // `am` means today (one even crammed name/able/homeSpace/position at birth — the fat-birth drift),
+        // and `am`'s meaning must be FOLDED, not frozen, so it can grow. Birth is JUST birth + home (the
+        // reducer defaults position from homeSpace). See WORD-DRIVEN-PARSER.md ("A WORD IS FOLDED, NOT
+        // FROZEN"). parse() calls the reader BEFORE this table, so `I am …` never reaches these rules.
+        // My name is <Name>.   -> RENAME the current being (first-person: "my" = the being you drive). A
+        // self `do:set-being` on the `name` field; NO `of` — the subject is the actor's own being, set at
+        // rasterize (treeibp short-circuits a self set-being onto $caller). Not a birth — just a rename.
         (
-            Regex::new(r"^I am ([A-Z][\w.-]*)(?:, (.+?))?\.$").unwrap(),
-            |m| {
-                let mut params = vec![("able", jstr(&m[1].to_lowercase()))];
-                if let Some(d) = m.get(2) {
-                    if !d.as_str().is_empty() {
-                        params.push(("description", jstr(d.as_str())));
-                    }
-                }
-                obj(vec![
-                    ("kind", jstr("act")), ("verb", jstr("be")), ("act", jstr("birth")), ("by", jstr("I")),
-                    ("of", obj(vec![("kind", jstr("being")), ("id", jstr(&m[1]))])),
-                    ("params", obj(params)),
-                ])
-            },
+            Regex::new(r"^My name is ([A-Za-z][\w.-]*)\.$").unwrap(),
+            |m| obj(vec![
+                ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("set-being")),
+                ("params", obj(vec![("field", jstr("name")), ("value", jstr(&m[1]))])),
+            ]),
         ),
         // I make <Capitalized>[, <description>].   -> birth a being
         (
@@ -264,6 +262,37 @@ fn rules() -> &'static [(Regex, Builder)] {
                     ("params", obj(params)),
                 ])
             },
+        ),
+        // I make [the] <space> [in [the] <parent>] at <x>, <y>.   -> create a space AT a coord, optionally
+        // INSIDE a parent. A child's coord is its spot in the parent (the parent assigns it): coord folds
+        // onto the space, `parent` -> position. This is the "I make X in Y" grammar the flat seed flagged.
+        (
+            Regex::new(r"^I make (?:the )?([a-z][\w.-]*)(?: in (?:the )?([a-z][\w.-]*))? at (-?\d+), ?(-?\d+)\.$").unwrap(),
+            |m| {
+                let mut params = vec![("coord", obj(vec![
+                    ("x", Json::Num(m[3].parse::<f64>().unwrap_or(0.0))),
+                    ("y", Json::Num(m[4].parse::<f64>().unwrap_or(0.0))),
+                ]))];
+                if let Some(p) = m.get(2) {
+                    if !p.as_str().is_empty() {
+                        params.push(("parent", jstr(p.as_str())));
+                    }
+                }
+                obj(vec![
+                    ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("create-space")), ("by", jstr("I")),
+                    ("of", obj(vec![("kind", jstr("space")), ("id", jstr(&m[1]))])),
+                    ("params", obj(params)),
+                ])
+            },
+        ),
+        // I make [the] <space> in [the] <parent>.   -> create a space under a parent (parent -> position).
+        (
+            Regex::new(r"^I make (?:the )?([a-z][\w.-]*) in (?:the )?([a-z][\w.-]*)\.$").unwrap(),
+            |m| obj(vec![
+                ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("create-space")), ("by", jstr("I")),
+                ("of", obj(vec![("kind", jstr("space")), ("id", jstr(&m[1]))])),
+                ("params", obj(vec![("parent", jstr(&m[2]))])),
+            ]),
         ),
         // I make [the] <lowercase>[, <gloss>].   -> create a space
         (
@@ -452,6 +481,24 @@ fn effect_rules() -> &'static [(Regex, EffBuilder)] {
                 ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("move")),
                 ("params", obj(vec![("direction", jstr(&m[1].to_lowercase()))])),
             ]),
+        ),
+        // w / a / s / d   (the coined WASD keys — STAMP mode sends the BARE chord, no period). Each is a
+        // one-letter word for a compass step, the exact same do:move as "move <dir>." (move.word reads
+        // $caller). w = north (forward), a = west (left), s = south (back), d = east (right).
+        (
+            Regex::new(r"(?i)^([wasd])\.?$").unwrap(),
+            |m, _ctx| {
+                let dir = match m[1].to_lowercase().as_str() {
+                    "w" => "north",
+                    "a" => "west",
+                    "s" => "south",
+                    _ => "east", // d
+                };
+                obj(vec![
+                    ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("move")),
+                    ("params", obj(vec![("direction", jstr(dir))])),
+                ])
+            },
         ),
         // the <able> <verb>, and it becomes <X>.   (a state-wheel act: no `of`, sets the next state)
         (
@@ -1235,6 +1282,20 @@ fn parse_single_line_flow(line: &str, ctx: &Ctx) -> Option<Json> {
 /// dimension + spaces), second pass walks raw lines — a `:` header opens a flow (parse_header +
 /// collect_body for its body), every other line applies the single-line RULES. (The guards, nested
 /// blocks, and lookahead rules are deferred slices; the vector harness only feeds covered forms.)
+/// THE DECLARED VOCABULARY the word-driven reader resolves verbs against, read ONCE from the seed `.word`
+/// (verbs/do/see/recall.word). This is the parse membrane reading the declared words — the floor. (Later
+/// the vocabulary comes from the chain fold, threaded by the reader; today it is read from the `.word`
+/// files directly, via `$TREE_SEED_DIR` or the crate-relative seed dir.) Reading the WORDS, not a table.
+static VOCAB: LazyLock<vocab::Vocabulary> = LazyLock::new(|| {
+    let seed = std::env::var("TREE_SEED_DIR")
+        .ok()
+        .filter(|d| !d.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../seed")));
+    let rd = |n: &str| std::fs::read_to_string(seed.join("store/words").join(n)).unwrap_or_default();
+    vocab::read_vocabulary(&rd("verbs.word"), &rd("do.word"), &rd("see.word"), &rd("recall.word"))
+});
+
 pub fn parse(source: &str) -> Vec<Json> {
     let raw: Vec<&str> = source.split('\n').collect();
     let ctx = first_pass(&raw);
@@ -1267,6 +1328,16 @@ pub fn parse(source: &str) -> Vec<Json> {
         }
         if let Some(flow) = parse_single_line_flow(line, &ctx) {
             nodes.push(flow);
+            i += 1;
+            continue;
+        }
+        // THE WORD-DRIVEN READER first (WORD-DRIVEN-PARSER.md): resolve the verb from the declared
+        // vocabulary and read the sentence generically. A statement can UNFOLD into several acts (the
+        // composite: `I am X in Y, a Z in W` = birth + grant + grant), each its own node -> its own moment.
+        // Falls back to the regex table below for forms it does not cover (it returns EMPTY for those).
+        let reader_acts = reader::read_act(line, &VOCAB);
+        if !reader_acts.is_empty() {
+            nodes.extend(reader_acts);
             i += 1;
             continue;
         }

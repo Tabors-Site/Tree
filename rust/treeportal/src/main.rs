@@ -24,7 +24,15 @@ fn main() -> eframe::Result<()> {
         .nth(1)
         .or_else(|| std::env::var("TREEPORTAL_URL").ok())
         .unwrap_or_else(|| "ws://127.0.0.1:7070/ws".into());
-    let opts = eframe::NativeOptions::default();
+    // the RUNTIME window/taskbar icon — DISTINCT from the exe file's resource icon (build.rs/windres).
+    // eframe shows a default box ("E") until we set this, so the taskbar didn't match the exe. Load it
+    // from the SAME portal.ico art (its 256px layer, exported to assets/icon.png) so both icons match.
+    let mut viewport = egui::ViewportBuilder::default();
+    match eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png")) {
+        Ok(icon) => viewport = viewport.with_icon(icon),
+        Err(e) => eprintln!("portal icon: {e}"),
+    }
+    let opts = eframe::NativeOptions { viewport, ..Default::default() };
     eframe::run_native(
         "TreeOS Portal",
         opts,
@@ -83,30 +91,54 @@ impl Portal {
         if let Some(w) = &self.wire {
             w.send(msg);
         }
-        // settle the bar to the canonical IBP form `storyDomain#history/space@being`.
+        // settle the bar. SIMPLE mode shows only the POSITION on the RIGHT (story+history are mirrored,
+        // shown once on the LEFT); ADVANCED shows the full chain `storyDomain#history/space@being`.
         let shown = canonical_display(&self.story, &self.history, address);
-        self.st.address = shown.clone();
+        let display = if self.st.advanced_ibpa { shown } else { path_of(&shown) };
+        self.st.address = display.clone();
         if push {
             self.st.nav_stack.truncate(self.st.nav_index + 1); // trim the forward future
-            if self.st.nav_stack.last() != Some(&shown) {
-                self.st.nav_stack.push(shown.clone());
+            if self.st.nav_stack.last() != Some(&display) {
+                self.st.nav_stack.push(display.clone());
                 self.st.nav_index = self.st.nav_stack.len() - 1;
             }
         }
+        // the LEFT stance FOLLOWS what you perceive — clicking a space (2D/3D) or perceiving re-settles it
+        // to the new path, so the IBPA always shows where you are.
+        self.rebuild_left();
     }
 
     /// The LEFT stance (who you are), canonical + mirroring the RIGHT: `storyDomain#history/@being` when
     /// you drive a being, else the minimum `storyDomain#history/`. Rebuilt whenever the actor changes.
     pub fn left_stance_str(&self) -> String {
+        if !self.st.advanced_ibpa {
+            // SIMPLE (mirrored): identity + branch only. story + history are shared with the RIGHT and the
+            // position lives on the RIGHT, so the LEFT is just WHO you are and WHICH branch.
+            return match &self.active_being {
+                Some((_, name)) => format!("@{} #{}", name, self.history),
+                None => format!("#{}", self.history),
+            };
+        }
+        // ADVANCED: the full LEFT chain, carrying its own position (the dual bar, for cross-world).
+        let path = path_of(&self.st.address);
         match &self.active_being {
-            Some((_, name)) => format!("{}#{}/@{}", self.story, self.history, name),
-            None => format!("{}#{}/", self.story, self.history),
+            Some((_, name)) => format!("{}#{}{}@{}", self.story, self.history, path, name),
+            None => format!("{}#{}{}", self.story, self.history, path),
         }
     }
 
     /// Re-render the editable LEFT-stance buffer to its canonical form (after login / drive / branch).
     pub fn rebuild_left(&mut self) {
         self.st.left_stance = self.left_stance_str();
+    }
+
+    /// Flip SIMPLE ↔ ADVANCED IBPA. Re-settles both bar buffers to the new mode's form (bare position vs
+    /// full dual chain) WITHOUT re-fetching — the position and branch are unchanged, only how they show.
+    pub fn toggle_ibpa(&mut self) {
+        self.st.advanced_ibpa = !self.st.advanced_ibpa;
+        let full = canonical_display(&self.story, &self.history, &path_of(&self.st.address));
+        self.st.address = if self.st.advanced_ibpa { full } else { path_of(&full) };
+        self.rebuild_left();
     }
 
     /// Navigate the RIGHT address field (Enter in the IBP bar).
@@ -158,7 +190,18 @@ impl Portal {
     /// Sign out of the active Name — back to the login gate.
     pub fn sign_out(&mut self) {
         self.logged_in = false;
+        self.active_being = None;
+        self.vault.active = None; // DESELECT the Name → all the way back to the start screen (not the
+        // just-generated-key view, which is gated on an active Name's pending mnemonic).
         self.st.left_stance = "@I#0".to_string();
+        // clear every transient login field so the start screen is clean.
+        self.st.login_name.clear();
+        self.st.login_password.clear();
+        self.st.set_password.clear();
+        self.st.add_name.clear();
+        self.st.add_import.clear();
+        self.st.add_msg.clear();
+        self.st.pending_password = None;
     }
 
     /// Sign in with a Name + PASSWORD (Model B): ask the story for the Name's ENCRYPTED key blob; the
@@ -170,11 +213,11 @@ impl Portal {
             self.st.add_msg = "enter a name and a password".into();
             return;
         }
-        self.st.pending_password = Some(pw);
         match &self.wire {
             Some(w) => {
                 w.send(wire::proto::moment_name_key(&name));
-                self.st.add_msg = "unlocking…".into();
+                self.st.pending_password = Some(pw); // set ONLY once sent — else a disconnected sign-in
+                self.st.add_msg = "unlocking…".into(); // would leave it stuck (a false "unlocking…")
             }
             None => self.st.add_msg = "not connected".into(),
         }
@@ -239,6 +282,10 @@ impl Portal {
                     Some(Json::Str(v)) => Some(v.clone()),
                     _ => None,
                 };
+                let num = |k: &str| match wire::proto::get(h, k) {
+                    Some(Json::Num(v)) => Some(*v),
+                    _ => None,
+                };
                 let path = match s("path") {
                     Some(p) => p,
                     None => continue,
@@ -247,7 +294,8 @@ impl Portal {
                     label: s("label").unwrap_or_else(|| path.clone()),
                     parent: s("parent"),
                     path,
-                    fork_ord: None,
+                    fork_ord: num("forkOrd"),
+                    tip: num("tip"),
                 });
             }
         }
@@ -299,10 +347,19 @@ impl Portal {
                 branch_changed = true;
             }
         }
-        self.rebuild_left(); // settle the buffer to canonical
-        if branch_changed {
-            self.reperceive_current(); // the RIGHT view re-folds on the new branch
+        // ADVANCED: the LEFT carries its own position, so its path re-perceives that room (the dual bar).
+        // SIMPLE: the LEFT is identity + branch only — the position is the RIGHT — so a LEFT edit just
+        // switches branch (a branch switch re-folds the mirrored view).
+        if self.st.advanced_ibpa {
+            let new_path = path_of(&s);
+            if new_path != path_of(&self.st.address) || branch_changed {
+                self.navigate(&new_path, true);
+                return;
+            }
+        } else if branch_changed {
+            self.reperceive_current();
         }
+        self.rebuild_left(); // settle the buffer to canonical
     }
 
     /// The actor: the active Name driving a being `{beingId, nameId, name}`, else the bare Name
@@ -385,6 +442,67 @@ impl Portal {
     }
 
     /// Drive a being the active Name owns (pull it / be:connect). Its acts are signed by the Name.
+    /// Take ANOTHER moment of where you are — the post-act step of the moment→act→moment model. The old
+    /// moment is dead; this asks for the fresh face of the SAME place (same address, same actor). No
+    /// re-navigation, no nav-stack push, no view switch — nothing that could drift you elsewhere.
+    fn refresh_moment(&mut self) {
+        let msg = self.moment_msg(&self.st.address.clone());
+        if let Some(w) = &self.wire {
+            w.send(msg);
+        }
+    }
+
+    /// Show a server error WHERE THE USER IS LOOKING, and never hang. The server answers every failure
+    /// with an error envelope; until now the portal buried them, so a bad sign-in sat forever on
+    /// "unlocking…" and a denied act looked like nothing happened. On the login screen (or mid sign-in)
+    /// the error lands in the login message AND releases the pending-password wait; in the world it lands
+    /// in the word bar's hint. Always logged.
+    fn report_error(&mut self, err: String) {
+        self.st.log.push(format!("✕ {err}"));
+        if !self.logged_in || self.st.pending_password.is_some() {
+            self.st.pending_password = None; // release the "unlocking…" wait — no more hang
+            self.st.add_msg = err;
+        } else {
+            self.st.hint = err;
+        }
+    }
+
+    /// True while you have no being of your OWN — bodiless, or only riding the shared @arrival stance.
+    /// You are locked here (birth-only) until you speak your own being into existence.
+    fn needs_own_being(&self) -> bool {
+        match &self.active_being {
+            None => true,
+            Some((_, name)) => name == "arrival",
+        }
+    }
+
+    /// Find @arrival in the current scene and drive it — the beingless-Name entry stance. Once you birth
+    /// your own being (`I am X`), embodiment switches you off arrival. Server-enforced too; this is the
+    /// client reaction that shows @arrival in the left stance.
+    fn auto_arrival(&mut self) {
+        let arrival = self
+            .st
+            .moment
+            .as_ref()
+            .and_then(|m| wire::proto::get(&m.raw, "view"))
+            .and_then(|v| wire::proto::get(v, "beings"))
+            .and_then(|b| if let Json::Arr(a) = b { Some(a.clone()) } else { None })
+            .and_then(|a| {
+                a.iter().find_map(|n| {
+                    let name = if let Some(Json::Str(s)) = wire::proto::get(n, "being") { s.clone() } else { return None };
+                    if name == "arrival" {
+                        let id = if let Some(Json::Str(s)) = wire::proto::get(n, "id") { s.clone() } else { String::new() };
+                        (!id.is_empty()).then_some((id, name))
+                    } else {
+                        None
+                    }
+                })
+            });
+        if let Some((id, name)) = arrival {
+            self.drive_being(&id, &name);
+        }
+    }
+
     pub fn drive_being(&mut self, being_id: &str, name: &str) {
         self.active_being = Some((being_id.to_string(), name.to_string()));
         self.rebuild_left();
@@ -534,7 +652,17 @@ impl eframe::App for Portal {
         }
         for t in incoming {
             let rx = wire::proto::parse_received(&t);
-            // a name+password sign-in reply: decrypt the fetched key locally, then enter.
+            // ERRORS FIRST: the server answers every failure with an error envelope that the render path
+            // and the op-handlers below can't show — so surface it here, before anything buries it. This
+            // is what makes a bad sign-in ("name not found" / "wrong password") or a denied act SPEAK
+            // instead of hanging. report_error routes it to the login screen (releasing "unlocking…") or
+            // to the in-world hint.
+            if let Some(err) = envelope_error(&rx.raw) {
+                self.report_error(err);
+                continue;
+            }
+            // a name+password sign-in reply (the SUCCESS view — the error view was caught above): decrypt
+            // the fetched key locally, then enter.
             if matches!(wire::proto::get(&rx.raw, "op"), Some(Json::Str(s)) if s == "name-key") {
                 self.handle_name_key(&rx.raw);
                 continue;
@@ -574,12 +702,39 @@ impl eframe::App for Portal {
                         }
                     }
                     self.st.moment = Some(rx);
+                    // AUTO-@ARRIVAL: a fresh Name with no being of its own IS @arrival — the shared entry
+                    // stance. Drive it so the LEFT IBPA shows @arrival and you're locked to it (the server
+                    // also enforces this); the only way out is to be born your own being through @cherub.
+                    if self.logged_in && self.active_being.is_none() {
+                        self.auto_arrival();
+                    }
                 }
                 wire::proto::RxKind::Act => {
-                    let ok = matches!(wire::proto::get(&rx.raw, "ok"), Some(Json::Bool(true)));
-                    self.st.log.push(if ok { "act ok".into() } else { format!("act: {}", short_reason(&rx.raw)) });
-                    if ok {
+                    // the act envelope is ALWAYS ok:true at the top (a bare error envelope was caught
+                    // above); the truth is whether any FACT sealed. Zero facts = a denied result (auth, a
+                    // seal conflict like "name already exists", a do-op fault) OR a Word that said nothing.
+                    if act_sealed_count(&rx.raw) == 0 {
+                        let msg = act_denied_reason(&rx.raw).unwrap_or_else(|| {
+                            if self.needs_own_being() {
+                                "that Word did nothing. Say  I am <Name>.  — a Capital name and a period (e.g. I am Tabor.)".into()
+                            } else {
+                                "that Word sealed nothing — it wasn't a statement the world knows yet".into()
+                            }
+                        });
+                        self.report_error(msg); // never silent
+                    } else {
+                        self.st.hint.clear();
+                        self.st.log.push("act ok".into());
                         self.perceive_timeline(); // a new moment landed — refresh the history bar dots
+                        // EMBODIMENT: "I am Tabor" (a be:birth/connect) puts you IN that being — drive it,
+                        // so your next "I" is the being (first-person). The sealed fact carries its id+name.
+                        if let Some((bid, name)) = act_being_fact(&rx.raw) {
+                            self.drive_being(&bid, &name);
+                        }
+                        // THE MODEL IS MOMENT → ACT → MOMENT: once you've acted, the old moment is past, so
+                        // you take ANOTHER moment of where you are. No re-navigation, no drift — just the
+                        // fresh face of the same place (now showing you MOVED, the new space, …).
+                        self.refresh_moment();
                     }
                 }
                 wire::proto::RxKind::Other => {
@@ -678,9 +833,8 @@ impl eframe::App for Portal {
 
         chrome::tabs::show(ctx, self); // per-being tabs, topmost
         chrome::ibp_bar::show(ctx, self);
-        // a new Name has no being yet — guide them to be born through @cherub (the I births; cherub is
-        // just the being present to speak the birth Word through — as mother, @arrival as father).
-        if self.logged_in && self.active_being.is_none() {
+        // you have no being OF YOUR OWN yet (bodiless, or riding shared @arrival) — guide the birth.
+        if self.logged_in && self.needs_own_being() {
             self.birth_hint(ctx);
         }
         chrome::word_bar::show(ctx, self); // very bottom
@@ -716,13 +870,8 @@ impl eframe::App for Portal {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| match self.st.view {
-            // the spatial view: 2D map (follow-cam) on the LEFT, 3D first-person on the RIGHT, side by side.
-            View::Map2d | View::World3d => {
-                ui.columns(2, |c| {
-                    views::map2d::show(&mut c[0], self);
-                    views::world3d::show(&mut c[1], self);
-                });
-            }
+            View::Map2d => views::map2d::show(ui, self),
+            View::World3d => views::world3d::show(ui, self),
             View::Story => views::story::show(ui, self),
             View::Rain => views::rain::show(ui, self),
             View::Explorer => views::explorer::show(ui, self),
@@ -763,21 +912,105 @@ fn raw_face(ui: &mut egui::Ui, p: &Portal) {
     });
 }
 
-/// Pull `results[0].reason` from a failed act reply for the log.
-fn short_reason(raw: &Json) -> String {
-    if let Some(Json::Arr(rs)) = wire::proto::get(raw, "results") {
-        if let Some(first) = rs.first() {
-            if let Some(Json::Str(r)) = wire::proto::get(first, "reason") {
-                return r.clone();
+fn str_of(v: &Json) -> Option<String> {
+    if let Json::Str(s) = v {
+        Some(s.clone())
+    } else {
+        None
+    }
+}
+
+/// Pull the human message out of a server ERROR ENVELOPE, or None if this reply isn't one. The server
+/// speaks two error-envelope shapes and the portal used to surface NEITHER (they fell through as "Other"
+/// and vanished — the silent "hang"):
+///   (1) a BARE envelope `{status:"error", error:{code, message}}` — a federation/cognize/malformed-act
+///       failure, or a create-branch fault;
+///   (2) a MOMENT whose `view` IS that envelope `{verb:"moment", [op], view:{status:"error", …}}` — a
+///       name-key "name not found", a scene "space not found", a story fault.
+/// Returns the real `error.message` (falling back to the `code`) so the user sees the ACTUAL reason.
+fn envelope_error(raw: &Json) -> Option<String> {
+    fn of(env: &Json) -> Option<String> {
+        match wire::proto::get(env, "status") {
+            Some(Json::Str(s)) if s == "error" => {
+                let e = wire::proto::get(env, "error");
+                let msg = e.and_then(|e| wire::proto::get(e, "message")).and_then(str_of);
+                let code = e.and_then(|e| wire::proto::get(e, "code")).and_then(str_of);
+                Some(msg.or(code).unwrap_or_else(|| "error".into()))
             }
+            _ => None,
         }
     }
-    "?".into()
+    of(raw).or_else(|| wire::proto::get(raw, "view").and_then(of))
+}
+
+/// How many FACTS an act reply sealed. `ok:true` with zero facts means the Word parsed to NOTHING (an
+/// unrecognized/empty statement) — the act "succeeded" but changed nothing. We surface that instead of
+/// letting it fail silently (the trap behind "I type I am tabor and nothing happens": a lowercase name
+/// or a missing period reads as no act).
+fn act_sealed_count(raw: &Json) -> usize {
+    match wire::proto::get(raw, "results") {
+        Some(Json::Arr(rs)) => rs.iter().filter(|o| wire::proto::get(o, "fact").is_some()).count(),
+        _ => 0,
+    }
+}
+
+/// The DENIAL reason from an act reply, if a result was refused. The act envelope is ALWAYS `ok:true` at
+/// the top (act.rs wraps every outcome that way); the truth is per-result `{ok:false, reason}` — an
+/// authorization refusal, a seal conflict ("name already exists"), a do-op fault. This digs it out so a
+/// denied act stops reading as success.
+fn act_denied_reason(raw: &Json) -> Option<String> {
+    let Some(Json::Arr(rs)) = wire::proto::get(raw, "results") else { return None };
+    rs.iter()
+        .find(|r| matches!(wire::proto::get(r, "ok"), Some(Json::Bool(false))))
+        .and_then(|r| wire::proto::get(r, "reason").and_then(str_of))
+}
+
+/// If an act reply sealed a `be:birth`/`be:connect` of a being, return its (beingId, displayName) — the
+/// being you just became. Used to EMBODY you after "I am Tabor" (drive it → first-person).
+fn act_being_fact(raw: &Json) -> Option<(String, String)> {
+    let s = |v: &Json| -> Option<String> {
+        if let Json::Str(x) = v {
+            Some(x.clone())
+        } else {
+            None
+        }
+    };
+    let Json::Arr(results) = wire::proto::get(raw, "results")? else { return None };
+    for o in results {
+        let Some(f) = wire::proto::get(o, "fact") else { continue };
+        if wire::proto::get(f, "verb").and_then(s) != Some("be".into()) {
+            continue;
+        }
+        let act = wire::proto::get(f, "act").and_then(s);
+        if !matches!(act.as_deref(), Some("birth") | Some("connect")) {
+            continue;
+        }
+        let of = wire::proto::get(f, "of")?;
+        if wire::proto::get(of, "kind").and_then(s) != Some("being".into()) {
+            continue;
+        }
+        let id = wire::proto::get(of, "id").and_then(s)?;
+        let name = wire::proto::get(f, "params").and_then(|p| wire::proto::get(p, "name")).and_then(s).unwrap_or_else(|| id.clone());
+        return Some((id, name));
+    }
+    None
 }
 
 /// Render an address to the canonical IBP display form `storyDomain#history/space@being` — history is
 /// ALWAYS shown (unlike a URL's omitted default), per the bar's spec. Parses + expands against the
 /// ambient story/branch; falls back to the raw text while it's mid-edit or unparseable.
+/// The room PATH of a canonical IBP address `storyDomain#history<path>@being` — the part between the
+/// history and the `@being`, always starting with `/` (defaults to `/`). Used to read the position out
+/// of the LEFT stance / RIGHT address so one drives the other.
+fn path_of(addr: &str) -> String {
+    let after_hash = addr.split_once('#').map(|(_, r)| r).unwrap_or(addr);
+    let path_start = after_hash.find(['/', '@']).unwrap_or(after_hash.len());
+    let rest = &after_hash[path_start..];
+    let path_end = rest.find('@').unwrap_or(rest.len());
+    let p = &rest[..path_end];
+    if p.is_empty() { "/".to_string() } else { p.to_string() }
+}
+
 fn canonical_display(story: &str, history: &str, address: &str) -> String {
     let ctx = treeaddress::Ctx {
         current_story: Some(story.to_string()),

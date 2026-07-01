@@ -9,12 +9,16 @@
 // fallback connection). The rest of CONFIG_DEFAULTS is noted but only the consumed keys are ported.
 
 use std::path::Path;
+use std::sync::LazyLock;
 
 use treehash::Json;
 use treestore::read_reel_file;
 
-/// The story domain = the library reel id (matches treeibp::STORY; a config follow-up: env/domain).
-const STORY: &str = "localhost";
+/// The story's NAME/ALIAS = the library reel id (its identity handle for addressing + acts). Set at first
+/// boot via `STORY_DOMAIN` (default "localhost"). NOT a DNS requirement — per philosophy/dns.md a reality
+/// is its I key + a chosen alias, resolved through Peering, so this is "whatever name they want". Read once
+/// from the env `.env` loads at startup; matches the same const in treeibp + treebook.
+static STORY: LazyLock<String> = LazyLock::new(|| std::env::var("STORY_DOMAIN").unwrap_or_else(|_| "localhost".to_string()));
 
 /// The seed ables vocabulary dir (the `.word` cognition flows + folded able specs). `$TREE_ABLES_DIR`
 /// overrides (a relocated checkout / a test scratch dir), else the cwd-relative `seed/store/words/ables`
@@ -36,7 +40,7 @@ fn get<'a>(v: &'a Json, k: &str) -> Option<&'a Json> {
 /// Read a story-config value: fold the library reel into `state.config`, key -> value, else the
 /// default. (None = unknown key with no default.)
 pub fn read_story_config(root: &Path, key: &str) -> Option<Json> {
-    let facts = read_reel_file(root, "0", "library", STORY, None, None);
+    let facts = read_reel_file(root, "0", "library", STORY.as_str(), None, None);
     let state = treefold::fold("library", &facts);
     config_from_state(&state, key)
 }

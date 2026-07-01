@@ -24,11 +24,20 @@ use crate::wire::{read_request, respond, ws_handshake, ws_read_text, ws_send_tex
 use crate::{cognize, federation, ibp, live};
 
 pub fn run() {
+    load_dotenv(); // first-boot settings (STORY_DOMAIN = the story's name/alias, PORT, …) reach the runtime
     let args: Vec<String> = env::args().collect();
     if args.get(1).map(String::as_str) == Some("serve") {
         let addr = args.get(2).cloned().unwrap_or_else(|| "127.0.0.1:7070".to_string());
         let root = args.get(3).cloned().unwrap_or_else(|| "store/past".to_string());
         serve(&addr, Path::new(&root));
+    } else if args.get(1).map(String::as_str) == Some("genesis") {
+        // (RE)PLANT A FRESH WORLD from the seed:  treeos genesis [store-dir] [seed-dir]
+        // The store is gitignored, so a delete is recovered here — the I reads the whole book (vocabulary
+        // coined, spaces + delegates born, grants run) via treebook::full_genesis. This is pure EDGE: the
+        // CLI wiring the genesis WORDS (genesis-spaces/-delegates/-home.word) to disk; it decides nothing.
+        let store = args.get(2).cloned().unwrap_or_else(|| "store/past".to_string());
+        let seed = args.get(3).cloned().unwrap_or_else(|| "seed".to_string());
+        std::process::exit(plant_world(Path::new(&store), Path::new(&seed)));
     } else if args.get(1).map(String::as_str) == Some("peer-fact") {
         // emit THIS reality's signed address-fact for a peer to pin in its Peering cache:
         //   treeos peer-fact <reality-domain> <host> <port> [transport]
@@ -47,6 +56,97 @@ pub fn run() {
         let root = args.get(1).cloned().unwrap_or_else(|| "store/past".to_string());
         std::process::exit(boot_report(Path::new(&root)));
     }
+}
+
+/// Load `KEY=VALUE` lines from a `.env` file into the process env (only keys not already set), so the
+/// first-boot settings reach the runtime. A tiny native reader — no dotenv crate. Silent if there's no
+/// `.env`. This is the ONE place `.env` is read; everything downstream reads `std::env`. Path override:
+/// `TREEOS_ENV`. (The story's name/alias — STORY_DOMAIN — is NOT a DNS requirement; per philosophy/dns.md
+/// a reality is its I key + a chosen alias, resolved by Peering, so this is just "whatever name they want".)
+fn load_dotenv() {
+    let path = env::var("TREEOS_ENV").unwrap_or_else(|_| ".env".to_string());
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(_) => return,
+    };
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some((k, v)) = line.split_once('=') {
+            let (k, v) = (k.trim(), v.trim().trim_matches('"'));
+            if !k.is_empty() && env::var(k).is_err() {
+                env::set_var(k, v);
+            }
+        }
+    }
+}
+
+// ── genesis: (re)plant a fresh world from the seed's genesis book ─────────────
+fn plant_world(store: &Path, seed: &Path) -> i32 {
+    if store.exists() {
+        eprintln!("treeos genesis: {} already exists — remove it first to replant", store.display());
+        return 1;
+    }
+    let vocab = genesis_vocabulary(seed);
+    match treebook::full_genesis(seed, store, &vocab) {
+        Ok(b) => {
+            println!(
+                "world born at {}: I={} vocabulary={} spaces={} delegates={}",
+                store.display(),
+                b.i_name,
+                b.vocabulary_coined,
+                b.spaces.len(),
+                b.delegates.len()
+            );
+            0
+        }
+        Err(e) => {
+            eprintln!("treeos genesis failed: {e:?}");
+            1
+        }
+    }
+}
+
+/// The vocabulary the I reads, in dependency order: the foundation flats first (word→iam→…→for), then
+/// every remaining `.word` under `store/words`, sorted. Mirrors treebook's full_genesis test harness.
+fn genesis_vocabulary(seed: &Path) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut push = |out: &mut Vec<String>, rel: String| {
+        if seen.insert(rel.clone()) {
+            out.push(rel);
+        }
+    };
+    for f in [
+        "word", "iam", "base", "in", "out", "chain", "history", "story", "fold", "see", "do", "name",
+        "being", "space", "matter", "weave", "be", "call", "can", "recall", "able", "flow", "verbs",
+        "if", "while", "for",
+    ] {
+        push(&mut out, format!("store/words/{f}.word"));
+    }
+    let mut rest = Vec::new();
+    let mut stack = vec![seed.join("store/words")];
+    while let Some(d) = stack.pop() {
+        if let Ok(rd) = std::fs::read_dir(&d) {
+            for ent in rd.flatten() {
+                let p = ent.path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else if p.extension().and_then(|e| e.to_str()) == Some("word") {
+                    if let Ok(rel) = p.strip_prefix(seed) {
+                        rest.push(rel.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+    rest.sort();
+    for rel in rest {
+        push(&mut out, rel);
+    }
+    out
 }
 
 // ── one-shot boot: read + verify + fold + match the JS .proj snapshots ───────

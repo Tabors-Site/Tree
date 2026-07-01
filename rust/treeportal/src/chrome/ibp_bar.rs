@@ -37,12 +37,19 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
             if ui.button("~").on_hover_text("your being's home").clicked() {
                 p.navigate("~", true);
             }
+            // IBPA mode toggle — SIMPLE mirrors (default), ADVANCED is the dual cross-world bar (off for now).
+            let (mode_lbl, mode_tip) = if p.st.advanced_ibpa {
+                ("dual", "ADVANCED IBPA: enter both sides (cross-world). Click for SIMPLE mirrored.")
+            } else {
+                ("simple", "SIMPLE IBPA: LEFT + RIGHT mirror — @being #history :: /position. Click for the dual cross-world bar.")
+            };
+            if ui.button(mode_lbl).on_hover_text(mode_tip).clicked() {
+                p.toggle_ibpa();
+            }
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                // 3D is folded into the 2D/3D spatial split (rendered side by side), so it's not a
-                // standalone tab. Order (right-to-left layout → shown left-to-right): 2D/3D, 4D, Story,
-                // Files, Rain.
-                for v in [View::Rain, View::Explorer, View::Story, View::FourD, View::Map2d] {
+                // right-to-left layout → shown left-to-right: 2D, 3D, 4D, Story, Files, Rain
+                for v in [View::Rain, View::Explorer, View::Story, View::FourD, View::World3d, View::Map2d] {
                     if ui.selectable_label(p.st.view == v, v.label()).clicked() {
                         p.st.view = v;
                     }
@@ -50,9 +57,11 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
             });
         });
 
-        // row 2: LEFT :: RIGHT  (full chains). Cross-history (LEFT #h != RIGHT #h) tints :: amber.
-        let cross = cross_history(&p.st.left_stance, &p.st.address);
+        // row 2: LEFT :: RIGHT. SIMPLE = `@being #history :: /position` (mirrored — one story+history).
+        // ADVANCED = the full dual chains; cross-history (LEFT #h != RIGHT #h) then tints :: amber.
+        let cross = p.st.advanced_ibpa && cross_history(&p.st.left_stance, &p.st.address);
         let sep_col = if cross { egui::Color32::from_rgb(226, 197, 116) } else { egui::Color32::from_gray(110) };
+        let right_hint = if p.st.advanced_ibpa { "story#history/space@being" } else { "/room · your position" };
         ui.horizontal(|ui| {
             // LEFT (actor) — editable; for now #history applies (being/position switching lands with tabs)
             let left = ui.add(
@@ -71,7 +80,7 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
             let right = ui.add(
                 egui::TextEdit::singleline(&mut p.st.address)
                     .desired_width(ui.available_width())
-                    .hint_text("story#history/space/space@being")
+                    .hint_text(right_hint)
                     .font(egui::TextStyle::Monospace),
             );
             if right.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {

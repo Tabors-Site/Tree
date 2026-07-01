@@ -44,6 +44,38 @@ fn story_signer(actor: &Json) -> Option<impl Fn(&Json, &[String]) -> Json> {
     })
 }
 
+/// Enrich a Name-facet actor with `homeSpace` — the space a new being spawns INTO (user doctrine: a
+/// being is always born in a space). If the actor is embodied (drives a being), use that being's current
+/// space; else the story's place root. The bare story "I" and an already-set homeSpace are left as-is.
+fn with_home_space(actor: &Json, root: &Path, history: &str) -> Json {
+    let is_name = matches!(get_str(actor, "nameId"), Some(n) if !n.is_empty() && n != "I");
+    if !is_name || get_str(actor, "homeSpace").map_or(false, |h| !h.is_empty()) {
+        return actor.clone();
+    }
+    // embodied → the being's folded position; else the place root.
+    let space = get_str(actor, "beingId")
+        .filter(|b| !b.is_empty() && *b != "I")
+        .and_then(|b| {
+            let facts = treestore::read_reel_file(root, history, "being", b, None, None);
+            match get(&treefold::fold("being", &facts), "position") {
+                Some(Json::Str(s)) if !s.is_empty() => Some(s.clone()),
+                _ => None,
+            }
+        })
+        .or_else(|| crate::resolve::resolve("/", history, None, root).ok().map(|r| r.space_id));
+    match space {
+        Some(s) if !s.is_empty() => match actor {
+            Json::Obj(fields) => {
+                let mut e: Vec<(String, Json)> = fields.iter().filter(|(k, _)| k != "homeSpace").cloned().collect();
+                e.push(("homeSpace".to_string(), Json::Str(s)));
+                Json::Obj(e)
+            }
+            _ => actor.clone(),
+        },
+        _ => actor.clone(),
+    }
+}
+
 /// Run a raw Word as an act (genesis act / do-op): parse -> authorize -> rasterize -> stamp. After the
 /// seal, the PRESENT-LOOP Phase-2 hook fires (subscription wakes + inbox eviction) over the sealed facts.
 pub fn run_word(word: &str, actor: &Json, root: &Path, history: &str, basis: Option<f64>) -> Vec<treeibp::Outcome> {
@@ -51,6 +83,11 @@ pub fn run_word(word: &str, actor: &Json, root: &Path, history: &str, basis: Opt
     let ables_dir = ables_dir.as_path();
     let materials_dir = Path::new(MATERIALS_DIR);
     let store_words_dir = Path::new(STORE_WORDS_DIR);
+    // a being is ALWAYS born into a space: enrich a Name's actor with `homeSpace` (its being's space if
+    // embodied, else the story's place root) so a `be:birth` spawns the being there (facet_resolve places
+    // it). Only for a real Name (facet) — the story I / bodiless-noone paths are untouched.
+    let actor = with_home_space(actor, root, history);
+    let actor = &actor;
     let signer = story_signer(actor);
     let sign_ref = signer.as_ref().map(|f| f as &dyn Fn(&Json, &[String]) -> Json);
     let outcomes = treeibp::act_via_fold(

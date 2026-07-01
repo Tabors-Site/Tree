@@ -129,7 +129,10 @@ fn i_reads_the_whole_book_and_the_world_is_born() {
     assert!(born.spaces.iter().any(|(n, _)| n == "root"), "the place root exists");
     assert!(born.spaces.iter().any(|(n, _)| n == "heaven"), "heaven exists");
 
-    // 3. THE FAITHFUL DELEGATE ROSTER is birthed (be:birth + the right able), every reel verifies.
+    // 3. THE FAITHFUL DELEGATE ROSTER is birthed — BARE births (Tabor: "the first am is just being birth
+    //    thats it"): each `I am <Name> in <space>` lays JUST be:birth + homeSpace, an EMPTY being. The able
+    //    is NOT crammed into birth (that would be the fat-birth drift); it is GRANTED by a word in
+    //    genesis.word (step 4). Every reel verifies.
     assert_eq!(born.delegates.len(), ROSTER.len(), "the full roster is birthed");
     for (able, name) in ROSTER {
         assert!(
@@ -140,22 +143,32 @@ fn i_reads_the_whole_book_and_the_world_is_born() {
         assert!(!facts.is_empty(), "delegate `{name}` has a reel");
         assert_eq!(gs(&facts[0], "verb"), Some("be"), "delegate `{name}` first fact is a be");
         assert_eq!(gs(&facts[0], "act"), Some("birth"), "delegate `{name}` is born (be:birth)");
-        assert_eq!(
-            get(&facts[0], "params").and_then(|p| gs(p, "able")),
-            Some(*able),
-            "delegate `{name}` carries able `{able}`"
+        // BARE birth: no able at birth (able is `I am a <role>` / a grant, never `I am <Name>`).
+        assert!(
+            get(&facts[0], "params").and_then(|p| gs(p, "able")).is_none(),
+            "delegate `{name}` birth is BARE — no able at birth (granted by a word, step 4)"
         );
         assert!(ok(&verify_fact_chain(&facts)), "delegate `{name}` chain verifies");
     }
 
-    // 4. THE GRANTS landed (genesis.word) — do:grant-able facts on the delegate reels.
-    assert!(born.grants_laid > 0, "the grant flow laid grants ({})", born.grants_laid);
+    // 4. THE ABLES ARE SAID IN THE BIRTHS — the delegate reels carry do:grant-able facts laid by each
+    //    birth's trailing able-clauses (the old `do grant-able` flow is RETIRED; the word IS the grant).
+    //    Every delegate but @public carries its OWN able (`arrival`->Arrival, `cherub`->Cherub, …). The
+    //    old flow laid nothing now, so born.grants_laid is 0.
+    assert_eq!(born.grants_laid, 0, "the old grant flow is retired (ables are said in the births)");
     let mut grant_facts = 0;
-    for (_able, name) in &born.delegates {
+    for (able, name) in &born.delegates {
         let facts = read_reel_file(&dir, "0", "being", name, None, None);
         grant_facts += facts.iter().filter(|f| gs(f, "act") == Some("grant-able")).count();
+        if name.as_str() != "Public" {
+            assert!(
+                facts.iter().any(|f| gs(f, "act") == Some("grant-able")
+                    && get(f, "params").and_then(|p| gs(p, "able")) == Some(able.as_str())),
+                "delegate `{name}` is SAID its own able `{able}` (a birth clause, not a grant flow)"
+            );
+        }
     }
-    assert_eq!(grant_facts, born.grants_laid, "every grant landed on a delegate reel");
+    assert!(grant_facts > 0, "the said ables landed as grant-able facts on the delegate reels ({grant_facts})");
 
     // 5. I's OWN reel verifies whole (the genesis + the vocabulary coins + I's creation acts).
     let i_reel = read_reel_file(&dir, "0", "being", "I", None, None);
