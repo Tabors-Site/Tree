@@ -414,35 +414,9 @@ type EffBuilder = fn(&Captures, &Ctx) -> Json;
 /// EFFECT_RULES (this slice: the two state-act forms — parser.js `stateAct`).
 fn effect_rules() -> &'static [(Regex, EffBuilder)] {
     static TABLE: LazyLock<Vec<(Regex, EffBuilder)>> = LazyLock::new(|| vec![
-        // move <direction>.   (a being walks itself: the compass step W/A/S/D expand to). It lowers to a
-        // `do move` deed carrying params.direction — NO `of`, because the SUBJECT is the actor's own
-        // being: move.word (a kind:op composite) reads `$caller` and authors the do:move on that being's
-        // reel. The EXISTING move verb (no new parser verb); the four compass words are the vocabulary.
-        (
-            Regex::new(r"(?i)^move (north|south|east|west)\.$").unwrap(),
-            |m, _ctx| obj(vec![
-                ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("move")),
-                ("params", obj(vec![("direction", jstr(&m[1].to_lowercase()))])),
-            ]),
-        ),
-        // w / a / s / d   (the coined WASD keys — STAMP mode sends the BARE chord, no period). Each is a
-        // one-letter word for a compass step, the exact same do:move as "move <dir>." (move.word reads
-        // $caller). w = north (forward), a = west (left), s = south (back), d = east (right).
-        (
-            Regex::new(r"(?i)^([wasd])\.?$").unwrap(),
-            |m, _ctx| {
-                let dir = match m[1].to_lowercase().as_str() {
-                    "w" => "north",
-                    "a" => "west",
-                    "s" => "south",
-                    _ => "east", // d
-                };
-                obj(vec![
-                    ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("move")),
-                    ("params", obj(vec![("direction", jstr(dir))])),
-                ])
-            },
-        ),
+        // (`move <direction>` and the WASD keys -> do:move params.direction are now the WORD-DRIVEN READER
+        // (deed voice) — reader.rs `read_effect`: `move` a Do-verb from the word, the compass words the
+        // vocabulary, WASD the coined keys. parse_effect calls read_effect first. Both regexes were DELETED.)
         // the <able> <verb>, and it becomes <X>.   (a state-wheel act: no `of`, sets the next state)
         (
             Regex::new(r"(?i)^the (\w+) (\w+), and it becomes (\w+)\.$").unwrap(),
@@ -983,6 +957,13 @@ fn parse_inline_then(rest: &str, ctx: &Ctx) -> Vec<Json> {
 }
 
 fn parse_effect(line: &str, ctx: &Ctx) -> Option<Json> {
+    // THE WORD-DRIVEN READER (deed voice) FIRST (WORD-DRIVEN-PARSER.md): resolve the verb from the declared
+    // vocabulary and read the deed generically — the effect peer of parse()'s `read_act` call. Falls back to
+    // the effect regex tables below for deeds it does not cover yet (it returns None for those). This one
+    // seam covers BOTH flow bodies (collect_body -> parse_effect) and top-level spoken deeds (the fallback).
+    if let Some(eff) = reader::read_effect(line, &VOCAB) {
+        return Some(eff);
+    }
     for (re, build) in effect_rules() {
         if let Some(caps) = re.captures(line) {
             return Some(build(&caps, ctx));

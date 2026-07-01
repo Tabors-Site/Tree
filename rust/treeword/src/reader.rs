@@ -10,11 +10,15 @@
 // FIRST FORM: `I am <Name> [in <space>]` — birth a being, homed by `in` — the shape genesis-delegates.word
 // now uses ("I am Arrival in root."). The VERB (am -> be) is resolved FROM THE WORD (vocab::verb_by_present).
 //
-// FLAGGED STOPGAP (the drift-test, honestly applied): the be-FORM "birth" — which of be's forms a present
-// on a being maps to — is MEANING, and by the leash it belongs in be.word, not here. It is picked in Rust
-// for now and is the NEXT thing to move to the .word (be.word should say "the present of be on a being is
-// to birth it"). Everything else here is floor: splitting a sentence into words + roles, and resolving the
-// verb from the vocabulary. This one pick is the remaining seam, and it is marked so it stays visible.
+// FLAGGED STOPGAP (the drift-test, honestly applied — see WORD-DRIVEN-PARSER.md "Step-0 STATUS"): the
+// be-FORM "birth" (which of be's forms a present on a being maps to) is picked in Rust here. be.word ALREADY
+// DECLARES the forms in PROSE ("A being is born of a mother" = birth, "connected to when a Name takes it up"
+// = connect, …); what is missing is a FOLD that EXTRACTS "present-of-be-on-a-being → birth (+ home as a
+// field)" from that definition so the reader can UNFOLD it. `be_act` short-circuits that fold. The be:birth
+// PRIMITIVE stays FLOOR (an irreducible op, as be.js was); what should FOLD is `am`'s DEFINITION assembling
+// the primitive + the story's redefinitions. Everything else here IS floor: splitting a sentence into words
+// + roles, resolving the verb from the vocabulary. This pick is the remaining seam — the crystallization
+// keystone — marked so it stays visible; retire it only once the fold proves birth+home (Step-0).
 
 use crate::vocab::{Family, Vocabulary};
 use treehash::Json;
@@ -81,6 +85,76 @@ pub fn read_act(statement: &str, vocab: &Vocabulary) -> Vec<Json> {
         }
     }
     acts
+}
+
+/// Read a DEED-voice effect — the being's spoken deed, IMPLICIT subject ($caller), NO "I". This is the
+/// sibling of `read_act`: `read_act` is the "I" voice (top-level acts), `read_effect` is the deed voice
+/// (a flow body's effect, or a bare deed a being utters). Same word-driven reading — resolve the verb from
+/// the vocabulary + read roles generically — but the subject is the actor itself, so there is no `of`/`by`
+/// unless the deed names one. Returns None for forms not yet migrated; `parse_effect` then falls back to
+/// the effect regex tables. (No `ctx` yet — the first migrated deed, `move <direction>`, needs none; deeds
+/// that read the flow's state_var/being will take it as they migrate.)
+///
+/// FIRST DEED: `move <direction>` / WASD -> `do:move` carrying params.direction. The being walks ITSELF
+/// (move.word reads `$caller` and authors the do:move on its reel) — the EXISTING move verb, the four
+/// compass words the vocabulary. Same do:move as the "I" voice's `I move to <space>`, but a compass step
+/// (a direction) rather than a destination space.
+pub fn read_effect(clause: &str, vocab: &Vocabulary) -> Option<Json> {
+    let s = clause.trim().trim_end_matches('.').trim();
+    let tokens: Vec<&str> = s.split_whitespace().collect();
+    if tokens.is_empty() {
+        return None;
+    }
+    // WASD: a single coined compass KEY (w/a/s/d) -> the same do:move as `move <dir>` (w=north/forward,
+    // a=west/left, s=south/back, d=east/right). STAMP mode sends the bare chord; the `.` is optional.
+    if tokens.len() == 1 {
+        if let Some(dir) = wasd_direction(tokens[0]) {
+            return Some(move_direction_act(dir));
+        }
+    }
+    // the deed voice has NO subject: token 0 IS the verb, resolved from the word.
+    let verb = vocab.verb_by_present(tokens[0])?;
+    let rest = &tokens[1..];
+    match verb.family {
+        // `move <direction>` -> do:move params.direction (NO `of` — $caller walks itself). A bare compass
+        // direction is the object; `move to <space>` is the "I" voice (read_act), so a non-compass `move`
+        // defers to the fallback.
+        Some(Family::Do) if verb.present.as_str() == "move" => {
+            let dir = rest.first().map(|d| d.to_lowercase())?;
+            if !is_compass(&dir) {
+                return None;
+            }
+            Some(move_direction_act(&dir))
+        }
+        _ => None, // other deeds not migrated to the reader yet -> parse_effect falls back to the tables
+    }
+}
+
+/// `w`/`a`/`s`/`d` -> its compass direction (the coined WASD keys), case-insensitive. None for any other
+/// single token (it then falls through to verb resolution / the fallback).
+fn wasd_direction(tok: &str) -> Option<&'static str> {
+    match tok.to_lowercase().as_str() {
+        "w" => Some("north"),
+        "a" => Some("west"),
+        "s" => Some("south"),
+        "d" => Some("east"),
+        _ => None,
+    }
+}
+
+fn is_compass(d: &str) -> bool {
+    matches!(d, "north" | "south" | "east" | "west")
+}
+
+/// `move <direction>` / WASD -> do:move carrying params.direction. Matches the retired effect regex EXACTLY:
+/// kind:act, verb:do, act:move, params:{direction}, and NO `of` (the subject is the actor's own being).
+fn move_direction_act(dir: &str) -> Json {
+    obj(vec![
+        ("kind", jstr("act")),
+        ("verb", jstr("do")),
+        ("act", jstr("move")),
+        ("params", obj(vec![("direction", jstr(dir))])),
+    ])
 }
 
 /// Split a statement into its clauses on top-level `,` and ` and ` (a `,`/`and` inside `"..."` does NOT
@@ -510,5 +584,27 @@ mod tests {
         assert_ne!(gs(&r[0], "act"), Some("birth"), "a rename is never a birth");
         // a non-`name` field or a non-Be verb is not this form -> falls back (empty).
         assert!(read_act("My home is heaven.", &v).is_empty(), "only `name` migrated (other fields later)");
+    }
+
+    #[test]
+    fn reads_move_direction_as_a_deed_off_the_word() {
+        let v = full_vocab();
+        // `move north.` -> do:move params.direction=north — the DEED voice (no "I"; $caller walks itself).
+        let m = read_effect("move north.", &v).expect("move north is a deed");
+        assert_eq!(gs(&m, "verb"), Some("do"));
+        assert_eq!(gs(&m, "act"), Some("move"));
+        assert_eq!(get(&m, "params").and_then(|p| gs(p, "direction")), Some("north"), "the compass direction");
+        assert!(get(&m, "of").is_none(), "no `of` — the subject is the actor's own being");
+        // the WASD keys -> the same do:move (w=north, a=west, s=south, d=east); bare chord or with a period.
+        let dir = |s: &str| read_effect(s, &v).and_then(|n| get(&n, "params").and_then(|p| gs(p, "direction")).map(str::to_string));
+        assert_eq!(dir("w").as_deref(), Some("north"));
+        assert_eq!(dir("a.").as_deref(), Some("west"));
+        assert_eq!(dir("s").as_deref(), Some("south"));
+        assert_eq!(dir("d").as_deref(), Some("east"));
+        // `move to <space>` is the "I" voice (a destination), NOT a compass deed -> None (defers).
+        assert!(read_effect("move to heaven.", &v).is_none(), "move to a space is the I-voice, not a deed");
+        // an unmigrated deed (call/see/the-…) -> None, so parse_effect falls back to the effect tables.
+        assert!(read_effect("call Bob, saying hi.", &v).is_none(), "call not migrated -> fallback");
+        assert!(read_effect("the cherub forms a being.", &v).is_none(), "a `the …` effect -> fallback");
     }
 }

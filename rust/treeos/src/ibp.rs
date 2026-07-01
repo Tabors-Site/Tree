@@ -259,6 +259,20 @@ fn handle_wire_inner(msg: &str, root: &Path) -> String {
             // decides + acts). The summon-driven wake of the present-loop runtime (Phase 1). CLOCK-FREE:
             // B wakes on this real event, not on a timer. Composes scheduler::wake over the conductor.
             Some("summon") | Some("call") => return json(&summon(&req, root)),
+            // FORWARDING (dns.md Phase 6): a peer asks "who is <alias>?" -> reply with the signed claim(s)
+            // we hold. Each claim carries its claimant's own I-signature, so we cannot forge one; we only
+            // pass along (or withhold) what we know. Discovery by introduction, no central directory.
+            Some("resolve") => {
+                let alias = get_str(&req, "alias").unwrap_or_default();
+                return treehash::stringify(&crate::federation::resolve_reply(&alias));
+            }
+            // HANDSHAKE (dns.md Phase 2): a peer opens with "here is my signed I-am"; we verify + pin it
+            // and introduce ourselves back. Both realities end up caching each other, reachability-proven.
+            Some("hello") => {
+                let fact = get(&req, "fact").cloned().unwrap_or(Json::Null);
+                let local = crate::config::story_host(root).unwrap_or_else(|| "localhost".to_string());
+                return treehash::stringify(&crate::federation::hello_reply(&fact, &local));
+            }
             // cognize = the autonomous loop (moment -> decide a Word -> act), built on the two primitives.
             Some("cognize") => {
                 return json(&match crate::cognize::cognize_view(&req, root) {

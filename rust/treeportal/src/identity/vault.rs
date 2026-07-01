@@ -63,6 +63,17 @@ impl Vault {
         Ok(())
     }
 
+    /// Rename the active Name (its UI nickname/label) — e.g. a nickname chosen on the key-reveal page.
+    pub fn rename_active(&mut self, label: &str) {
+        let label = label.trim();
+        if label.is_empty() {
+            return;
+        }
+        if let Some(n) = self.active.and_then(|i| self.names.get_mut(i)) {
+            n.label = label.to_string();
+        }
+    }
+
     /// The active Name's key, ENCRYPTED with a password — the `pw:` blob to store in the story
     /// (name:declare / set-password). Used to register a Name or set/change its password.
     pub fn encrypted_blob(&self, password: &str) -> Option<String> {

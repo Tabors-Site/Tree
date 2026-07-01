@@ -5,7 +5,6 @@
 // (federation::resolve_verified refuses anything unsigned or invalid); mDNS is only the discovery channel.
 
 use std::collections::HashMap;
-use std::path::Path;
 use std::time::{Duration, Instant};
 
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
@@ -15,7 +14,7 @@ const SERVICE: &str = "_treeos._tcp.local.";
 
 /// This reality's LAN IP — the source address for reaching the internet, i.e. the host a peer connects
 /// to. No packet is sent (UDP `connect` just sets the default destination); falls back to loopback.
-fn local_ip() -> String {
+pub fn local_ip() -> String {
     use std::net::UdpSocket;
     UdpSocket::bind("0.0.0.0:0")
         .ok()
@@ -49,6 +48,9 @@ pub fn advertise(reality: &str, port: u16) -> Option<ServiceDaemon> {
             return None;
         }
     };
+    // self-pin our OWN signed claim so we can forward it (dns.md Phase 6) and so an alias collision with
+    // another claimant surfaces here too (Phase 5) — a reality is a claimant for its own alias.
+    let _ = crate::federation::pin_claim(reality, &fact);
     let mut props: HashMap<String, String> = HashMap::new();
     props.insert("reality".into(), reality.to_string());
     props.insert("pubkey".into(), gstr(&fact, "pubkey").unwrap_or_default());
@@ -113,7 +115,9 @@ pub fn discover(secs: u64, pin: bool) -> Vec<Json> {
                     let reality = gstr(&peer, "reality").unwrap_or_default();
                     if !reality.is_empty() && seen.insert(reality.clone()) {
                         if pin {
-                            if let Err(e) = pin_peer(&reality, &peer) {
+                            // collision-aware pin: a different-key claimant for the same alias is KEPT as a
+                            // separate claimant (surfaced at resolve time), not silently overwritten.
+                            if let Err(e) = crate::federation::pin_claim(&reality, &peer) {
                                 eprintln!("mDNS pin '{reality}': {e}");
                             }
                         }
@@ -153,17 +157,3 @@ fn verify_resolved(info: &ServiceInfo) -> Option<Json> {
     ]))
 }
 
-/// Pin a verified peer into the Peering cache (.story/peers.json) so `resolve_verified` can reach it.
-fn pin_peer(reality: &str, fact: &Json) -> Result<(), String> {
-    let path = Path::new(".story/peers.json");
-    let mut peers = std::fs::read_to_string(path)
-        .ok()
-        .and_then(|s| treehash::parse(&s).ok())
-        .unwrap_or_else(|| Json::Obj(vec![]));
-    if let Json::Obj(e) = &mut peers {
-        e.retain(|(k, _)| k != reality);
-        e.push((reality.to_string(), fact.clone()));
-    }
-    std::fs::create_dir_all(".story").map_err(|e| e.to_string())?;
-    std::fs::write(path, treehash::stringify(&peers)).map_err(|e| e.to_string())
-}

@@ -47,6 +47,81 @@ pub fn run() {
         for p in &peers {
             println!("{}", treehash::stringify(p));
         }
+    } else if args.get(1).map(String::as_str) == Some("peers") {
+        // show the Peering cache (verified claimants per alias, collisions and all):  treeos peers
+        println!("{}", treehash::stringify(&crate::federation::peering_cache()));
+    } else if args.get(1).map(String::as_str) == Some("whois") {
+        // resolve an alias against MY Peering cache: where does it land, or is it ambiguous?
+        //   treeos whois <alias>
+        let alias = args.get(2).cloned().unwrap_or_default();
+        match crate::federation::resolve_verified(&alias) {
+            Ok(addr) => println!("{alias} -> {addr}"),
+            Err(e) => {
+                println!("{e}");
+                std::process::exit(1);
+            }
+        }
+    } else if args.get(1).map(String::as_str) == Some("handshake") {
+        // LIVE HANDSHAKE (dns.md Phase 2): exchange signed identities with a peer; both cache each other.
+        //   treeos handshake <host:port>
+        let peer = args.get(2).cloned().unwrap_or_default();
+        if peer.is_empty() {
+            eprintln!("usage: treeos handshake <host:port>");
+            std::process::exit(1);
+        }
+        let alias = env::var("STORY_DOMAIN").unwrap_or_else(|_| "localhost".to_string());
+        let my_host = crate::mdns::local_ip();
+        let my_port: u16 = env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(7070);
+        match crate::federation::handshake(&peer, &alias, &my_host, my_port) {
+            Ok(claimants) => {
+                println!("handshook with {peer} — introduced myself as '{alias}', pinned {} peer(s):", claimants.len());
+                for c in claimants {
+                    println!("  {c}");
+                }
+            }
+            Err(e) => {
+                eprintln!("treeos handshake: {e}");
+                std::process::exit(1);
+            }
+        }
+    } else if args.get(1).map(String::as_str) == Some("pin") {
+        // resolve an alias COLLISION by choosing which claimant pubkey to trust:
+        //   treeos pin <alias> <pubkey>
+        let (alias, pubkey) = (args.get(2).cloned().unwrap_or_default(), args.get(3).cloned().unwrap_or_default());
+        if alias.is_empty() || pubkey.is_empty() {
+            eprintln!("usage: treeos pin <alias> <pubkey>");
+            std::process::exit(1);
+        }
+        match crate::federation::pin_choice(&alias, &pubkey) {
+            Ok(()) => println!("pinned '{alias}' -> {pubkey}"),
+            Err(e) => {
+                eprintln!("treeos pin: {e}");
+                std::process::exit(1);
+            }
+        }
+    } else if args.get(1).map(String::as_str) == Some("resolve") {
+        // FORWARDING (dns.md Phase 6): ask a KNOWN peer who an alias is; verify + pin the reply:
+        //   treeos resolve <alias> via <host:port>
+        let alias = args.get(2).cloned().unwrap_or_default();
+        let via = if args.get(3).map(String::as_str) == Some("via") { args.get(4).cloned() } else { args.get(3).cloned() };
+        match (alias.is_empty(), via) {
+            (false, Some(peer)) => match crate::federation::resolve_via_peer(&peer, &alias) {
+                Ok(claimants) => {
+                    println!("'{alias}' resolved via {peer} — pinned {} claimant(s):", claimants.len());
+                    for c in claimants {
+                        println!("  {c}");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("treeos resolve: {e}");
+                    std::process::exit(1);
+                }
+            },
+            _ => {
+                eprintln!("usage: treeos resolve <alias> via <host:port>");
+                std::process::exit(1);
+            }
+        }
     } else if args.get(1).map(String::as_str) == Some("genesis") {
         // (RE)PLANT A FRESH WORLD from the seed:  treeos genesis [store-dir] [seed-dir]
         // The store is gitignored, so a delete is recovered here — the I reads the whole book (vocabulary

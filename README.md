@@ -6,93 +6,69 @@ Plant a seed on a host. It stores and grows a federated and cryptographically si
 
 It also provides a "5th dimensional" Library that Names can act in to share books of histories, and Search all Stories they are peered with.
 
-## Run it (Rust)
+## Setup
 
-TreeOS boots on Rust. One self-contained binary reads, verifies, folds, writes, and serves a Story with no Node in the loop. You need a Rust toolchain ([rustup](https://rustup.rs)).
+One Rust binary does everything (read, verify, fold, write, serve).Needs [rustup](https://rustup.rs).
 
 ```bash
-git clone https://github.com/Tabors-Site/Tree.git
-cd Tree
-
-# build the binaries → rust/target/release/{treeos, treeportal}
+git clone https://github.com/Tabors-Site/Tree.git && cd Tree
 cargo build --release --manifest-path rust/Cargo.toml
 ```
 
-### Make a store (plant a fresh Story)
+Binaries land in `rust/target/release/` — `treeos` (the Story) and `treeportal` (the window onto it).
 
-`genesis` reads the seed's genesis words (`seed/store/genesis-*.word`) and plants a brand-new world — the Name "I", the being "Am", the vocabulary, the spaces, the delegates — into an empty store directory:
+## Make a store
 
-```bash
-# treeos genesis <store-dir> <seed-dir>   (both optional; default store/past + seed)
-./rust/target/release/treeos genesis store/past seed
-```
-
-The store directory is where your Story lives (its chain + projections). Name it something else (`store/mystory`) to spin up a fresh, isolated Story — its own chain, like a new database. Genesis refuses if the directory already exists (delete it first to replant).
-
-### Serve it
+A **store** is your Story's world on disk — its own chain, like a fresh database. `genesis` plants a new one:
 
 ```bash
-# treeos serve <host:port> <store-dir>   (defaults 127.0.0.1:7070 + store/past)
-./rust/target/release/treeos serve 127.0.0.1:7070 store/past
+./rust/target/release/treeos genesis store/mine
 ```
 
-`serve` exposes the chain over HTTP + WebSocket: `GET /health`, `/reels`, `/reel/<history>/<kind>/<id>`, a `/ws` stream, and `POST /word` — the write seam that runs a Word and stamps the resulting fact onto the chain, all in Rust.
+That's it: a fresh world at `store/mine` (the Name "I", the being "Am", vocabulary, spaces). Pick any folder name for a separate Story. It won't overwrite an existing one.
 
-Want a one-shot integrity check instead? Run the binary with no subcommand to read + fold + verify a store and print a boot report:
+## Run
 
 ```bash
-./rust/target/release/treeos store/past
+./rust/target/release/treeos serve 127.0.0.1:7070 store/mine   # serve over http + ws
+./rust/target/release/treeos store/mine                        # no subcommand = read+verify boot report
+./rust/target/release/treeportal                               # the UI (connects to ws://127.0.0.1:7070/ws)
 ```
 
-### The Portal (the UI)
+- **serve** — exposes the chain: `/health`, `/reels`, `/reel/...`, `/ws`, and `POST /word` (run a Word, stamp the fact).
+- **portal** — sign in with a Name + password, drive a being: 2D map, 3D, Story render, 4D branch tree, Rain.
 
-`treeportal` is the native window onto a running `treeos`. Start the server, then:
+## Peers on the LAN (no DNS)
+
+`serve` advertises this reality by **name** over mDNS with a signed address-fact. Find others on the network:
 
 ```bash
-# connects to ws://127.0.0.1:7070/ws by default; pass another URL to point elsewhere
-./rust/target/release/treeportal
-# or:  ./rust/target/release/treeportal ws://host:port/ws
+./rust/target/release/treeos discover          # find peers, verify signatures, pin the valid ones
+./rust/target/release/treeos whois <alias>      # where an alias resolves (or that it's ambiguous)
 ```
 
-Sign in with a Name + password, drive a being, and move through the world: the 2D map, first-person 3D, the Story render, the 4D branch tree, and the Rain.
+Trust is the I-key signature, not DNS — a spoofed address is refused. See [`philosophy/dns.md`](philosophy/dns.md).
 
-### Find peers on the LAN (no DNS)
+## Windows
 
-`serve` advertises this reality over mDNS as `_treeos._tcp`, carrying its **signed address-fact** — the I-key's signature over `{name, host, port, transport}`. Another reality on the same network finds it by **name**, with no DNS and no registrar:
+Same `cargo build --release` in PowerShell/cmd. Binaries: `rust\target\release\treeos.exe` and `treeportal.exe`. Copy either anywhere and run — no toolchain, no Node.
 
-```bash
-./rust/target/release/treeos discover        # browse a few seconds, verify each signature, pin the valid ones
-```
+## Config (first boot)
 
-Every discovered reality's signature is checked against its own I public key; a bad or missing signature is **refused**, and the verified ones are pinned into `.story/peers.json` (the Peering cache that federation resolves through). This is TreeOS resolving names to network addresses by **cryptographic identity** instead of DNS — the first rung of [`philosophy/dns.md`](philosophy/dns.md).
+Copy `.env.example` to `.env`. Three deployment lines, read at startup:
 
-### Where the binaries are
+- **`STORY_DOMAIN`** — the Story's name / alias (becomes its address `name::path@being`). Not a DNS domain; a reality is its I key plus a chosen name, resolved through Peering. `genesis` plants under it.
+- **`PORT`** — where `serve` answers (default 7070).
+- **`STORE_NAME`** — the `store/<name>` folder (default `past`).
 
-After `cargo build --release`:
-
-- **Linux / macOS:** `rust/target/release/treeos` and `rust/target/release/treeportal`
-- **Windows:** `rust\target\release\treeos.exe` and `rust\target\release\treeportal.exe` — same `cargo build --release` command in a Windows shell (PowerShell / cmd)
-
-Copy a binary anywhere and run it — no toolchain, no Node, no `node_modules`.
-
-## Config (first-boot settings)
-
-A Story's first-boot identity lives in **`.env`** (copy `.env.example`) — read by the `treeos` binary at startup, the equivalent of what you'd set on an OS's first boot:
-
-- **`STORY_DOMAIN`** — the Story's **name / alias**, its identity handle. It becomes the library reel id: how the Story is addressed (`name::path@being`) and what its acts commit to. This is **not** a DNS domain — a TreeOS reality is its I key plus a chosen alias, resolved through Peering, not DNS (see [`philosophy/dns.md`](philosophy/dns.md)). Pick whatever name you want; `genesis` plants the Story under it (`STORY_DOMAIN=tabors-site treeos genesis store/mine seed`).
-- **`PORT`** — where `treeos serve` answers (default 7070).
-- **`STORE_NAME`** — the store folder `store/<name>` (default `past`); name it fresh for an isolated Story.
-
-Everything else a Story *is* — display bits, runtime knobs, `JWT_SECRET` — is a **live config word**: I acts `set-config <key> <value>`, which lands a `config-set` name-act on the library reel and takes effect immediately (no restart, no `.env`). So `.env` is just the three deployment lines above; the Story's identity and settings live on-chain, changeable in-system by I.
+Everything else (`JWT_SECRET`, display bits, runtime knobs) is a **live config word**: I acts `set-config <key> <value>` on the library reel, effective immediately — no restart.
 
 ## Read deeper
 
-- [`seed/FACTORY.md`](seed/FACTORY.md), the seed in its own words (the JS reference implementation)
-- [`philosophy/`](philosophy/), the doctrine
-- [`philosophy/I.md`](philosophy/I.md), the cryptographic root
-- [`philosophy/theorems.md`](philosophy/theorems.md), the formal results
+- [`seed/FACTORY.md`](seed/FACTORY.md) — the seed in its own words (JS reference implementation)
+- [`philosophy/`](philosophy/) — the doctrine · [`I.md`](philosophy/I.md) the cryptographic root · [`theorems.md`](philosophy/theorems.md) the formal results
 
-The `seed/` tree is the original JS implementation, kept as the reference the Rust port is proven against.
+The `seed/` tree is the original JS, kept as the reference the Rust port is proven against.
 
 ## License
 

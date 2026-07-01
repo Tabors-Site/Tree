@@ -55,6 +55,7 @@ mod credential;
 mod jwt;
 mod keyfile;
 mod mnemonic;
+mod name_facet;
 mod nameid;
 mod password_lock;
 mod payload;
@@ -67,6 +68,7 @@ pub use mnemonic::{
 };
 pub use credential::{credential_key, decrypt_credential, encrypt_credential, hash_password, verify_password};
 pub use jwt::{decode_jwt, sign_jwt_hs256, verify_jwt_hs256};
+pub use name_facet::{derive_name_keypair, is_name_facet_of};
 pub use nameid::{encode_key_id, is_key_id, key_id_to_pubkey, MAX_KEY_ID_LEN};
 pub use password_lock::{decrypt_with_password, encrypt_with_password, is_password_locked};
 pub use payload::{build_act_sig_payload, build_moment_proof_payload};

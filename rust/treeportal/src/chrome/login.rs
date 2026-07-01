@@ -40,7 +40,7 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
 
                     // ── SIGN IN — name + password ────────────────────────────────────────────────────────
                     section(ui, "SIGN IN");
-                    field(ui, &mut p.st.login_name, "your name");
+                    field(ui, &mut p.st.login_name, "nickname");
                     let pw = ui.add(pw_edit(&mut p.st.login_password, "password"));
                     let enter = pw.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                     ui.add_space(3.0);
@@ -67,7 +67,7 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
                     gap(ui);
                     section(ui, "NEW NAME");
                     ui.horizontal(|ui| {
-                        ui.add(egui::TextEdit::singleline(&mut p.st.add_name).hint_text("a handle (optional)").desired_width(W - 108.0));
+                        ui.add(egui::TextEdit::singleline(&mut p.st.add_name).hint_text("a nickname (optional)").desired_width(W - 108.0));
                         if ui.add(egui::Button::new("create").min_size(egui::vec2(96.0, 26.0))).clicked() {
                             if let Err(e) = p.vault.generate(p.st.add_name.trim()) {
                                 p.st.add_msg = e;
@@ -76,12 +76,12 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
                     });
                     help(ui, "generates your key (24 words). A PASSWORD is OPTIONAL — just a convenience so you don't paste the key each time. Your 24 WORDS are the root: save them on paper. Lose them and the Name is gone — there is no reset.");
 
-                    // ── HAVE A KEY — import ──────────────────────────────────────────────────────────────
+                    // ── LOG IN WITH PRIVATE KEY — your words/key ARE your Name; pasting them signs you back in ──
                     gap(ui);
-                    section(ui, "HAVE A KEY");
-                    ui.add(egui::TextEdit::multiline(&mut p.st.add_import).desired_rows(2).desired_width(W).hint_text("paste 24 words, or a PKCS8 PEM").font(egui::TextStyle::Monospace));
+                    section(ui, "LOG IN WITH PRIVATE KEY");
+                    ui.add(egui::TextEdit::multiline(&mut p.st.add_import).desired_rows(2).desired_width(W).hint_text("paste your 24 words, or a PKCS8 PEM").font(egui::TextStyle::Monospace));
                     ui.add_space(3.0);
-                    if ui.add(egui::Button::new("import").min_size(egui::vec2(W, 26.0))).clicked() {
+                    if ui.add(egui::Button::new("log in").min_size(egui::vec2(W, 26.0))).clicked() {
                         let name = p.st.add_name.trim().to_string();
                         let imp = p.st.add_import.trim().to_string();
                         let r = if imp.contains("BEGIN") { p.vault.import_pem(&name, &imp) } else { p.vault.import_mnemonic(&name, &imp) };
@@ -90,7 +90,7 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
                             Err(e) => p.st.add_msg = e,
                         }
                     }
-                    help(ui, "your key never leaves this machine — it signs your acts locally. Words OR key are interchangeable proof; a password is optional on top.");
+                    help(ui, "your key never leaves this machine — it signs your acts locally. This isn't importing a portable identity; it's how you sign back into your Name.");
 
                     msg(ui, p);
                     ui.add_space(24.0);

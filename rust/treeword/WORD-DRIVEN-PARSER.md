@@ -171,6 +171,15 @@ engine produces. The code is just the edges where the logic needs to connect."*
 - **being / name / matter / space are the WORD STORY** — *"all being/name/matter/space stuff is our word
   story, and a lot of rust for those is connected to the word."* The substrate Rust exists to serve the
   word; the word is not decoration on top of the Rust.
+- **FLOW is the key to word logic — most things that were CODE become FLOW, not Rust** (Tabor: *"flow is
+  basically the key to word logic. most things will be flow that were code."*). The `When …:` bodies +
+  their effects (the DEED voice — `move`/`call`/`see`/`do`/`set`, If/refuse/Return/foreach) are where
+  LOGIC lives in Word. So the code→word migration is code→**FLOW**, NOT code→Rust: logic that today sits
+  in Rust/JS becomes flow; the Rust floor stays the irreducible primitives only. This makes the deed-voice
+  reader (`read_effect`, the effect peer of `read_act`) the KEY layer to word-drive — it is HOW code
+  becomes word — not a side task. Corollary of the edge rule: if you're tempted to pull effect LOGIC into
+  Rust, stop — it's flow. Rust reads the flow generically (verb from the vocab + roles) and holds only the
+  floor. [[flow-is-word-logic]]
 - **A word that HAS code logic lives NEXT TO its Rust file.** *"the word's that have code logic with them
   should be clearly next to their rust files. that is why store is setup that way in seed with words next
   to files."* In `seed/store/words/` each host-coupled word sits beside its code
@@ -207,6 +216,18 @@ definition-chain grew. (The vocabulary-fold applied to the verb itself; tree-rin
   ADDS a grant. Base word = defaults; trailing clauses = deltas.
 - **Step-0 (close-story): prove the fold can EXPRESS what the regex did BEFORE deleting the regex.** Never
   delete the hardcoded version until its replacement works. Prove, then delete — never the reverse.
+- **Step-0 STATUS (be.word/iam.word investigated — the keystone's actual state):** be.word DECLARES be's
+  six forms in PROSE — "A being is **born** of a mother" (birth), "connected to when a Name takes it up"
+  (connect), released / switch / truename / "dies when its chain seals" (kill) — and pins the SELECTION to
+  code: *"be's forms are six (be.js) … each a do on the being."* iam.word: `am` = a name:declare fact +
+  a be:birth fact (bottoms out at the be:birth primitive). So the definition is STATED, but no FOLD yet
+  EXTRACTS "present-of-be-on-a-being → birth (+ home as a field)" from that prose — `be_act` (birth) and
+  `read_rename` (set-field) short-circuit it in Rust, honestly FLAGGED. THE KEYSTONE (crystallization core):
+  a fold-readable `am` definition → a fold that yields the entailment tree → the reader unfolds it → the
+  Rust short-circuits retire. Note the split: the be:birth/connect/… PRIMITIVES stay FLOOR (irreducible ops
+  beside be.word, as be.js was); what FOLDS is `am`'s DEFINITION assembling those primitives + the story's
+  redefinitions (auto-home, connect-if-Name-exists, grant-same-name — none built). Prove birth+home from the
+  fold BEFORE `be_act` retires. This is the joint "bring the word folder into Rust" step, not a solo grind.
 
 ## BEING FACTS ARE FLAT ON THE BEING (Tabor): flat storage, typed fold
 

@@ -20,6 +20,13 @@ use treestore::read_reel_file;
 /// from the env `.env` loads at startup; matches the same const in treeibp + treebook.
 static STORY: LazyLock<String> = LazyLock::new(|| std::env::var("STORY_DOMAIN").unwrap_or_else(|_| "localhost".to_string()));
 
+/// This reality's NAME / ALIAS — the library reel id, the one authoritative source (STORY_DOMAIN). Every
+/// place that needs "who am I on the network" (mDNS advertise self-pin, the handshake self-introduction,
+/// the cross-story `local` axis) reads THIS, so they can never disagree. Not a DNS name (see dns.md).
+pub fn story_alias() -> String {
+    STORY.clone()
+}
+
 /// The seed ables vocabulary dir (the `.word` cognition flows + folded able specs). `$TREE_ABLES_DIR`
 /// overrides (a relocated checkout / a test scratch dir), else the cwd-relative `seed/store/words/ables`
 /// the binary serves from. No wall-clock; a pure path lookup.

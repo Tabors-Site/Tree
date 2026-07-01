@@ -51,32 +51,101 @@ fn gstr(v: &Json, k: &str) -> Option<String> {
         _ => None,
     }
 }
+fn obj(pairs: Vec<(&str, Json)>) -> Json {
+    Json::Obj(pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+}
 
-/// Resolve a peer reality domain to a VERIFIED `host:port`, or refuse. Reads the pinned signed address-
-/// fact from `.story/peers.json`, rebuilds its canonical content, and checks the signature against the
-/// pinned I pubkey. An unknown peer, a missing signature, or a bad signature all REFUSE (no fall back to
-/// raw DNS — that is the whole security point). The verified host/port are the peer's own I-signed
-/// reachability; reaching a LAN/private address is allowed (the trust is the signature, not the IP).
-pub fn resolve_verified(domain: &str) -> Result<String, String> {
-    let raw = std::fs::read_to_string(peers_path()).map_err(|_| format!("no Peering cache (.story/peers.json) — peer '{domain}' is unknown"))?;
-    let peers = treehash::parse(&raw).map_err(|_| "Peering cache is not valid JSON".to_string())?;
-    let entry = get(&peers, domain).ok_or_else(|| format!("unknown peer '{domain}': not in the Peering cache"))?;
+// ── The Peering cache is COLLISION-AWARE (dns.md Phase 5 "Collide") ────────────────────────────────
+// An alias is a nickname, not an ICANN-owned name: MORE THAN ONE reality may claim `tabors-site`, each
+// having signed its OWN claim with its OWN I key. So an entry holds an ARRAY of claims, not one:
+//   { "<alias>": { "claims": [ {pubkey,host,port,transport,sig}, ... ], "pinned": "<pubkey>"? } }
+// Resolution VERIFIES each claim and then: 0 valid -> refuse; 1 -> resolve; >=2 -> refuse and SURFACE
+// all claimants (the system tells you about the ambiguity instead of silently picking one), unless a
+// `pinned` pubkey (a local trust choice) selects exactly one. Legacy flat `{pubkey,...}` entries are
+// read as a one-claim array (back-compat with the phase-1/2 cache).
 
-    let pubkey = gstr(entry, "pubkey").ok_or("peer entry missing pubkey")?;
-    let host = gstr(entry, "host").ok_or("peer entry missing host")?;
-    let port = match get(entry, "port") {
+/// A verified claim distilled from a cache entry (the signature already checks out against `pubkey`).
+pub struct Claim {
+    pub pubkey: String,
+    pub host: String,
+    pub port: u16,
+    pub transport: String,
+}
+
+/// Pull the claim list out of a cache entry, tolerating the legacy flat single-claim shape.
+fn entry_claims(entry: &Json) -> Vec<Json> {
+    match get(entry, "claims") {
+        Some(Json::Arr(a)) => a.clone(),
+        _ if get(entry, "pubkey").is_some() => vec![entry.clone()], // legacy flat entry = one claim
+        _ => vec![],
+    }
+}
+
+/// Verify ONE claim's signed address-fact against its own pubkey; None if malformed/unsigned/invalid.
+fn verify_claim(domain: &str, claim: &Json) -> Option<Claim> {
+    let pubkey = gstr(claim, "pubkey")?;
+    let host = gstr(claim, "host")?;
+    let port = match get(claim, "port") {
         Some(Json::Num(n)) => *n as u16,
-        _ => return Err("peer entry missing/!numeric port".to_string()),
+        _ => return None,
     };
-    let transport = gstr(entry, "transport").unwrap_or_else(|| "ws".to_string());
-    let sig = gstr(entry, "sig").ok_or("peer address-fact is UNSIGNED — refusing")?;
-
-    let raw_pub = treesign::key_id_to_pubkey(&pubkey).ok_or("peer pubkey is not a valid key id")?;
+    let transport = gstr(claim, "transport").unwrap_or_else(|| "ws".to_string());
+    let sig = gstr(claim, "sig")?;
+    let raw_pub = treesign::key_id_to_pubkey(&pubkey)?;
     let content = treecognition::federation::address_fact_content(domain, &host, port, &transport);
     if !treesign::verify_with_pubkey(&raw_pub, &treehash::stringify(&content), &sig) {
-        return Err(format!("peer '{domain}' address-fact signature INVALID — refusing (possible DNS hijack / spoofed reachability)"));
+        return None;
     }
-    Ok(format!("{host}:{port}"))
+    Some(Claim { pubkey, host, port, transport })
+}
+
+/// Read the Peering cache (or an empty object if none/unreadable).
+fn read_cache() -> Json {
+    std::fs::read_to_string(peers_path())
+        .ok()
+        .and_then(|s| treehash::parse(&s).ok())
+        .unwrap_or_else(|| Json::Obj(vec![]))
+}
+
+/// The VERIFIED claimants for an alias, plus the locally pinned pubkey (if any). Unsigned/invalid claims
+/// are dropped silently — only cryptographically valid claimants survive.
+pub fn verified_claimants(domain: &str) -> (Vec<Claim>, Option<String>) {
+    let cache = read_cache();
+    let entry = match get(&cache, domain) {
+        Some(e) => e,
+        None => return (vec![], None),
+    };
+    let pinned = gstr(entry, "pinned");
+    let claims = entry_claims(entry).iter().filter_map(|c| verify_claim(domain, c)).collect();
+    (claims, pinned)
+}
+
+/// Resolve a peer reality domain to a VERIFIED `host:port`, or refuse. Reads the pinned signed address-
+/// facts from `.story/peers.json`, rebuilds each canonical content, and checks the signature against the
+/// claimant's I pubkey. An unknown peer or all-invalid claims REFUSE (no fall back to raw DNS — that is
+/// the whole security point). A COLLISION (>=2 valid claimants) refuses and surfaces them, unless a
+/// `pinned` pubkey resolves the tie. The verified host/port are the peer's own I-signed reachability;
+/// reaching a LAN/private address is allowed (the trust is the signature, not the IP).
+pub fn resolve_verified(domain: &str) -> Result<String, String> {
+    let (mut claims, pinned) = verified_claimants(domain);
+    if let Some(pin) = &pinned {
+        claims.retain(|c| &c.pubkey == pin);
+    }
+    match claims.len() {
+        0 => Err(format!("unknown peer '{domain}': no verified claimant in the Peering cache")),
+        1 => {
+            let c = &claims[0];
+            Ok(format!("{}:{}", c.host, c.port))
+        }
+        _ => {
+            let who: Vec<String> = claims.iter().map(|c| format!("{} ({}:{})", c.pubkey, c.host, c.port)).collect();
+            Err(format!(
+                "COLLISION: {} realities claim '{domain}' — pin one with `treeos pin {domain} <pubkey>`:\n  {}",
+                claims.len(),
+                who.join("\n  ")
+            ))
+        }
+    }
 }
 
 /// Publish THIS reality's own signed address-fact: sign `{reality, host, port, transport}` with the
@@ -95,6 +164,159 @@ pub fn publish_address_fact(reality: &str, host: &str, port: u16, transport: &st
         ("transport".to_string(), Json::Str(transport.to_string())),
         ("sig".to_string(), Json::Str(sig)),
     ]))
+}
+
+fn write_cache(cache: &Json) -> Result<(), String> {
+    std::fs::create_dir_all(".story").map_err(|e| e.to_string())?;
+    std::fs::write(peers_path(), treehash::stringify(cache)).map_err(|e| e.to_string())
+}
+
+/// Pin/refresh a VERIFIED claim into the Peering cache under `alias`. A claim from a DIFFERENT pubkey is
+/// kept as a SEPARATE claimant (that is a collision, surfaced at resolve time); a claim from the SAME
+/// pubkey refreshes in place (an address change — restamp and re-inform). The caller has already checked
+/// the signature (trust-on-first-use). Returns whether this pin introduced a NEW claimant (a fresh pubkey).
+pub fn pin_claim(alias: &str, claim: &Json) -> Result<bool, String> {
+    let pubkey = gstr(claim, "pubkey").ok_or("claim missing pubkey")?;
+    let mut cache = read_cache();
+    let top = match &mut cache {
+        Json::Obj(e) => e,
+        _ => return Err("Peering cache is not an object".to_string()),
+    };
+    let (mut claims, pinned) = match top.iter().find(|(k, _)| k == alias) {
+        Some((_, v)) => (entry_claims(v), gstr(v, "pinned")),
+        None => (vec![], None),
+    };
+    let is_new = !claims.iter().any(|c| gstr(c, "pubkey").as_deref() == Some(pubkey.as_str()));
+    claims.retain(|c| gstr(c, "pubkey").as_deref() != Some(pubkey.as_str())); // same pubkey -> refresh
+    claims.push(claim.clone());
+    let mut pairs: Vec<(&str, Json)> = vec![("claims", Json::Arr(claims))];
+    if let Some(p) = &pinned {
+        pairs.push(("pinned", Json::Str(p.clone())));
+    }
+    let new_entry = obj(pairs);
+    match top.iter_mut().find(|(k, _)| k == alias) {
+        Some((_, v)) => *v = new_entry,
+        None => top.push((alias.to_string(), new_entry)),
+    }
+    write_cache(&cache)?;
+    Ok(is_new)
+}
+
+/// Record a local trust CHOICE for an alias: which claimant pubkey to resolve to when there's a collision.
+/// This is the human/policy decision dns.md leaves OUT of any central authority — you pin the pubkey you
+/// trust for a nickname; nobody owns the nickname.
+pub fn pin_choice(alias: &str, pubkey: &str) -> Result<(), String> {
+    let mut cache = read_cache();
+    let top = match &mut cache {
+        Json::Obj(e) => e,
+        _ => return Err("Peering cache is not an object".to_string()),
+    };
+    let claims = match top.iter().find(|(k, _)| k == alias) {
+        Some((_, v)) => entry_claims(v),
+        None => return Err(format!("no such alias '{alias}' in the Peering cache")),
+    };
+    let new_entry = obj(vec![("claims", Json::Arr(claims)), ("pinned", Json::Str(pubkey.to_string()))]);
+    if let Some((_, v)) = top.iter_mut().find(|(k, _)| k == alias) {
+        *v = new_entry;
+    }
+    write_cache(&cache)
+}
+
+/// The whole Peering cache (for `treeos peers`).
+pub fn peering_cache() -> Json {
+    read_cache()
+}
+
+/// Answer a FORWARDING query (dns.md Phase 6, the peer SIDE): the signed claim(s) THIS reality can vouch
+/// for about `alias`, straight from its Peering cache. Every returned claim carries its claimant's OWN
+/// I-signature, so the asker verifies it independently — the forwarder cannot forge or substitute a claim,
+/// it can only pass along (or withhold) ones it holds. A reality self-pins its own claim when it serves,
+/// so asking A about A returns A's own signed fact; asking A about B returns B's (if A has met B).
+pub fn resolve_reply(alias: &str) -> Json {
+    let cache = read_cache();
+    let mut claims: Vec<Json> = Vec::new();
+    if let Some(entry) = get(&cache, alias) {
+        for raw in entry_claims(entry) {
+            if verify_claim(alias, &raw).is_some() {
+                claims.push(raw);
+            }
+        }
+    }
+    obj(vec![("claims", Json::Arr(claims))])
+}
+
+/// FORWARDING (dns.md Phase 6, the asker SIDE): ask a KNOWN peer "who is `<alias>`?" over the wire; it
+/// replies with the signed claim(s) it holds. Each claim is self-verifying (the claimant's own I-signature
+/// over its address-fact), so a malicious forwarder cannot forge one: we VERIFY every returned claim and
+/// PIN the valid ones into our Peering cache. This is discovery by INTRODUCTION with no central
+/// infrastructure — D finds B by asking A, trusting B's key, never A's word. Returns the pinned claimants.
+pub fn resolve_via_peer(peer: &str, alias: &str) -> Result<Vec<String>, String> {
+    let query = treehash::stringify(&obj(vec![
+        ("verb", Json::Str("resolve".to_string())),
+        ("alias", Json::Str(alias.to_string())),
+    ]));
+    let reply = dispatch(peer, &query)?;
+    let parsed = treehash::parse(&reply).map_err(|_| format!("peer '{peer}' gave a non-JSON resolve reply"))?;
+    let claims = match get(&parsed, "claims") {
+        Some(Json::Arr(a)) => a.clone(),
+        _ => return Err(format!("peer '{peer}' knows no claimant for '{alias}'")),
+    };
+    let mut pinned = Vec::new();
+    for c in &claims {
+        if let Some(v) = verify_claim(alias, c) {
+            pin_claim(alias, c)?;
+            pinned.push(format!("{} ({}:{})", v.pubkey, v.host, v.port));
+        }
+    }
+    if pinned.is_empty() {
+        return Err(format!("peer '{peer}' returned claim(s) for '{alias}' but NONE verified — ignoring (forged forward?)"));
+    }
+    Ok(pinned)
+}
+
+/// The LIVE HANDSHAKE (dns.md Phase 2): open a connection to a peer and exchange signed "I am `<alias>`"
+/// address-facts, each side VERIFYING + PINNING the other. Unlike trusting an mDNS multicast, this
+/// confirms the peer is actually REACHABLE and controls its key live, and it is BIDIRECTIONAL — the peer
+/// caches US too (it pins the fact we offer). `my_*` describe our own reachability to introduce. Returns
+/// the peer claimant(s) we pinned.
+pub fn handshake(peer: &str, my_alias: &str, my_host: &str, my_port: u16) -> Result<Vec<String>, String> {
+    let my_fact = publish_address_fact(my_alias, my_host, my_port, "ws")?;
+    let msg = treehash::stringify(&obj(vec![
+        ("verb", Json::Str("hello".to_string())),
+        ("fact", my_fact),
+    ]));
+    let reply = dispatch(peer, &msg)?;
+    let parsed = treehash::parse(&reply).map_err(|_| format!("peer '{peer}' gave a non-JSON hello reply"))?;
+    let claims = match get(&parsed, "claims") {
+        Some(Json::Arr(a)) => a.clone(),
+        _ => return Err(format!("peer '{peer}' did not introduce itself")),
+    };
+    let mut pinned = Vec::new();
+    for c in &claims {
+        let alias = gstr(c, "reality").unwrap_or_default();
+        if !alias.is_empty() {
+            if let Some(v) = verify_claim(&alias, c) {
+                pin_claim(&alias, c)?;
+                pinned.push(format!("{alias}: {} ({}:{})", v.pubkey, v.host, v.port));
+            }
+        }
+    }
+    if pinned.is_empty() {
+        return Err(format!("peer '{peer}' replied but its self-introduction did not verify"));
+    }
+    Ok(pinned)
+}
+
+/// Answer a HELLO (the peer side of the handshake): VERIFY + PIN the caller's offered signed fact, then
+/// introduce OURSELVES back with our own signed claim(s). Both sides end up caching each other. The
+/// caller's fact carries its own I-signature, so a forged introduction is dropped, not pinned.
+pub fn hello_reply(incoming_fact: &Json, own_alias: &str) -> Json {
+    if let Some(alias) = gstr(incoming_fact, "reality") {
+        if verify_claim(&alias, incoming_fact).is_some() {
+            let _ = pin_claim(&alias, incoming_fact);
+        }
+    }
+    resolve_reply(own_alias)
 }
 
 /// A fixed Sec-WebSocket-Key (any valid base64 16-byte value works — the server computes the accept and

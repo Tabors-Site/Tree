@@ -96,6 +96,9 @@ pub struct PortalState {
     pub login_password: String,
     pub set_password: String,
     pub pending_password: Option<String>,
+    /// the key-reveal "enter" confirm gate: set true when a first enter-press had no nickname/password,
+    /// so the "save your private key" warning shows and a second press is needed to enter anyway.
+    pub confirm_enter: bool,
     /// the RIGHT-stance TARGET being (beingId, name): what a Word typed in the word bar CALLS. Set by
     /// clicking a being (in 3D/2D) or typing `@being`. None = you address the place, not a being.
     pub target_being: Option<(String, String)>,
@@ -135,6 +138,7 @@ impl Default for PortalState {
             login_password: String::new(),
             set_password: String::new(),
             pending_password: None,
+            confirm_enter: false,
             target_being: None,
             timeline: Vec::new(),
             branches: Vec::new(),
