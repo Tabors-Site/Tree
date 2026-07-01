@@ -115,18 +115,42 @@ fn key_reveal(ui: &mut egui::Ui, p: &mut Portal, mnemonic: &str) {
             ui.set_width(W - 24.0);
             ui.label(egui::RichText::new(mnemonic).monospace().size(15.0).line_height(Some(24.0)));
         });
+    // NICKNAME — re-shown from the last page, a second chance if you skipped it — and a PASSWORD. Both
+    // optional, both just for easy sign-in; your 24 words are the real key either way.
     gap(ui);
-    section(ui, "SET A PASSWORD  ·  optional");
-    ui.horizontal(|ui| {
-        ui.add(pw_edit(&mut p.st.set_password, "password").desired_width(W - 108.0));
-        if ui.add(egui::Button::new("set").min_size(egui::vec2(96.0, 26.0))).on_hover_text("encrypt the key with this password + register it in the story").clicked() {
-            p.set_name_password();
-        }
-    });
-    help(ui, "a password lets you sign in with name + password on any device (the key is stored in the story, encrypted). Optional — your 24 words are the real key.");
+    section(ui, "NICKNAME  ·  optional");
+    ui.add(egui::TextEdit::singleline(&mut p.st.add_name).hint_text("a nickname for easy sign-in").desired_width(W));
+    ui.add_space(8.0);
+    section(ui, "PASSWORD  ·  optional");
+    ui.add(pw_edit(&mut p.st.set_password, "password").desired_width(W));
+    help(ui, "a nickname + password let you sign back in the easy way. Optional — your 24 words are the real key.");
     ui.add_space(10.0);
-    if primary(ui, "I've saved my words  —  enter  ›") {
-        p.finish_login();
+
+    // ENTER. If the nickname or password is missing, the FIRST press warns (save your key!) and a second
+    // press enters anyway; with both set, apply the nickname + register the password, then enter.
+    let has_nick = !p.st.add_name.trim().is_empty();
+    let has_pw = p.st.set_password.chars().count() >= 6;
+    let complete = has_nick && has_pw;
+    let label = if p.st.confirm_enter && !complete { "enter anyway  ›" } else { "I've saved my words  —  enter  ›" };
+    if primary(ui, label) {
+        if complete || p.st.confirm_enter {
+            let nick = p.st.add_name.trim().to_string();
+            p.vault.rename_active(&nick); // no-op if empty
+            if has_pw {
+                p.set_name_password(); // encrypt the key + register name+password in the story
+            }
+            p.st.confirm_enter = false;
+            p.finish_login();
+        } else {
+            p.st.confirm_enter = true; // first incomplete press → show the warning below
+        }
+    }
+    if p.st.confirm_enter && !complete {
+        ui.add_space(6.0);
+        ui.colored_label(
+            AMBER,
+            egui::RichText::new("It is advised to set a nickname and password for easy access. But if you don't, ENSURE you wrote down your private key as that is only way to get back into this Name.").small(),
+        );
     }
     msg(ui, p);
     ui.add_space(24.0);

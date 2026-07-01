@@ -270,7 +270,7 @@ fn handle_wire_inner(msg: &str, root: &Path) -> String {
             // and introduce ourselves back. Both realities end up caching each other, reachability-proven.
             Some("hello") => {
                 let fact = get(&req, "fact").cloned().unwrap_or(Json::Null);
-                let local = crate::config::story_host(root).unwrap_or_else(|| "localhost".to_string());
+                let local = crate::config::story_alias(); // our alias = STORY_DOMAIN, the same source advertise self-pins under
                 return treehash::stringify(&crate::federation::hello_reply(&fact, &local));
             }
             // cognize = the autonomous loop (moment -> decide a Word -> act), built on the two primitives.
