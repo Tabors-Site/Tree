@@ -1,21 +1,19 @@
-// treegenesis end-to-end: plant a fresh Story's genesis into a temp store with NO Node, then prove the
-// WHOLE contract over the determinism spine:
-//   FOLD      - the planted reels fold via treefold: the library names catalog materializes the I-name
-//               (parentNameId=null, keyEnc=story-key), and the being projection materializes the
-//               parentless root being (parentBeingId=null - THE genesis marker).
-//   VERIFY    - both chains verify via treeverify, anchored at GENESIS_PREV: the fact-reels (library +
-//               being) AND the I-name's act-chain are whole from the chain root.
-//   SIGNATURE - BOTH genesis acts' sigs verify via treesign::verify_act_sig against the STORY pubkey
-//               (the "i-am" path: the literal "i-am" is not a pubkey id, so it routes to the raw story
-//               key), rebuilt from the STORED act + its committed fact ids - exactly verifyActSig's path.
-//   CLOCK-FREE- the acts + both facts carry NO wall-clock (`at`/`date`); the PURE sig payload carries no
-//               `time`. Order is `ord`/`seq`/`p` only (the time-purge).
+// treegenesis end-to-end: plant a fresh Story's genesis EGG into a temp store with NO Node, then prove
+// the WHOLE contract over the determinism spine:
+//   FOLD      - the planted library reel folds via treefold: the names catalog materializes the I-name
+//               (parentNameId=null, keyEnc=story-key). The being reel is EMPTY (Am is not egg-born).
+//   VERIFY    - the library fact-reel AND the I-name's act-chain verify via treeverify, anchored at
+//               GENESIS_PREV: both are whole from the chain root.
+//   SIGNATURE - the egg act's sig verifies via treesign::verify_act_sig against the STORY pubkey (the
+//               "I" path: the literal "I" is not a pubkey id, so it routes to the raw story key),
+//               rebuilt from the STORED act + its committed fact id - exactly verifyActSig's path.
+//   CLOCK-FREE- the act + fact carry NO wall-clock (`at`/`date`); the PURE sig payload carries no `time`.
+//               Order is `ord`/`seq`/`p` only (the time-purge).
 //
-// GENESIS = TWO SEPARATE ONE-WORD MOMENTS (project_spacebar_moments: one word = one fact = one moment).
-// "I" (name:declare on the library reel) and "am" (be:birth on the being reel) are TWO acts and TWO Words,
-// so the I's act-chain holds TWO acts in order and each reel holds exactly fact #0 at p = GENESIS_PREV.
-// There is NO fusion (the old "lone exemption" was a DRIFT, now removed): the Spacebar Law holds at
-// genesis with no exemption.
+// THE EGG = ONE ONE-WORD MOMENT (project_spacebar_moments: one word = one fact = one moment). The egg
+// lays only "I" (name:declare on the library reel) - the signer coming to be, one act on the I-name's
+// act-chain, the library reel's fact #0 at p = GENESIS_PREV. The being "Am" is NOT born here: it is the
+// FIRST WORD I read from the book (an EMPTY being the words build out - see treebook::full_genesis).
 
 use treefold::fold;
 use treegenesis::{load_or_mint_i_key, plant_genesis, GenesisError, Planted};
@@ -63,37 +61,36 @@ fn canon(v: &Json) -> String {
     treestore::canonicalize(v)
 }
 
-/// Plant a genesis (the I-name is always "I") into a fresh temp dir and return (dir, planted, story_pub).
+/// Plant a genesis egg (the I-name is always "I") into a fresh temp dir and return (dir, planted, story_pub).
 fn plant(tag: &str, story_domain: &str) -> (std::path::PathBuf, Planted, [u8; 32]) {
     let dir = std::env::temp_dir().join(format!("treegenesis-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     // Mint the I key (the story key) under the store's own .story dir. First boot -> minted + written.
     let key = load_or_mint_i_key(&dir.join(".story")).expect("mint the I key");
     assert!(key.minted, "first boot mints the story key");
-    let planted = plant_genesis(&dir, story_domain, &key, None).expect("plant genesis");
+    let planted = plant_genesis(&dir, story_domain, &key).expect("plant genesis egg");
     (dir, planted, key.raw_pub)
 }
 
-/// THE FULL CONTRACT on a default ("I") genesis: TWO moments, fold + verify + both sigs + parentless +
-/// clock-free. The default I-name is now "I" (the correct name; the old "i-am" was a wrong artifact).
+/// THE FULL CONTRACT on a default ("I") genesis egg: ONE moment, fold + verify + sig + root-name +
+/// clock-free, and the being reel EMPTY (Am is the book's first word, not egg-born).
 #[test]
 fn plants_folds_verifies_and_signs_genesis() {
     let story_domain = "localhost";
     let (dir, planted, story_pub) = plant("full", story_domain);
 
     assert_eq!(planted.i_name, "I", "the Name is I (the signer)");
-    assert_eq!(planted.being_id, "Am", "the first being's id IS \"Am\" (the name-being split)");
+    assert_eq!(planted.being_id, "Am", "the first being's id IS \"Am\" (the book will birth it)");
     assert_eq!(planted.story_domain, story_domain);
-    assert_ne!(planted.name_act_id, planted.being_act_id, "two distinct genesis acts");
 
     // ── FOLD: the library reel folds to the names catalog with the I-name declared ──
     let lib_facts = read_reel_file(&dir, "0", "library", story_domain, None, None);
     assert_eq!(lib_facts.len(), 1, "exactly fact #0 on the library reel");
-    // MOMENT 1's Word: the library fact records name:declare ("I").
+    // THE EGG'S Word: the library fact records name:declare ("I").
     assert_eq!(
         fact_verb_act(&lib_facts[0]),
         Some(("name".to_string(), "declare".to_string())),
-        "MOMENT 1 = \"I\" = name:declare on the library reel"
+        "the egg = \"I\" = name:declare on the library reel"
     );
     let lib_state = fold("library", &lib_facts);
     // names[<i_name>] exists with the genesis spec.
@@ -116,58 +113,26 @@ fn plants_folds_verifies_and_signs_genesis() {
         "the root Name stores no private key (story-key signer)"
     );
 
-    // ── FOLD: the being reel (the being "Am") folds to the parentless root being ──
+    // ── THE BEING "Am" IS NOT EGG-BORN: its reel is EMPTY (the book's first word births it) ──
     let be_facts = read_reel_file(&dir, "0", "being", "Am", None, None);
-    assert_eq!(be_facts.len(), 1, "exactly fact #0 on the being reel");
-    // MOMENT 2's Word: the being fact records be:birth ("am").
-    assert_eq!(
-        fact_verb_act(&be_facts[0]),
-        Some(("be".to_string(), "birth".to_string())),
-        "MOMENT 2 = \"am\" = be:birth on the being reel"
-    );
-    let be_state = fold("being", &be_facts);
-    // **THE GENESIS MARKER**: parentBeingId is null.
-    assert!(
-        matches!(get(&be_state, "parentBeingId"), Some(Json::Null)),
-        "the genesis being is parentless (parentBeingId=null): {}",
-        canon(&be_state)
-    );
-    assert_eq!(sget(&be_state, "name").as_deref(), Some("I"), "the being carries the I-name");
-    assert_eq!(sget(&be_state, "trueName").as_deref(), Some("I"), "trueName = the I Name");
-    assert!(
-        matches!(get(&be_state, "homeSpace"), Some(Json::Null)),
-        "born with homeSpace=null (heaven does not exist yet)"
-    );
+    assert_eq!(be_facts.len(), 0, "the being reel is empty after the egg (Am is the book's first word)");
 
-    // ── VERIFY: both fact-reels + the act-chain are whole from GENESIS_PREV ──
+    // ── VERIFY: the library fact-reel + the act-chain are whole from GENESIS_PREV ──
     let lib_v = verify_fact_chain(&lib_facts);
     assert!(verdict_ok(&lib_v), "library fact-chain verifies: {}", canon(&lib_v));
-    let be_v = verify_fact_chain(&be_facts);
-    assert!(verdict_ok(&be_v), "being fact-chain verifies: {}", canon(&be_v));
-    // each reel's fact #0 chains from GENESIS_PREV (p == 64 zeros, seq 1).
+    // the reel's fact #0 chains from GENESIS_PREV (p == 64 zeros, seq 1).
     assert_eq!(sget(&lib_facts[0], "p").as_deref(), Some(GENESIS_PREV), "library fact #0 p = GENESIS_PREV");
-    assert_eq!(sget(&be_facts[0], "p").as_deref(), Some(GENESIS_PREV), "being fact #0 p = GENESIS_PREV");
 
-    // ── TWO MOMENTS: the I's act-chain holds TWO acts in order (name:declare then be:birth) ──
+    // ── ONE MOMENT: the I's act-chain holds exactly ONE act (name:declare) from GENESIS_PREV ──
     let acts = read_act_chain_file(&dir, story_domain, "0", "I");
-    assert_eq!(acts.len(), 2, "TWO genesis acts on the I-name's act-chain (one word = one moment)");
+    assert_eq!(acts.len(), 1, "ONE genesis egg act on the I-name's act-chain (one word = one moment)");
     let name_act = &acts[0];
-    let being_act = &acts[1];
-    // MOMENT 1 = "I" = name:declare, chained from GENESIS_PREV.
     assert_eq!(id_of(name_act), planted.name_act_id, "act #0 IS the returned name_act_id");
     assert_eq!(sget(name_act, "p").as_deref(), Some(GENESIS_PREV), "the I act chains from GENESIS_PREV");
-    // MOMENT 2 = "am" = be:birth, chained off MOMENT 1's act id (the chain advanced).
-    assert_eq!(id_of(being_act), planted.being_act_id, "act #1 IS the returned being_act_id");
-    assert_eq!(
-        sget(being_act, "p").as_deref(),
-        Some(planted.name_act_id.as_str()),
-        "the be:birth act chains off the name:declare act (the I's act-chain, in order)"
-    );
     let act_v = verify_act_chain(&acts);
-    assert!(verdict_ok(&act_v), "the two-act act-chain verifies: {}", canon(&act_v));
+    assert!(verdict_ok(&act_v), "the one-act act-chain verifies: {}", canon(&act_v));
 
-    // ── SIGNATURE: BOTH genesis acts' sigs verify via treesign::verify_act_sig (the story-pubkey path) ──
-    // MOMENT 1 = name:declare, sig over the library fact id.
+    // ── SIGNATURE: the egg act's sig verifies via treesign::verify_act_sig (the story-pubkey path) ──
     let name_sig = get(name_act, "sig").expect("the name:declare act carries a sig");
     assert_eq!(sget(name_sig, "alg").as_deref(), Some("ed25519"));
     assert_eq!(sget(name_sig, "by").as_deref(), Some("I"), "signed by I (the story signer)");
@@ -187,97 +152,57 @@ fn plants_folds_verifies_and_signs_genesis() {
     let tampered = vec!["deadbeef".to_string()];
     assert!(
         !treesign::verify_act_sig(&story_pub, name_act, &tampered, &name_sig_value),
-        "a tampered factId set must NOT verify (name)"
+        "a tampered factId set must NOT verify"
     );
 
-    // MOMENT 2 = be:birth, sig over the being fact id.
-    let being_sig = get(being_act, "sig").expect("the be:birth act carries a sig");
-    assert_eq!(sget(being_sig, "alg").as_deref(), Some("ed25519"));
-    assert_eq!(sget(being_sig, "by").as_deref(), Some("I"), "signed by I (the story signer)");
-    let being_sig_value = sget(being_sig, "value").expect("being sig.value present");
-    let being_fact_ids = vec![planted.being_fact_id.clone()];
-    assert!(
-        treesign::verify_act_sig(&story_pub, being_act, &being_fact_ids, &being_sig_value),
-        "the be:birth act verifies against the STORY pubkey (the i-am path)"
-    );
-    assert!(!treesign::verify_act_sig(&[0u8; 32], being_act, &being_fact_ids, &being_sig_value), "wrong key fails");
-    // the two acts' sigs are distinct (each commits to its own p + factId).
-    assert_ne!(name_sig_value, being_sig_value, "each moment carries its own distinct signature");
-    // CROSS-BIND: each act's sig names ITS OWN moment's fact, so swapping the fact ids must NOT verify.
-    // This proves MOMENT 1's act laid the library (name:declare) fact and MOMENT 2's act laid the being
-    // (be:birth) fact - the two moments are bound to their own Words.
-    assert!(
-        !treesign::verify_act_sig(&story_pub, name_act, &being_fact_ids, &name_sig_value),
-        "the name:declare act does NOT verify against the be:birth fact id"
-    );
-    assert!(
-        !treesign::verify_act_sig(&story_pub, being_act, &name_fact_ids, &being_sig_value),
-        "the be:birth act does NOT verify against the name:declare fact id"
-    );
-
-    // ── CLOCK-FREE: no `at`/`date` anywhere on either act or fact; no `time` in either sig payload ──
-    for (label, doc) in [
-        ("name act", name_act),
-        ("being act", being_act),
-        ("library fact", &lib_facts[0]),
-        ("being fact", &be_facts[0]),
-    ] {
+    // ── CLOCK-FREE: no `at`/`date` anywhere on the act or fact; no `time` in the sig payload ──
+    for (label, doc) in [("name act", name_act), ("library fact", &lib_facts[0])] {
         assert!(get(doc, "at").is_none(), "{label} carries no wall-clock `at`");
         assert!(get(doc, "date").is_none(), "{label} carries no `date`");
         let c = canon(doc);
         assert!(!c.contains("\"at\":"), "{label} has no `at` field anywhere: {c}");
         assert!(!c.contains("\"date\":"), "{label} has no `date` field anywhere: {c}");
     }
-    for (label, act, fids) in [
-        ("name", name_act, &name_fact_ids),
-        ("being", being_act, &being_fact_ids),
-    ] {
-        let payload_json = treesign::canonicalize(&treesign::build_act_sig_payload(act, fids));
-        assert!(!payload_json.contains("time"), "the PURE {label} sig payload carries no `time`: {payload_json}");
-    }
-    // each act carries the clock-free `ord` (the append ordinal, NOT a wall-clock): 0 then 1.
-    assert!(matches!(get(name_act, "ord"), Some(Json::Num(_))), "the name act rides a clock-free `ord`");
-    assert!(matches!(get(being_act, "ord"), Some(Json::Num(_))), "the being act rides a clock-free `ord`");
+    let payload_json = treesign::canonicalize(&treesign::build_act_sig_payload(name_act, &name_fact_ids));
+    assert!(!payload_json.contains("time"), "the PURE sig payload carries no `time`: {payload_json}");
+    // the act carries the clock-free `ord` (the append ordinal, NOT a wall-clock).
+    assert!(matches!(get(name_act, "ord"), Some(Json::Num(_))), "the egg act rides a clock-free `ord`");
 
     let _ = std::fs::remove_dir_all(&dir);
-    println!("  treegenesis: plant -> TWO moments fold + verify + both sigs (story pubkey) + parentless + clock-free  OK");
+    println!("  treegenesis: plant egg -> ONE moment folds + verifies + sig (story pubkey) + root-name + clock-free  OK");
 }
 
-/// THE I-IMMUTABILITY GUARD: a second plant onto the same store is refused (AlreadyPlanted) and leaves
-/// the committed genesis untouched - genesis facts are never overwritten (project_iam_genesis_immutable).
+/// THE NAME-ONCE GUARD: a second plant onto the same store is refused (AlreadyPlanted) and leaves the
+/// committed egg untouched - the Name is declared once, genesis facts are never overwritten
+/// (project_iam_genesis_immutable).
 #[test]
 fn re_plant_is_refused_and_genesis_is_immutable() {
     let story_domain = "localhost";
     let (dir, planted, _pub) = plant("immutable", story_domain);
 
-    // capture the committed bytes of fact #0 on both reels + BOTH acts.
+    // capture the committed bytes of fact #0 on the library reel + the egg act.
     let lib0 = canon(&read_reel_file(&dir, "0", "library", story_domain, None, None)[0]);
-    let be0 = canon(&read_reel_file(&dir, "0", "being", "Am", None, None)[0]);
     let acts0: Vec<String> = read_act_chain_file(&dir, story_domain, "0", "I").iter().map(canon).collect();
-    assert_eq!(acts0.len(), 2, "two genesis acts committed");
+    assert_eq!(acts0.len(), 1, "one genesis egg act committed");
 
-    // a SECOND plant (same key) must refuse - the being reel is not empty.
+    // a SECOND plant (same key) must refuse - the library reel is not empty.
     let key = load_or_mint_i_key(&dir.join(".story")).expect("reload the I key");
     assert!(!key.minted, "the key was already on disk (loaded, not re-minted)");
-    let again = plant_genesis(&dir, story_domain, &key, None);
+    let again = plant_genesis(&dir, story_domain, &key);
     assert!(
         matches!(again, Err(GenesisError::AlreadyPlanted)),
         "a second plant is refused (AlreadyPlanted)"
     );
 
-    // and the committed genesis is byte-for-byte unchanged (never overwritten).
+    // and the committed egg is byte-for-byte unchanged (never overwritten).
     assert_eq!(read_reel_file(&dir, "0", "library", story_domain, None, None).len(), 1, "still one library fact");
-    assert_eq!(read_reel_file(&dir, "0", "being", "Am", None, None).len(), 1, "still one being fact");
     assert_eq!(canon(&read_reel_file(&dir, "0", "library", story_domain, None, None)[0]), lib0, "library fact #0 unchanged");
-    assert_eq!(canon(&read_reel_file(&dir, "0", "being", "Am", None, None)[0]), be0, "being fact #0 unchanged");
     let acts_now: Vec<String> = read_act_chain_file(&dir, story_domain, "0", "I").iter().map(canon).collect();
-    assert_eq!(acts_now, acts0, "both genesis acts unchanged");
-    // the planted ids are stable (the first plant's truth stands).
+    assert_eq!(acts_now, acts0, "the genesis egg act unchanged");
+    // the planted id is stable (the first plant's truth stands).
     let chain = read_act_chain_file(&dir, story_domain, "0", "I");
     assert_eq!(id_of(&chain[0]), planted.name_act_id);
-    assert_eq!(id_of(&chain[1]), planted.being_act_id);
 
     let _ = std::fs::remove_dir_all(&dir);
-    println!("  treegenesis: re-plant refused + genesis immutable (two acts)  OK");
+    println!("  treegenesis: re-plant refused + genesis egg immutable (one act)  OK");
 }
-

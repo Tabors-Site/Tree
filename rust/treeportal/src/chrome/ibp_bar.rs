@@ -39,7 +39,10 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
             }
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                for v in [View::Rain, View::World3d, View::Story, View::Explorer, View::Map2d] {
+                // 3D is folded into the 2D/3D spatial split (rendered side by side), so it's not a
+                // standalone tab. Order (right-to-left layout → shown left-to-right): 2D/3D, 4D, Story,
+                // Files, Rain.
+                for v in [View::Rain, View::Explorer, View::Story, View::FourD, View::Map2d] {
                     if ui.selectable_label(p.st.view == v, v.label()).clicked() {
                         p.st.view = v;
                     }

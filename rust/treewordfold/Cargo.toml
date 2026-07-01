@@ -9,6 +9,10 @@ license = "AGPL-3.0"
 # READ the facts off the reel via the kernel store (compose, never reimplement). treehash for Json.
 treehash = { path = "../treehash" }
 treestore = { path = "../treestore" }
+# treefold — used ONLY to read a being's `parentBeingId` off its folded STATE (the mother-lineage walk).
+# The STATE reducer (reduce_being) is the parent-pointer source ONLY; the vocabulary itself NEVER folds
+# through it — vocabulary ACCUMULATES (union), state RESOLVES (latest-wins). See fold_lineage_word_set.
+treefold = { path = "../treefold" }
 
 # The fold-from-chain contract (a fresh "I" world genesised through the stamper, its vocabulary folded)
 # is proven end-to-end by treebook's full_genesis test — words laid the only legitimate way, through I

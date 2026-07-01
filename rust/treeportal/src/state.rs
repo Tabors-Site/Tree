@@ -12,16 +12,19 @@ pub enum View {
     World3d,
     Rain,
     Explorer,
+    /// the branch/timeline tree — every history as a tree from `0`, navigate branches + past moments.
+    FourD,
 }
 
 impl View {
     pub fn label(self) -> &'static str {
         match self {
-            View::Map2d => "2D",
+            View::Map2d => "2D/3D", // the spatial view renders 2D and 3D side by side
             View::Story => "Story",
             View::World3d => "3D",
             View::Rain => "Rain",
             View::Explorer => "Files",
+            View::FourD => "4D",
         }
     }
 }
@@ -109,7 +112,8 @@ impl Default for PortalState {
             side_being: None,
             lang: "en".to_string(),
             composer: Composer::default(),
-            per_word: true,
+            per_word: false, // the PERIOD groups the statement: "I make Tabor." sends as ONE act that
+            // reads together (the user's doctrine), not word-by-word. Space just separates words.
             moment: None,
             hint: String::new(),
             log: Vec::new(),

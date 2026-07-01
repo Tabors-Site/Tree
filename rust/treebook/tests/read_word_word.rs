@@ -59,19 +59,17 @@ fn i_reads_word_word_and_the_foundation_folds() {
     let dir = fresh_store("foundation");
     let story_domain = "localhost";
 
-    // 1. the razor-thin turtle: mint the Name I + plant the two genesis moments (Name "I" + being "Am").
+    // 1. the razor-thin EGG: mint the Name I + plant the ONE egg moment (the Name "I" on the library reel).
+    //    The being "Am" is NOT egg-born - it is the FIRST WORD of the book (full_genesis exercises that
+    //    hand-off). This focused test coins word.word DIRECTLY onto Am's reel to prove the guards + fold,
+    //    so Am's reel starts EMPTY (no egg birth).
     let (planted, key) = plant_and_ignite(&dir, story_domain).expect("ignite genesis");
     assert_eq!(planted.i_name, "I", "the Name is \"I\" (the signer), never the legacy \"i-am\"");
     assert_eq!(planted.being_id, "Am", "the first being is \"Am\" (the name-being split)");
 
-    // the being Am's reel currently holds ONLY the genesis be:birth (one fact) before reading the book.
+    // the being Am's reel is EMPTY before reading (the egg lays only the Name; Am is the book's first word).
     let before = read_reel_file(&dir, "0", "being", "Am", None, None);
-    assert_eq!(before.len(), 1, "only the genesis be:birth on Am's reel before reading the book");
-    assert_eq!(
-        (get_str(&before[0], "verb"), get_str(&before[0], "act")),
-        (Some("be"), Some("birth")),
-        "the genesis fact is be:birth"
-    );
+    assert_eq!(before.len(), 0, "Am's reel is empty after the egg (Am is born by the book, not the egg)");
 
     // sign the book's coins with the story key (I authoring its own vocabulary), as treeos signs.
     let seed = key.seed;
@@ -97,7 +95,7 @@ fn i_reads_word_word_and_the_foundation_folds() {
         "each foundation statement laid its one declare-word fact"
     );
 
-    // Am's reel now carries the genesis be:birth + one coin per statement read.
+    // Am's reel now carries one coin per statement read (it started empty; each word = one coin fact).
     let after = read_reel_file(&dir, "0", "being", "Am", None, None);
     assert_eq!(
         after.len(),

@@ -227,6 +227,27 @@ fn rules() -> &'static [(Regex, Builder)] {
                 ("verse", Json::Bool(true)),
             ]),
         ),
+        // I am <Capitalized>[, <description>].   -> BIRTH the being that expresses this Name (the identity
+        // form the user names: "I am Tabor" makes an empty being Tabor that BECOMES Tabor through every fact
+        // it later gives itself). Same be:birth as "I make <Capitalized>" — the session-Name twin of the
+        // genesis verse "I am … I am". A real Name's facet_resolve (treeibp) then makes it the Name's OWN
+        // (by/trueName = the Name). Placed AFTER the quoted genesis verse so the verse still wins.
+        (
+            Regex::new(r"^I am ([A-Z][\w.-]*)(?:, (.+?))?\.$").unwrap(),
+            |m| {
+                let mut params = vec![("able", jstr(&m[1].to_lowercase()))];
+                if let Some(d) = m.get(2) {
+                    if !d.as_str().is_empty() {
+                        params.push(("description", jstr(d.as_str())));
+                    }
+                }
+                obj(vec![
+                    ("kind", jstr("act")), ("verb", jstr("be")), ("act", jstr("birth")), ("by", jstr("I")),
+                    ("of", obj(vec![("kind", jstr("being")), ("id", jstr(&m[1]))])),
+                    ("params", obj(params)),
+                ])
+            },
+        ),
         // I make <Capitalized>[, <description>].   -> birth a being
         (
             Regex::new(r"^I make ([A-Z][\w.-]*)(?:, (.+?))?\.$").unwrap(),

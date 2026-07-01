@@ -75,39 +75,51 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
                 seek(p, o, now);
             }
 
-            // status
+            // status — while scrubbing, SHOW THE MOMENT you're on (its Word), not just the ord.
             if ghost {
-                ui.colored_label(AMBER, egui::RichText::new(format!("⏸ ord {}", pos as i64)).small());
+                let phrase = p.st.timeline.iter().rev().find(|(o, _)| *o <= pos + 0.5).map(|(_, ph)| ph.clone()).unwrap_or_default();
+                let text = if phrase.len() > 40 { format!("{}…", &phrase[..37]) } else { phrase };
+                ui.colored_label(AMBER, egui::RichText::new(format!("⏸ {text}")).small()).on_hover_text(format!("ord {}", pos as i64));
             } else {
                 ui.label(egui::RichText::new(format!("● now {}", now as i64)).small().weak());
             }
 
-            // ── the BRANCH switcher + fork ───────────────────────────────────────────────────────────
+            // ── the BRANCH menu (the history tree) + fork ────────────────────────────────────────────
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                // fork a new branch at the scrubbed moment (or now)
-                if ui.small_button("⑂ branch").on_hover_text("fork a NEW history here — your acts diverge from this moment").clicked() {
-                    let n = p.st.branches.len();
-                    p.create_branch(&format!("branch-{n}"));
-                }
-                // the branch you stand on + a switcher of all histories
                 let cur = p.history.clone();
                 let cur_label = p.st.branches.iter().find(|b| b.path == cur).map(|b| b.label.clone()).unwrap_or_else(|| cur.clone());
                 let mut switch_to: Option<String> = None;
-                egui::ComboBox::from_id_source("branch_switch")
-                    .selected_text(egui::RichText::new(format!("#{cur} {cur_label}")).monospace().small().color(ACCENT))
-                    .show_ui(ui, |ui| {
-                        for b in &p.st.branches {
-                            let on = b.path == cur;
-                            let tag = if b.path == "0" { b.label.clone() } else { format!("{} (off #{})", b.label, b.parent.clone().unwrap_or_default()) };
-                            if ui.selectable_label(on, egui::RichText::new(format!("#{}  {tag}", b.path)).monospace()).clicked() && !on {
-                                switch_to = Some(b.path.clone());
-                            }
+                let mut fork = false;
+                ui.menu_button(egui::RichText::new(format!("⑂ #{cur} {cur_label} ▾")).monospace().small().color(ACCENT), |ui| {
+                    ui.set_min_width(220.0);
+                    ui.label(egui::RichText::new("HISTORIES").small().weak());
+                    // main first, then its children indented — the fork tree.
+                    let mut rows: Vec<&crate::state::Branch> = p.st.branches.iter().collect();
+                    rows.sort_by(|a, b| a.path.cmp(&b.path));
+                    for b in rows {
+                        let on = b.path == cur;
+                        let indent = if b.path == "0" { "" } else { "   ↳ " };
+                        let mark = if on { "● " } else { "  " };
+                        if ui.selectable_label(on, egui::RichText::new(format!("{mark}{indent}#{}  {}", b.path, b.label)).monospace()).clicked() && !on {
+                            switch_to = Some(b.path.clone());
+                            ui.close_menu();
                         }
-                    })
-                    .response
-                    .on_hover_text("the branch you act on — switch to view/act on another history");
+                    }
+                    ui.separator();
+                    let here = if ghost { format!("at ord {}", pos as i64) } else { "at now".to_string() };
+                    if ui.button(format!("⑂  fork a new branch here ({here})")).clicked() {
+                        fork = true;
+                        ui.close_menu();
+                    }
+                })
+                .response
+                .on_hover_text("the branch you act on — the history tree; switch or fork a new one");
                 if let Some(path) = switch_to {
                     p.switch_history(&path);
+                }
+                if fork {
+                    let n = p.st.branches.len();
+                    p.create_branch(&format!("branch-{n}"));
                 }
             });
         });

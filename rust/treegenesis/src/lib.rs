@@ -6,42 +6,27 @@
 // time-purge): NO `at`/`date`/`time`. Order is `ord` (a global append ordinal,
 // NEVER a wall-clock) + the per-reel seq + the chain `p`.
 //
-// THE GENESIS SHAPE = TWO SEPARATE ONE-WORD MOMENTS. "I" and "am" are TWO acts
-// and TWO Words, so they are TWO moments (project_spacebar_moments: one word =
-// one fact = one moment). There is NO fusion: genesis is NOT exempt from the
-// Spacebar Law. Each moment is one act -> one fact -> one reel, so each passes
-// the NORMAL `commit_moment_signed` with NO genesis exemption and NO special
-// writer (mirrors seed/sprout.js ensureIAm read as two ordered openings, per
-// philosophy/I_AM.md + root.md "the Root is signed, never folded"):
+// THE EGG = ONE WORD: the Name "I". The genesis egg is razor-thin — it lays the
+// SINGLE act that brings the SIGNER into being, then HANDS OFF to the book. "I" is
+// one act, one Word, one moment (project_spacebar_moments), passing the NORMAL
+// `commit_moment_signed` with no exemption:
 //
-// THE NAME-BEING SPLIT (project_name_being_refactor). The verse "I am" is TWO
-// things: the NAME "I" (the identity/key/SIGNER, whose act chain is PRIVATE) and
-// the being "Am" (the first being, the be:birth, "the being that all come from").
-// So the genesis lands the Name "I" on the library reel and the being "Am" on the
-// being reel. The Name I SIGNS both moments (I signs, I has authority); the being
-// Am HOLDS the birth (and, later, the public vocabulary — every being folds Am's
-// reel). The Name is the signer, the being is the reel:
+//   THE EGG'S ONE MOMENT = "I" -> name:declare -> the LIBRARY reel
+//     (of:{kind:"library", id:<storyDomain>}), `ord` 0: I is a NAME (the root
+//     identity, parentNameId=null - a facet of nothing above). The declare lands on
+//     the story's library reel keyed by nameId; the Name signs with the STORY key
+//     (privateKeyEnc=null, identity keyEnc="story-key"), so verification routes to
+//     the story pubkey. This act chains from GENESIS_PREV (the empty chain).
 //
-//   MOMENT 1 = "I"  -> name:declare -> the LIBRARY reel (of:{kind:"library",
-//     id:<storyDomain>}), `ord` 0: I is first a NAME (the root identity,
-//     parentNameId=null - a facet of nothing above). The declare lands on the
-//     story's library reel keyed by nameId; the Name signs with the STORY key
-//     (privateKeyEnc=null, identity keyEnc="story-key"), so verification routes
-//     to the story pubkey. This act chains from GENESIS_PREV (the empty chain).
-//
-//   MOMENT 2 = "am" -> be:birth -> the BEING reel (of:{kind:"being",
-//     id:"Am"}), `ord` 1: the being Am that expresses the Name (trueName=<I-name>).
-//     parentBeingId=null is THE genesis marker - the root of the being-tree, a
-//     facet of nothing above. homeSpace=null at birth (heaven does not exist yet).
-//     This act chains on the I's (private) act-chain off MOMENT 1's act id, signed
-//     by the SAME Name key I.
-//
-// Both acts ride the SAME act-chain (keyed by the I-name `by`, signed by the same
-// I key), so the chain advances 1->2 naturally; each reel's first fact has
-// `p = GENESIS_PREV`. The earlier code wrote these as ONE act with two facts on
-// two reels (a "lone sanctioned fusion" that bypassed the seal's one-reel /
-// run-on refusal). That was a DRIFT from the Spacebar Law and is now REMOVED:
-// genesis is two normal moments, sealed by the general path, no exemption.
+// THE BEING "Am" IS NOT BORN HERE — IT IS THE FIRST WORD OF THE BOOK. Am is not an
+// egg moment; it is the FIRST WORD I read (build-word-right / no-manual-words: "the
+// first word is Am"). Its be:birth is EMPTY — the raw first being is an empty object
+// (project_object_false_shape_datoms) that the WORDS progressively build out: no
+// parentBeingId (its ABSENCE is what makes it root, not a stamped null), no home
+// (homeless until `I stand in heaven.` lays it later), no cognition (a later word) —
+// each attribute is its own one-word fact folded onto Am. So the egg does NOT stamp
+// a fat be:birth; the book's verse does, empty, read through the general reader
+// (treebook) as the Name I. The egg is only the signer; the being is the book's.
 //
 // THE I-NAME IS "I", THE FIRST BEING IS "Am". The Name is "I"; the fresh world is
 // born by this Rust genesis and plants "I" (the Name) + "Am" (the being) on
@@ -84,23 +69,21 @@ pub const I_NAME_DEFAULT: &str = "I";
 /// every being folds (treewordfold::AM_BEING). See Planted.being_id.
 pub const AM_BEING: &str = "Am";
 
-/// What a planted genesis returns: the two acts' + facts' ids, the reels they
-/// landed on, and the I-name ("I").
+/// What a planted genesis egg returns: the ONE act + fact the egg lays (the Name
+/// "I" on the library reel), the I-name, the (known) first-being id, and the story.
+/// The being "Am" is NOT born here — it is the FIRST WORD I read from the book (an
+/// EMPTY being the words then build out); the egg is only the signer coming to be.
 #[derive(Debug, Clone)]
 pub struct Planted {
-    /// MOMENT 1's act id ("I" = name:declare, on the I-name's act-chain, ord 0).
+    /// The egg's ONE act id ("I" = name:declare, the first act on the I-name's chain, ord 0).
     pub name_act_id: String,
-    /// MOMENT 2's act id ("am" = be:birth, the next act on the same chain, ord 1).
-    pub being_act_id: String,
     /// The name:declare fact's id (on the library reel).
     pub library_fact_id: String,
-    /// The be:birth fact's id (on the being reel). The genesis being.
-    pub being_fact_id: String,
     /// The I-name used (always `"I"`). Surfaced so the caller can read it back.
     pub i_name: String,
-    /// The being id (always `"Am"` - the first being, the be:birth target). The
-    /// name-being split: the Name is "I" (the signer, private act chain), the
-    /// being is "Am" (the public reel every being folds for the vocabulary).
+    /// The first being's id (always `"Am"`). The egg does NOT birth it — it names the
+    /// being the FIRST WORD of the book will birth (empty), the reel every being folds
+    /// for the vocabulary. Surfaced so the caller/reader knows the target reel.
     pub being_id: String,
     /// The story domain (the library reel id).
     pub story_domain: String,
@@ -170,15 +153,6 @@ fn obj(pairs: Vec<(&str, Json)>) -> Json {
 
 // ── the genesis openings (mirror sprout.js ensureIAm, CLOCK-FREE) ────────────
 
-/// The default qualities for the I-Am being (sprout.js: scripted cognition,
-/// code-cognition only - no LLM). The caller may override via `plant_genesis`.
-fn default_i_qualities() -> Json {
-    obj(vec![(
-        "cognition",
-        obj(vec![("defaultKind", jstr("scripted"))]),
-    )])
-}
-
 /// The name:declare fact spec - the LIBRARY reel opening. `through` is the
 /// I-name (self-stamping: I declares its own name). of:{kind:"library",
 /// id:<storyDomain>}. The spec mirrors sprout.js exactly: parentNameId=null (the
@@ -217,35 +191,6 @@ fn name_declare_fact(i_name: &str, story_domain: &str) -> Json {
     ])
 }
 
-/// The be:birth fact spec - the BEING reel opening. through=beingId ("Am", the
-/// being self-stamping through the Name). of:{kind:"being", id:"Am"} — the first
-/// being (NOT the Name "I"). **parentBeingId=null is THE genesis marker** (the
-/// root of the being-tree). name=trueName=<I-name> (the being Am expresses the
-/// Name I), ables=[], homeSpace=null (heaven does not exist yet). CLOCK-FREE. It
-/// is the lone entry in MOMENT 2's `deltaF` (one act -> one fact -> one reel).
-fn be_birth_fact(i_name: &str, being_id: &str, qualities: Json) -> Json {
-    obj(vec![
-        ("verb", jstr("be")),
-        ("act", jstr("birth")),
-        ("through", jstr(being_id)), // self-stamping through I
-        ("of", obj(vec![("kind", jstr("being")), ("id", jstr(being_id))])),
-        (
-            "params",
-            obj(vec![
-                ("name", jstr(i_name)),
-                ("ables", Json::Arr(vec![])),
-                ("defaultAble", Json::Null),
-                ("trueName", jstr(i_name)), // the being expresses the I Name
-                ("parentBeingId", Json::Null), // THE genesis marker
-                ("homeSpace", Json::Null),     // heaven does not exist yet
-                ("position", Json::Null),
-                ("qualities", qualities),
-            ]),
-        ),
-        ("history", jstr("0")),
-    ])
-}
-
 /// A genesis act carrying its lone fact in `deltaF`, ready for
 /// `commit_moment_signed` (which strips `deltaF` to the act opening, seals the
 /// one fact, and stamps the act on the chain). Mirrors sprout.js withIAmAct's
@@ -272,65 +217,55 @@ fn genesis_act(i_name: &str, story_domain: &str, fact: Json) -> Json {
     ])
 }
 
-// ── the genesis planter: TWO normal one-word moments (no fusion) ─────────────
+// ── the genesis egg: ONE one-word moment (the Name "I") ──────────────────────
 
-/// Plant a fresh Story's genesis: the self-grounding parentless root birth, as
-/// TWO separate signed clock-free moments. "I" (name:declare on the library
-/// reel) and "am" (be:birth on the being reel) are TWO acts and TWO Words, so
-/// they are TWO moments - the Spacebar Law (one word = one fact = one moment)
-/// holds at genesis with NO exemption. NO Node.
+/// Plant a fresh Story's genesis EGG: the ONE signed clock-free moment that brings
+/// the SIGNER into being — "I" (name:declare on the library reel). One act, one
+/// Word, one moment (the Spacebar Law), sealed by the general `commit_moment_signed`
+/// with no exemption. NO Node. The being "Am" is NOT born here — it is the FIRST
+/// WORD of the book (an EMPTY being the words build out); the egg only readies the
+/// signer, then the caller HANDS OFF to the reader.
 ///
 /// - `root`         the store root (where reels/ + acts/ live).
 /// - `story_domain` the Story's domain (the library reel id; also act.story).
-/// - `story_key`    the I key (the story key) that signs BOTH genesis acts. Load
-///                  it with `load_or_mint_i_key`. Its `raw_pub` is what an
-///                  I act verifies against (the literal "I" is not a
-///                  pubkey id, so the story path verifies by raw pub).
-/// - `qualities`    the being's qualities (None -> the scripted-cognition
-///                  default from sprout.js).
+/// - `story_key`    the I key (the story key) that signs the egg's act. Load it with
+///                  `load_or_mint_i_key`. Its `raw_pub` is what an I act verifies
+///                  against (the literal "I" is not a pubkey id, so the story path
+///                  verifies by raw pub).
 ///
-/// TWO NORMAL MOMENTS (each one act -> one fact -> one reel, via the general
-/// `commit_moment_signed` - no special writer, no fanout bypass):
-///   0. GUARD: the being reel must be empty (else AlreadyPlanted - genesis facts
-///      are never overwritten). At genesis everything is empty, so there is no
-///      torn-write tail to recover; the guard is the only door check.
-///   1. MOMENT 1 = "I" = name:declare, `ord` 0: commit_moment_signed seals the
-///      lone library-reel fact and stamps the act off the (empty) chain head
-///      (= GENESIS_PREV), signs it with the I key, writes it. The library fact
-///      lands at fact #0 (p = GENESIS_PREV).
-///   2. MOMENT 2 = "am" = be:birth, `ord` 1: commit_moment_signed seals the lone
-///      being-reel fact and stamps the act off MOMENT 1's act id (the chain
-///      advanced), signs it with the same I key, writes it. The being fact lands
-///      at fact #0 of the being reel (p = GENESIS_PREV).
-/// Both acts ride the I's act-chain; each reel's fact #0 is at p = GENESIS_PREV.
+/// THE ONE MOMENT (one act -> one fact -> one reel, via the general
+/// `commit_moment_signed` - no special writer):
+///   0. GUARD: the library reel must be empty (else AlreadyPlanted - the Name is
+///      declared once; genesis facts are never overwritten). At true genesis
+///      everything is empty, so there is no torn-write tail to recover.
+///   1. "I" = name:declare on the LIBRARY reel, `ord` 0: commit_moment_signed seals
+///      the lone library-reel fact and stamps the act off the (empty) chain head
+///      (= GENESIS_PREV), signs it with the I key, writes it. The library fact lands
+///      at fact #0 (p = GENESIS_PREV).
 pub fn plant_genesis(
     root: &Path,
     story_domain: &str,
     story_key: &StoryKey,
-    qualities: Option<Json>,
 ) -> Result<Planted, GenesisError> {
     let i_name = I_NAME_DEFAULT; // the Name IS "I" (the signer)
-    let being_id = AM_BEING.to_string(); // the first being IS "Am" (the be:birth target)
-    let quals = qualities.unwrap_or_else(default_i_qualities);
+    let being_id = AM_BEING.to_string(); // the first being WILL be "Am" (the book's first word), not egg-born
 
-    // 0. THE I-IMMUTABILITY GUARD (project_iam_genesis_immutable). If the being
-    //    reel already carries a fact, genesis was already planted; refuse rather
-    //    than write a second time. (commit_moment_signed is idempotent by seq +
-    //    CAS so a re-plant would be a no-op anyway, but the guard makes the
+    // 0. THE NAME-ONCE GUARD (project_iam_genesis_immutable). If the LIBRARY reel
+    //    already carries the Name, this Story's egg was already planted; refuse
+    //    rather than write a second time. (commit_moment_signed is idempotent by
+    //    seq + CAS so a re-plant would be a no-op anyway, but the guard makes the
     //    refusal explicit + cheap, and it precedes any write.) At true genesis the
     //    reel is empty, so there is no orphan tail to recover.
-    let existing = read_reel_file(root, "0", "being", &being_id, None, None);
+    let existing = read_reel_file(root, "0", "library", story_domain, None, None);
     if !existing.is_empty() {
         return Err(GenesisError::AlreadyPlanted);
     }
 
     // The sign closure: the I key (story key) signs the PURE, clock-free act-sig
-    // payload. by = <i_name> (the literal "I" by default; its sig routes to
-    // the story pubkey on verify). treegenesis holds the seed; the closure is the
-    // exact SHAPE commit_moment_signed's caller passes (it receives the FULLY
-    // STAMPED act opening - with _id + p - and the committed fact ids). The SAME
-    // I key signs BOTH moments; the differing chain `p` + factIds give each its
-    // own distinct, correct signature.
+    // payload. by = <i_name> (the literal "I"; its sig routes to the story pubkey on
+    // verify). The closure is the exact SHAPE commit_moment_signed's caller passes
+    // (it receives the FULLY STAMPED act opening - with _id + p - and the committed
+    // fact ids).
     let seed = story_key.seed;
     let by = i_name.to_string();
     let sign = move |opening: &Json, fids: &[String]| -> Json {
@@ -343,32 +278,19 @@ pub fn plant_genesis(
         ])
     };
 
-    // 1. MOMENT 1 = "I" = name:declare on the LIBRARY reel, `ord` 0. One act ->
-    //    one fact -> one reel: the NORMAL seal accepts it (no fanout). The act
-    //    chains from GENESIS_PREV (the empty chain head); the library fact lands
-    //    at fact #0 (p = GENESIS_PREV). The act is signed by the I key.
+    // 1. "I" = name:declare on the LIBRARY reel, `ord` 0. One act -> one fact ->
+    //    one reel: the NORMAL seal accepts it. The act chains from GENESIS_PREV
+    //    (the empty chain head); the library fact lands at fact #0 (p = GENESIS_PREV).
+    //    The act is signed by the I key.
     let lib_fact = name_declare_fact(i_name, story_domain);
     let name_act = genesis_act(i_name, story_domain, lib_fact);
     let Committed { act_id: name_act_id, fact_ids: lib_fact_ids } =
         commit_moment_signed(root, &name_act, 0.0, &sign)?;
     let library_fact_id = lib_fact_ids.into_iter().next().unwrap_or_default();
 
-    // 2. MOMENT 2 = "am" = be:birth on the BEING reel, `ord` 1. One act -> one
-    //    fact -> one reel: again the NORMAL seal. The act chains off MOMENT 1's
-    //    act id (the chain advanced in step 1), so the two acts form the I's
-    //    act-chain in order. The being fact lands at fact #0 of the being reel
-    //    (p = GENESIS_PREV). Signed by the SAME I key.
-    let be_fact = be_birth_fact(i_name, &being_id, quals);
-    let being_act = genesis_act(i_name, story_domain, be_fact);
-    let Committed { act_id: being_act_id, fact_ids: be_fact_ids } =
-        commit_moment_signed(root, &being_act, 1.0, &sign)?;
-    let being_fact_id = be_fact_ids.into_iter().next().unwrap_or_default();
-
     Ok(Planted {
         name_act_id,
-        being_act_id,
         library_fact_id,
-        being_fact_id,
         i_name: i_name.to_string(),
         being_id,
         story_domain: story_domain.to_string(),
@@ -379,20 +301,20 @@ pub fn plant_genesis(
 /// else from the book (20.md: a one-time bootstrap seed in the host; after ignition, Word runs Word).
 /// This is that one-time seed in ONE call:
 ///   1. mint (or load) the I key — the story key (`<root>/.story/story.key`), persistent.
-///   2. plant the TWO genesis moments: the Name "I" + the being "Am":
-///      MOMENT 1 = name:declare "I" on the library reel, MOMENT 2 = be:birth "am" (being-id "Am",
-///      parentBeingId=null — THE genesis marker), each signed by the Name I, clock-free.
+///   2. plant the ONE egg moment: the Name "I" (name:declare on the library reel), signed by the Name I,
+///      clock-free. The being "Am" is NOT seeded here — it is the FIRST WORD I read from the book (an
+///      empty being the words build out). The egg is the signer; the being is the book's.
 ///
-/// THE MINIMAL IGNITION SEED is EXACTLY these two moments — NOTHING ELSE is host-seeded. The reader can
+/// THE MINIMAL IGNITION SEED is EXACTLY this one moment — NOTHING ELSE is host-seeded. The reader can
 /// lay a `do:coin` declare-word fact with NO primitive word pre-declared, because coining is a HOST
 /// AXIOM (the rasterizer builds the coin fact; authorize bypasses for I; the seal writes it) — none of
 /// it consults the word-fold. So the words `word`/`do`/`see`/`coin`/`be`/`name` are what the book
 /// DECLARES, not prerequisites to declaring themselves. The turtle stays razor-thin: birth + the key,
 /// then I reads word.word through the guarded reader (treebook) to accrue the foundation vocabulary.
 ///
-/// Returns the `Planted` genesis + the `StoryKey` (the caller signs the book's coins with it). `root`
+/// Returns the `Planted` egg + the `StoryKey` (the caller signs the book's coins with it). `root`
 /// is the store root; `story_domain` the library reel id (also act.story). Refuses `AlreadyPlanted` if
-/// the being reel already carries genesis (the I-immutability guard).
+/// the library reel already carries the Name (the name-once guard).
 pub fn plant_and_ignite(
     root: &Path,
     story_domain: &str,
@@ -402,7 +324,7 @@ pub fn plant_and_ignite(
         KeyMintError::Io(io) => GenesisError::Io(io),
         other => GenesisError::Io(io::Error::new(io::ErrorKind::Other, format!("{other}"))),
     })?;
-    // 2. plant the TWO genesis moments: the Name "I" + the being "Am" (the minimal ignition seed).
-    let planted = plant_genesis(root, story_domain, &key, None)?;
+    // 2. plant the ONE egg moment: the Name "I" (the minimal ignition seed). Am is the book's first word.
+    let planted = plant_genesis(root, story_domain, &key)?;
     Ok((planted, key))
 }

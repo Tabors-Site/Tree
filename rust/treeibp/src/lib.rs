@@ -96,6 +96,62 @@ fn obj(f: Vec<(&str, Json)>) -> Json {
 fn ok_true(v: &Json) -> bool {
     matches!(get(v, "ok"), Some(Json::Bool(true)))
 }
+/// Set (replace) one key on a Json object, preserving the rest.
+fn set_field(v: &Json, key: &str, val: Json) -> Json {
+    let mut e: Vec<(String, Json)> = match v {
+        Json::Obj(o) => o.iter().filter(|(k, _)| k != key).cloned().collect(),
+        _ => Vec::new(),
+    };
+    e.push((key.to_string(), val));
+    Json::Obj(e)
+}
+
+/// A per-Name, DETERMINISTIC being id from (nameId, being-name): so a Name saying "I am Tabor" twice
+/// yields the SAME being (→ connect, not a re-birth), and two different Names' "Tabor" never collide.
+/// Readable prefix + a hash of the Name+name (the id-derivation rule: a being's id = the hash of its
+/// birth, here bound to its Name so it's sovereign).
+fn derive_being_id(name_id: &str, being_name: &str) -> String {
+    let low = being_name.to_lowercase();
+    let h = treehash::sha256_hex(format!("{name_id}:{low}").as_bytes());
+    format!("{low}-{}", &h[..12])
+}
+
+/// "I" = the acting Name's FACET (the user's doctrine): once you are a Name, "I" is not the story I — it
+/// is YOUR facet of I (your Name). When a Name speaks `I am <Name>` (a `be:birth`), the being it makes is
+/// the Name's OWN: a per-Name deterministic id, attributed to the Name (`by`), expressing the Name
+/// (`trueName`), self-stamped (`through`), and — when the speaker is already EMBODIED (driving a being) —
+/// born OUT OF that being (`parentBeingId` = the current being; "I am George" births George out of you).
+/// trueName is FORCED to the Name. At genesis (actor is the bare story "I") this is a no-op.
+fn facet_resolve(spec: &Json, actor: &Json) -> Json {
+    let name_id = match get_str(actor, "nameId") {
+        Some(n) if !n.is_empty() && n != I_AM => n.to_string(),
+        _ => return spec.clone(),
+    };
+    if get_str(spec, "verb") != Some("be") || get_str(spec, "act") != Some("birth") {
+        return spec.clone();
+    }
+    let display_name = get(spec, "of").and_then(|o| get_str(o, "id")).unwrap_or("").to_string();
+    let being_id = derive_being_id(&name_id, &display_name);
+    let mut params = get(spec, "params").cloned().unwrap_or_else(|| obj(vec![]));
+    params = set_field(&params, "trueName", jstr(&name_id));
+    params = set_field(&params, "name", jstr(&display_name));
+    // born out of the current being when embodied, else a root being of the Name (no parent).
+    if let Some(parent) = get_str(actor, "beingId").filter(|b| !b.is_empty() && *b != I_AM) {
+        params = set_field(&params, "parentBeingId", jstr(parent));
+    }
+    let s = set_field(spec, "of", obj(vec![("kind", jstr("being")), ("id", jstr(&being_id))]));
+    let s = set_field(&s, "by", jstr(&name_id));
+    let s = set_field(&s, "through", jstr(&being_id));
+    set_field(&s, "params", params)
+}
+
+/// True when the actor is a real Name (a facet of I), not the bare story "I" and not a bodiless nobody.
+fn actor_name_facet(actor: &Json) -> Option<String> {
+    match get_str(actor, "nameId") {
+        Some(n) if !n.is_empty() && n != I_AM => Some(n.to_string()),
+        _ => None,
+    }
+}
 /// Fold a being's reel off disk → its granted ables (qualities.ablesGranted).
 pub fn fold_grants(dir: &Path, history: &str, being_id: &str) -> Json {
     let facts = read_reel_file(dir, history, "being", being_id, None, None);
@@ -614,10 +670,21 @@ fn derive_trigger(node: &Json, ctx: &Json, actor: &Json, history: &str) -> Json 
 pub fn op_word_via_fold(
     dir: &Path,
     history: &str,
+    actor_being: &str,
     op: &str,
     file_of: impl Fn(&str, Option<&str>) -> Option<String>,
 ) -> Option<String> {
-    let desc = treewordfold::resolve_word(dir, history, op)?;
+    // THE RESOLVE SEAM (lineage vocabulary): a being resolves words against its OWN mother-lineage
+    // vocabulary — the UNION fold of Am (the root base) up through every mother to the actor. So a word
+    // coined on an ancestor's reel resolves for a descendant (inherited through the fold), Am's genesis
+    // base is universal, and a NON-descendant does NOT see a being's private coins. The empty actor
+    // falls back to Am's base fold (the genesis reader / the pre-being bootstrap, which resolves the
+    // universal vocabulary before a being-tree exists).
+    let desc = if actor_being.is_empty() {
+        treewordfold::resolve_word(dir, history, op)?
+    } else {
+        treewordfold::resolve_lineage_word(dir, history, actor_being, op)?
+    };
     if !desc.is_op() {
         return None; // declared, but not an op word (a concept / type / reducer / …) — run inline
     }
@@ -704,13 +771,15 @@ pub fn act_via_fold(
     basis: Option<f64>,
     sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
 ) -> Vec<Outcome> {
+    // the actor's being — the lineage the op-word fold resolves against (its mother-lineage vocabulary).
+    let actor_being = get_str(actor, "beingId").unwrap_or("").to_string();
     act_inner(
         word,
         actor,
         dir,
         history,
         able_spec_of,
-        |op| op_word_via_fold(dir, history, op, &file_of),
+        |op| op_word_via_fold(dir, history, &actor_being, op, &file_of),
         &obj(vec![]),
         basis,
         sign,
@@ -734,13 +803,15 @@ pub fn act_via_fold_bound(
     basis: Option<f64>,
     sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
 ) -> Vec<Outcome> {
+    // the actor's being — the lineage the op-word fold resolves against (its mother-lineage vocabulary).
+    let actor_being = get_str(actor, "beingId").unwrap_or("").to_string();
     act_inner(
         word,
         actor,
         dir,
         history,
         able_spec_of,
-        |op| op_word_via_fold(dir, history, op, &file_of),
+        |op| op_word_via_fold(dir, history, &actor_being, op, &file_of),
         binds,
         basis,
         sign,
@@ -762,7 +833,9 @@ fn seal_specs(
 ) -> Vec<Outcome> {
     let mut out = Vec::new();
     for spec in specs {
-        let (k, i) = match get(spec, "of") {
+        // "I" = the acting Name's facet: a Name's be:birth makes its OWN being (by/trueName/through = it).
+        let mut spec = facet_resolve(spec, actor);
+        let (k, i) = match get(&spec, "of") {
             Some(o) => (
                 get_str(o, "kind").unwrap_or("being").to_string(),
                 get_str(o, "id").unwrap_or("").to_string(),
@@ -772,14 +845,28 @@ fn seal_specs(
         if i.is_empty() {
             continue; // a state-only act (no reel target) - its `sets` already threaded
         }
-        let verb = get_str(spec, "verb").unwrap_or("");
-        let op = get_str(spec, "act");
+        // CREATE-OR-CONNECT ("I am Tabor" doctrine): a Name saying `I am X` births X if new, else just
+        // SWITCHES to the being it already has under that name on this history — a `be:connect`, not a
+        // re-birth (the id is per-Name deterministic, so the existing reel IS this Name's own X).
+        if actor_name_facet(actor).is_some()
+            && get_str(&spec, "verb") == Some("be")
+            && get_str(&spec, "act") == Some("birth")
+            && !read_reel_file(dir, history, "being", &i, None, None).is_empty()
+        {
+            spec = set_field(&spec, "act", jstr("connect"));
+        }
+        let verb = get_str(&spec, "verb").unwrap_or("");
+        let op = get_str(&spec, "act");
         let audit_being = if k == "being" { Some(i.as_str()) } else { None }; // being target -> inheritation axis
-        if !ok_true(&authorize(verb, op, Some(&i), audit_being, actor, dir, history, &able_spec_of)) {
+        // A Name birthing OR connecting its OWN being is inherently authorized — it is the I of its beings,
+        // exactly as the genesis I births "Am". facet_resolve forced trueName = the Name (and the id is
+        // per-Name), so the being is provably its own; no grant needed. Every OTHER act runs the able-walk.
+        let name_self_be = verb == "be" && matches!(op, Some("birth") | Some("connect")) && actor_name_facet(actor).is_some();
+        if !name_self_be && !ok_true(&authorize(verb, op, Some(&i), audit_being, actor, dir, history, &able_spec_of)) {
             out.push(Outcome::Denied(format!("not authorized: {verb}:{}", op.unwrap_or(""))));
             continue;
         }
-        match seal_one(dir, history, &k, &i, spec, basis, sign) {
+        match seal_one(dir, history, &k, &i, &spec, basis, sign) {
             Some(fact) => out.push(Outcome::Authorized(fact)),
             None => out.push(Outcome::Denied(format!("seal failed: {verb}:{}", op.unwrap_or("")))),
         }

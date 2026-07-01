@@ -326,6 +326,54 @@ impl Portal {
         }
     }
 
+    /// The beingless-Name banner: a new Name has no body, so it guides you to be born through @cherub.
+    /// Birth is an I act (`I make <name>` → a be:birth) spoken THROUGH the being that's present — cherub
+    /// as mother, @arrival as father. It's not cherub logic; cherub is just who you address. The hint
+    /// shows the Word to say and a button that targets @cherub so the word bar calls it.
+    fn birth_hint(&mut self, ctx: &egui::Context) {
+        // find @cherub in the current scene (the being present to be born through)
+        let cherub = self
+            .st
+            .moment
+            .as_ref()
+            .and_then(|m| wire::proto::get(&m.raw, "view"))
+            .and_then(|v| wire::proto::get(v, "beings"))
+            .and_then(|b| if let Json::Arr(a) = b { Some(a.clone()) } else { None })
+            .and_then(|a| {
+                a.iter().find_map(|n| {
+                    let name = if let Some(Json::Str(s)) = wire::proto::get(n, "being") { s.clone() } else { return None };
+                    if name == "cherub" {
+                        let id = if let Some(Json::Str(s)) = wire::proto::get(n, "id") { s.clone() } else { String::new() };
+                        Some((id, name))
+                    } else {
+                        None
+                    }
+                })
+            });
+        let mut target_cherub = false;
+        egui::TopBottomPanel::top("birth_hint").show(ctx, |ui| {
+            ui.add_space(4.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.label(egui::RichText::new("✦ you have no being yet").color(egui::Color32::from_rgb(226, 197, 116)).strong());
+                ui.label("— give yourself a being: say, in the word bar below (\"I\" = you, your Name):");
+                ui.code("I am <YourBeingName>.");
+                if cherub.is_some() {
+                    if ui.button("talk to @cherub").on_hover_text("address cherub so your Word calls it").clicked() {
+                        target_cherub = true;
+                    }
+                } else {
+                    ui.label(egui::RichText::new("(no @cherub in view — go to /)").small().weak());
+                }
+            });
+            ui.add_space(4.0);
+        });
+        if target_cherub {
+            if let Some((id, name)) = cherub {
+                self.select_being(&id, &name);
+            }
+        }
+    }
+
     /// Select a being as the RIGHT-stance TARGET (click-being): a Word typed in the word bar then CALLS
     /// it (`@being hello`). Sets the address's `@being` so the IBP bar mirrors the selection.
     pub fn select_being(&mut self, being_id: &str, name: &str) {
@@ -449,6 +497,7 @@ impl Portal {
         match self.st.view {
             View::Story => self.perceive_story(),
             View::Rain => self.perceive_rain(),
+            View::FourD => self.perceive_branches(),
             View::Map2d | View::World3d | View::Explorer => {
                 let a = self.st.address.clone();
                 self.navigate(&a, false);
@@ -553,13 +602,9 @@ impl eframe::App for Portal {
             };
         }
 
-        // In the 3D view, WASD is MOVEMENT (handled in world3d::show as move-Words) and the mouse looks
-        // around — so the generic word/stamp capture is paused there (it would eat the movement keys).
-        let in_world3d = self.st.view == View::World3d;
-
         // MANUAL mode: capture typed keys into the composer (the keyboard ACT/FACT model) — but only
         // when no text field (the address bar) is focused, so editing the address still works.
-        if self.st.mode == Mode::Manual && !in_world3d {
+        if self.st.mode == Mode::Manual {
             let typing_in_field = ctx.memory(|m| m.focused().is_some());
             if !typing_in_field {
                 let mut sends: Vec<String> = Vec::new();
@@ -606,7 +651,7 @@ impl eframe::App for Portal {
 
         // STAMP mode: keys held form a chord; on release the chord is sent to the server as an act.
         // No client keymap — the server interprets the chord. Paused while editing the address.
-        if self.st.mode == Mode::Stamp && !in_world3d {
+        if self.st.mode == Mode::Stamp {
             let typing_in_field = ctx.memory(|m| m.focused().is_some());
             let down = ctx.input(|i| i.keys_down.iter().cloned().collect::<Vec<_>>());
             if !typing_in_field {
@@ -622,6 +667,7 @@ impl eframe::App for Portal {
             match self.st.view {
                 View::Story => self.perceive_story(),
                 View::Rain => self.perceive_rain(),
+                View::FourD => self.perceive_branches(),
                 View::Map2d | View::World3d | View::Explorer => {
                     let a = self.st.address.clone();
                     self.navigate(&a, false);
@@ -632,6 +678,11 @@ impl eframe::App for Portal {
 
         chrome::tabs::show(ctx, self); // per-being tabs, topmost
         chrome::ibp_bar::show(ctx, self);
+        // a new Name has no being yet — guide them to be born through @cherub (the I births; cherub is
+        // just the being present to speak the birth Word through — as mother, @arrival as father).
+        if self.logged_in && self.active_being.is_none() {
+            self.birth_hint(ctx);
+        }
         chrome::word_bar::show(ctx, self); // very bottom
         chrome::history_bar::show(ctx, self); // above the word bar
 
@@ -665,11 +716,17 @@ impl eframe::App for Portal {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| match self.st.view {
-            View::Map2d => views::map2d::show(ui, self),
+            // the spatial view: 2D map (follow-cam) on the LEFT, 3D first-person on the RIGHT, side by side.
+            View::Map2d | View::World3d => {
+                ui.columns(2, |c| {
+                    views::map2d::show(&mut c[0], self);
+                    views::world3d::show(&mut c[1], self);
+                });
+            }
             View::Story => views::story::show(ui, self),
-            View::World3d => views::world3d::show(ui, self),
             View::Rain => views::rain::show(ui, self),
             View::Explorer => views::explorer::show(ui, self),
+            View::FourD => views::fourd::show(ui, self),
         });
     }
 }

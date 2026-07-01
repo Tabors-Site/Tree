@@ -270,14 +270,14 @@ fn word_name_of(statement: &str) -> String {
 /// (never mutated; a `do:retire` layers a disable, a re-coin re-enables), LAST-COIN-WINS. So a word's
 /// FIRST-coin ordinal is fixed the moment it lands, and `symbol(word) = ALPHABET[coin_index]` stays
 /// stable for the viz (see treewordfold::fold_word_set). Coining ONLY appends here - order preserved.
-fn coin_spec(statement: &str) -> Json {
+fn coin_spec(reader_name: &str, target_being: &str, statement: &str) -> Json {
     let name = word_name_of(statement);
     obj(vec![
         ("verb", jstr("do")),
         ("act", jstr("coin")),
-        ("by", jstr(I_NAME)),      // the Name I signs
-        ("through", jstr(AM_BEING)), // acted through the being Am (the vehicle) - "the I doing it as Am"
-        ("of", obj(vec![("kind", jstr("being")), ("id", jstr(AM_BEING))])),
+        ("by", jstr(reader_name)),    // the Name reading SIGNS (genesis: "I")
+        ("through", jstr(target_being)), // acted THROUGH the target being (the vehicle) - "the Name doing it as <being>"
+        ("of", obj(vec![("kind", jstr("being")), ("id", jstr(target_being))])),
         (
             "params",
             obj(vec![
@@ -305,13 +305,14 @@ fn is_acting_node(node: &Json) -> bool {
 ///   - otherwise it is a DECLARATION (an `is` concept, or pure prose the parser read as nothing): the
 ///     reader coins it as ONE concept declare-word spec (the foundation landing). word.word's
 ///     statements are all declarations, so each yields exactly one coin.
-/// The actor ctx grounds any `$ref` in an acting node (none in a plain coin); for declarations it is unused.
-fn acting_specs(statement: &str) -> Vec<Json> {
+/// The actor ctx (the `reader_name`'s facet) grounds any `$ref` in an acting node (none in a plain coin);
+/// for declarations it is unused. `target_being` is the reel a coin lands on (genesis: "Am").
+fn acting_specs(reader_name: &str, target_being: &str, statement: &str) -> Vec<Json> {
     let nodes = treeword::parse(statement);
     let acting: Vec<&Json> = nodes.iter().filter(|n| is_acting_node(n)).collect();
     if !acting.is_empty() {
         let ctx = obj(vec![
-            ("identity", i_actor()),
+            ("identity", actor_of(reader_name)),
             ("bindings", obj(vec![])),
             ("state", obj(vec![])),
             ("beings", obj(vec![])),
@@ -325,7 +326,7 @@ fn acting_specs(statement: &str) -> Vec<Json> {
     if nodes.iter().any(|n| get_str(n, "kind") == Some("see")) && !has_declaration(&nodes, statement) {
         return Vec::new();
     }
-    vec![coin_spec(statement)]
+    vec![coin_spec(reader_name, target_being, statement)]
 }
 
 /// Is the statement a DECLARATION (something to coin)? A parsed `is` node, OR pure prose the parser read
@@ -343,12 +344,18 @@ fn spec_verb_act(spec: &Json) -> String {
 
 // ── reading one word (one act), guarded ──────────────────────────────────────────────────────────────
 
-/// The actor for the read: the Name "I" (beingId + nameId "I"). I is the SIGNER; it authors the genesis
-/// vocabulary onto the being Am's reel. authorize bypasses for I (the bootstrap axiom: beingId "I" hits
-/// the I-Am bypass, and I hasAuthorityOver "Am"), so the coin always lands. The TARGET is Am (the reel),
-/// the ACTOR is I (the Name) - the name-being split.
+/// The actor for a read: the READING Name's facet (beingId + nameId = the Name). The Name is the SIGNER;
+/// it authors the words onto the target being's reel. For genesis the Name is "I", and authorize bypasses
+/// (the bootstrap axiom: beingId "I" hits the I-Am bypass, and I hasAuthorityOver "Am"), so the coin
+/// always lands. For a NON-I Name reading a book later, authorize walks that Name's ables (the general
+/// instate) - the TARGET is the being (the reel), the ACTOR is the Name - the name-being split.
+fn actor_of(name: &str) -> Json {
+    obj(vec![("beingId", jstr(name)), ("nameId", jstr(name))])
+}
+/// The genesis reader's actor: the Name "I". A thin alias of `actor_of(I_NAME)`, kept for the survey +
+/// the run-grants path (both genesis-scoped, always I).
 fn i_actor() -> Json {
-    obj(vec![("beingId", jstr(I_NAME)), ("nameId", jstr(I_NAME))])
+    actor_of(I_NAME)
 }
 
 /// Seal ONE acting word's fact spec as a MOMENT on its reel (act-first, via treestore's doctrine-correct
@@ -408,6 +415,8 @@ const STORY: &str = "localhost";
 /// specs; GUARD 1 refuses if it produced MORE THAN ONE (a run-on, naming the cram). Zero specs is an
 /// inert `see` (fine). One spec is sealed as the word's single moment (authorize-gated, then committed).
 fn read_one_word(
+    reader_name: &str,
+    target_being: &str,
     statement: &str,
     dir: &Path,
     history: &str,
@@ -425,7 +434,7 @@ fn read_one_word(
 
     // lower the statement to its acting fact specs (a declaration -> one coin; an acting word -> its
     // deed(s); a `see` -> none). GUARD 1: a single word lays EXACTLY one fact (or zero for an inert see).
-    let specs = acting_specs(statement);
+    let specs = acting_specs(reader_name, target_being, statement);
     match specs.len() {
         0 => {
             return Ok(WordRead {
@@ -443,13 +452,14 @@ fn read_one_word(
         }
     }
     let spec = &specs[0];
-    lay_one_spec(statement, spec, dir, history, sign)
+    lay_one_spec(reader_name, statement, spec, dir, history, sign)
 }
 
 /// Seal one acting word's lone spec: AUTHORIZE it (treeibp's gate - I bypasses, the bootstrap axiom),
 /// then commit it as a moment. A denial (a malformed act, never a permission issue for I) surfaces as
 /// `BookError::Denied`. The reader's ONE write path for a single acting word.
 fn lay_one_spec(
+    reader_name: &str,
     statement: &str,
     spec: &Json,
     dir: &Path,
@@ -473,7 +483,7 @@ fn lay_one_spec(
     let verb = get_str(spec, "verb").unwrap_or("");
     let op = get_str(spec, "act");
     let audit_being = if kind == "being" { Some(id.as_str()) } else { None };
-    let actor = i_actor();
+    let actor = actor_of(reader_name);
     let verdict = treeibp::authorize(verb, op, Some(&id), audit_being, &actor, dir, history, |_| None);
     if !matches!(get(&verdict, "ok"), Some(Json::Bool(true))) {
         let reason = get_str(&verdict, "reason").unwrap_or("not authorized").to_string();
@@ -511,7 +521,7 @@ pub fn lay_word_specs(
             statement: label.to_string(),
             fact_id: None,
         }),
-        1 => lay_one_spec(label, &specs[0], dir, history, sign),
+        1 => lay_one_spec(I_NAME, label, &specs[0], dir, history, sign),
         n => Err(BookError::RunOn {
             word: label.to_string(),
             facts: n,
@@ -522,12 +532,21 @@ pub fn lay_word_specs(
 
 // ── reading a whole book, sequentially ────────────────────────────────────────────────────────────────
 
-/// I READS A BOOK - the guarded, sequential read. Split the book into statements (one Word each), then
-/// read each in order through `read_one_word` (both guards). The read is STRICTLY sequential, so a
-/// guard's refusal is the FIRST offending word in book order (the reader stops there - we fix that word,
-/// then read on). On success the foundation declare-word facts have landed on Am's reel and fold back via
-/// treewordfold. `sign` is the optional story-key signer (the I key, threaded into each word's seal).
-pub fn read_book(
+/// A NAME INSTATES A BOOK ONTO THE REELS - the GENERAL book-read, of which genesis is the first case.
+/// A `.word`/`.book` is "unclaimed" words; a Name READS it word by word and lays each word's fact onto
+/// the reels needed - "instating or reenacting" it. This is NOT a genesis-only path: ANY Name (a facet
+/// of I) can instate ANY book at ANY point in a history's present (the library / book-sharing shape).
+/// Genesis is simply `instate_book("I", "Am", genesis.book, …)` at the start.
+///
+/// - `reader_name`  the Name doing the reading (the SIGNER; genesis: "I"). authorize walks THIS Name's
+///                  authority (I bypasses; a later Name walks its ables).
+/// - `target_being` the being reel a concept-coin lands on / acts through (genesis: "Am"). Acting words
+///                  (creation deeds) carry their own `of` target from the parse; the coin default is this.
+///
+/// The read is STRICTLY sequential (guarded), so a refusal is the FIRST offending word in book order.
+pub fn instate_book(
+    reader_name: &str,
+    target_being: &str,
     book: &str,
     dir: &Path,
     history: &str,
@@ -537,13 +556,25 @@ pub fn read_book(
     let mut words = Vec::with_capacity(statements.len());
     let mut facts_laid = 0;
     for stmt in &statements {
-        let read = read_one_word(stmt, dir, history, sign)?; // STOP at the first offender
+        let read = read_one_word(reader_name, target_being, stmt, dir, history, sign)?; // STOP at first offender
         if read.fact_id.is_some() {
             facts_laid += 1;
         }
         words.push(read);
     }
     Ok(BookRead { words, facts_laid })
+}
+
+/// I READS A BOOK - the genesis case of `instate_book`: the reader is the Name "I", the target reel is
+/// the being "Am". A thin wrapper so genesis + the vocabulary read stay byte-identical while the general
+/// `instate_book` carries the "any Name, any book, any moment" shape. `sign` is the story-key signer.
+pub fn read_book(
+    book: &str,
+    dir: &Path,
+    history: &str,
+    sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
+) -> Result<BookRead, BookError> {
+    instate_book(I_NAME, AM_BEING, book, dir, history, sign)
 }
 
 /// Convenience: read a book UNSIGNED. word.word's reading needs no signer to demonstrate the guards +
@@ -722,7 +753,8 @@ pub fn full_genesis(
     dir: &Path,
     vocabulary: &[String],
 ) -> Result<BornWorld, GenesisBookError> {
-    // 1. IGNITE - the two razor-thin genesis moments: the Name "I" + the being "Am".
+    // 1. IGNITE - the razor-thin egg: the ONE moment that brings the SIGNER into being, the Name "I".
+    //    The being "Am" is NOT egg-born; it is the FIRST WORD I read from the book (below).
     let (planted, key) = treegenesis::plant_and_ignite(dir, STORY)
         .map_err(|e| GenesisBookError::Message(format!("ignite: {e}")))?;
 
@@ -740,6 +772,16 @@ pub fn full_genesis(
     };
     let sign_ref: &dyn Fn(&Json, &[String]) -> Json = &sign;
 
+    // 1b. THE FIRST WORD = "Am" (the hand-off). Before any coin can land on Am's reel, Am must exist -
+    //     so I read the SAYER (iam.word) FIRST. Its opening verse is the be:birth of Am (EMPTY - no fat
+    //     params; the raw first being is an empty object the later words build out). This is genesis's
+    //     one inherent ordering: the first word births the being every coin then lands on. Read through
+    //     the general reader as the Name "I" onto the being "Am"; the verse-birth is Am's reel fact #0.
+    let first_word = AM_BEING; // "Am" - the first word / first being
+    if let Ok(sayer) = std::fs::read_to_string(seed_dir.join("store/words/iam.word")) {
+        instate_book(I_NAME, first_word, &sayer, dir, "0", Some(sign_ref))?;
+    }
+
     // 2. THE VOCABULARY — I coin each declared word. A CONCEPT-DECLARATION file (word.word + the
     //    foundation flats: only `X is a Y.` sentences) is read per-statement (each concept its own coin).
     //    An OP-WORD file (a `When …:` flow / `see <op>` body) is COINED BY NAME (one coin, body NOT run)
@@ -748,6 +790,11 @@ pub fn full_genesis(
     //    fires when a word is actually RUN (the creation + grant sequence below). Dependency order.
     let mut vocabulary_coined = 0;
     for rel in vocabulary {
+        // iam.word (the sayer) was already read as the FIRST WORD above (it births Am); skip it here so
+        // its verse is not re-read (Am is born once).
+        if rel.ends_with("iam.word") {
+            continue;
+        }
         let p = seed_dir.join(rel);
         let text = match std::fs::read_to_string(&p) {
             Ok(t) => t,
@@ -1105,7 +1152,8 @@ fn survey_one(statement: &str) -> Option<Violation> {
     }
 
     // GUARD 1 (one word = one act): a declaration / acting word lays exactly one fact; a run-on lays >1.
-    let specs = acting_specs(statement);
+    // The survey is genesis-scoped (the I/Am read); it counts specs, so the reader identity is I/Am.
+    let specs = acting_specs(I_NAME, AM_BEING, statement);
     if specs.len() > 1 {
         return Some(Violation::RunOn {
             facts: specs.len(),
@@ -1189,6 +1237,22 @@ mod tests {
         assert_eq!(stmts.len(), 2, "two statements, the comment dropped: {stmts:?}");
         assert_eq!(stmts[0], "A word is a word.");
         assert!(stmts[1].starts_with("To do is to stamp"));
+    }
+
+    #[test]
+    fn coin_spec_routes_by_reader_and_target_being() {
+        // THE GENERALIZATION: a coin is BY the reading Name, acted THROUGH + landed ON the target being -
+        // not the hardcoded I/Am. So a later Name (e.g. "alice") instating onto its own reel ("Glyphs")
+        // routes there; genesis (the wrapper's defaults) stays I/Am byte-for-byte.
+        let general = coin_spec("alice", "Glyphs", "A glyph is a glyph.");
+        assert_eq!(get_str(&general, "by"), Some("alice"), "the reading Name signs");
+        assert_eq!(get_str(&general, "through"), Some("Glyphs"), "acted through the target being");
+        let of = get(&general, "of").expect("of");
+        assert_eq!(get_str(of, "id"), Some("Glyphs"), "the coin lands on the target reel");
+
+        let genesis = coin_spec(I_NAME, AM_BEING, "A word is a word.");
+        assert_eq!(get_str(&genesis, "by"), Some("I"), "genesis is still I");
+        assert_eq!(get_str(&genesis, "through"), Some("Am"), "genesis still lands on Am");
     }
 
     #[test]

@@ -127,15 +127,34 @@ fn descriptor_from_binding(name: &str, owner: Option<&str>, binding: &Json) -> W
 /// each new `params.word` the next index, and `symbol(word) = ALPHABET[coin_index(word)]` stays STABLE -
 /// a word's slot never shifts, because coins only ever append and the ordinal is fixed at first sight.
 pub fn fold_word_set(dir: &Path, history: &str) -> HashMap<String, WordDescriptor> {
+    let mut set: HashMap<String, WordDescriptor> = HashMap::new();
+    fold_being_coins_into(&mut set, dir, history, AM_BEING);
+    set
+}
+
+/// THE UNION/ACCUMULATE REDUCER (the vocabulary reducer, DISTINCT from the STATE reducer). Fold ONE
+/// being's own reel of declare-word facts (do:coin / do:retire) INTO the growing `set`, across the
+/// heaven "0" reel then (for a branch) the branch reel — each already seq-ordered on disk, so the read
+/// order IS the fold order. This is the UNION reducer the whole vocabulary fold is built on:
+///
+///   * a `do:coin` INSERTS its word into the set (last-coin-wins PER WORD name, never across words);
+///   * a `do:retire` SHADOWS its word (removes it from the resolvable set — union-with-deprecation);
+///   * a later re-coin RE-ENABLES a retired word.
+///
+/// It ACCUMULATES: coining "flower" at ord 50 does NOT drop "tree" at ord 10 — both stay in the set.
+/// It NEVER supersedes across distinct words (that is the STATE fold's latest-wins, which vocabulary
+/// must NOT use). Called Am-first then per descendant down the mother lineage (`fold_lineage_word_set`),
+/// so a descendant coining the SAME word-name SHADOWS/specializes the ancestor's in the projection while
+/// the ancestor's coin stays on its own chain (shared, undeleteable). Distinct names pure-accumulate.
+fn fold_being_coins_into(set: &mut HashMap<String, WordDescriptor>, dir: &Path, history: &str, being_id: &str) {
     // heaven "0" is inherited by every history; a branch layers its own facts ON TOP (history
     // precedence: "0" < any branch id), exactly getWord's `histories.flatMap`.
     let mut histories: Vec<&str> = vec!["0"];
     if history != "0" {
         histories.push(history);
     }
-    let mut set: HashMap<String, WordDescriptor> = HashMap::new();
     for h in histories {
-        for f in treestore::read_reel_file(dir, h, "being", AM_BEING, None, None) {
+        for f in treestore::read_reel_file(dir, h, "being", being_id, None, None) {
             if get_str(&f, "verb") != Some("do") {
                 continue;
             }
@@ -152,7 +171,7 @@ pub fn fold_word_set(dir: &Path, history: &str) -> HashMap<String, WordDescripto
                 _ => continue,
             };
             if act == Some(RETIRE) {
-                set.remove(&name); // disable wins until a later re-declare
+                set.remove(&name); // disable wins until a later re-declare (union-with-deprecation)
                 continue;
             }
             let binding = match get(params, "binding") {
@@ -163,7 +182,92 @@ pub fn fold_word_set(dir: &Path, history: &str) -> HashMap<String, WordDescripto
             set.insert(name.clone(), descriptor_from_binding(&name, owner, binding));
         }
     }
+}
+
+/// A being's `parentBeingId` — read off its FOLDED STATE (treefold::reduce_being via `fold`). THIS is
+/// the ONE place the STATE reducer touches the vocabulary path, and ONLY for the parent POINTER: it
+/// answers "who is the mother?" so we know the next reel to fold up the lineage. The vocabulary CONTENT
+/// never folds through reduce_being (that is latest-wins; vocabulary is union — the critical seam). None
+/// means a root (no mother) — Am / the I-Am being. Reads the single-history reel like the rest of the
+/// being-tree walks (has_authority_over, ancestor_states) do.
+fn parent_being_id(dir: &Path, history: &str, being_id: &str) -> Option<String> {
+    let facts = treestore::read_reel_file(dir, history, "being", being_id, None, None);
+    if facts.is_empty() {
+        return None;
+    }
+    let state = treefold::fold("being", &facts);
+    match &state {
+        treehash::Json::Obj(e) => e
+            .iter()
+            .find(|(k, _)| k == "parentBeingId")
+            .and_then(|(_, v)| match v {
+                treehash::Json::Str(s) if !s.is_empty() => Some(s.clone()),
+                _ => None,
+            }),
+        _ => None,
+    }
+}
+
+/// THE LINEAGE VOCABULARY FOLD — a being's LIVE vocabulary is the UNION fold of its MOTHER LINEAGE. The
+/// being-tree IS the vocabulary tree: walk from `being_id` UP the `parentBeingId` chain to the root, then
+/// fold AM FIRST (deepest/root) and each descendant down TO the being, each contributing its OWN reel's
+/// coins through the UNION reducer (`fold_being_coins_into`). So:
+///
+///   * Am's genesis base coins fold first — EVERY being resolves them (universal, shared, undeleteable);
+///   * each descendant EXTENDS the set with its own distinct coins (pure accumulate, no supersession);
+///   * a descendant coining the SAME word-name SHADOWS/specializes the ancestor's in the projection
+///     (genesis-outward order, closer-to-you wins per key), while every coin stays on its own chain;
+///   * a `do:retire` on a being's reel shadows that word in the live set (union-with-deprecation).
+///
+/// This REUSES the state fold's lineage WALK (up parentBeingId, reading each being's folded state for the
+/// pointer ONLY via `parent_being_id`) but a DIFFERENT REDUCER: the UNION/accumulate one, NEVER the
+/// state latest-wins. The genesis base always folds first because AM_BEING is appended as the deepest
+/// root even when the walk terminates before it (a being born off Am reaches Am; a stray root without a
+/// parentBeingId still gets Am's universal base). Cycle-guarded + depth-capped like the JS walkUp.
+///
+/// THE CACHE (projection) = THIS FOLD. The vocabulary projection IS the lineage union fold, computed
+/// FRESH from the chain on every call — a pure function of the reels, never a second source of truth.
+/// That is the "delete-and-rebuild from the lineage" discipline in its purest form: there is nothing to
+/// invalidate because there is no stored cache to drift; a new coin or retire lands on a reel and the
+/// very next fold sees it (do_makes_do: "folds FRESH per act, not boot-only"). A memoized snapshot, if
+/// ever added for a hot path, must be keyed by (history, being) and DROPPED-then-rebuilt from this fold
+/// on any coin/retire — never edited in place, or it becomes the drift this doctrine forbids.
+pub fn fold_lineage_word_set(dir: &Path, history: &str, being_id: &str) -> HashMap<String, WordDescriptor> {
+    // 1. WALK the mother lineage UP: [being, mother, …, root]. Reuse the parentBeingId pointer read.
+    let mut lineage: Vec<String> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut cur = being_id.to_string();
+    for _ in 0..256 {
+        if !seen.insert(cur.clone()) {
+            break; // a cycle in parentBeingId
+        }
+        lineage.push(cur.clone());
+        match parent_being_id(dir, history, &cur) {
+            Some(p) => cur = p,
+            None => break, // a root (Am / the I-Am being)
+        }
+    }
+    // Am is the UNIVERSAL base — the root every being folds first. Ensure it is the deepest reel even if
+    // the walk terminated before reaching it (a root that carries no parentBeingId, or the being IS Am).
+    if !lineage.iter().any(|b| b == AM_BEING) {
+        lineage.push(AM_BEING.to_string());
+    }
+
+    // 2. FOLD Am FIRST (deepest), descendants EXTEND or SHADOW: fold the lineage genesis-outward
+    //    (root → … → the being) through the UNION reducer. Reverse the up-walk so the deepest (Am) folds
+    //    first and the closest (the being itself) folds LAST — so closer-to-you shadows earlier per key.
+    let mut set: HashMap<String, WordDescriptor> = HashMap::new();
+    for b in lineage.iter().rev() {
+        fold_being_coins_into(&mut set, dir, history, b);
+    }
     set
+}
+
+/// Resolve ONE word from a being's LINEAGE vocabulary (the actor-lineage resolve seam). None when the
+/// word is unbound or shadowed anywhere the lineage did not re-enable it. This is what a being's act
+/// resolves words against — its mother-lineage union fold. Mirrors `resolve_word` but lineage-aware.
+pub fn resolve_lineage_word(dir: &Path, history: &str, being_id: &str, name: &str) -> Option<WordDescriptor> {
+    fold_lineage_word_set(dir, history, being_id).remove(name)
 }
 
 /// Resolve ONE word's descriptor from the fold (the runner's per-word lookup). None when the word is

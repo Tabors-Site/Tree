@@ -89,14 +89,19 @@ fn now_ord(root: &Path, history: &str) -> f64 {
 /// All folded reels of a kind visible on `history` (v1: own-history ∪ main "0"), as of `at` ord.
 fn all_of_kind(root: &Path, history: &str, kind: &str, at: Option<f64>) -> Vec<(String, Json)> {
     let lineage = lineage_of(root, history);
-    // every reel of this kind that exists anywhere in the lineage — folded through the branch's view.
-    let mut ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    // every reel of this kind visible in the lineage, folded through the branch's view. Order MUST stay
+    // deterministic (list_reels order) — root-finding does `.find(is_root)`, so a HashSet's random order
+    // would pick a different root each run. Dedup by id while preserving that order.
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut out: Vec<(String, Json)> = Vec::new();
     for (h, k, id) in list_reels(root) {
-        if k == kind && lineage.contains(&h) {
-            ids.insert(id);
+        if k == kind && lineage.contains(&h) && seen.insert(id.clone()) {
+            if let Some(s) = state(root, history, kind, &id, at) {
+                out.push((id, s));
+            }
         }
     }
-    ids.into_iter().filter_map(|id| state(root, history, kind, &id, at).map(|s| (id, s))).collect()
+    out
 }
 
 /// A space with no parent is the story root ("My Story").

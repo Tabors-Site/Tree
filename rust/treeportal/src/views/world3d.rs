@@ -15,7 +15,6 @@ use crate::Portal;
 
 const CELL: f32 = 1.6; // world units between grid coords
 const EYE: f32 = 1.15; // eye height above the ground
-const STEP: f32 = CELL; // one move = one cell
 
 pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
     let face = match p.st.moment.as_ref().and_then(|m| get(&m.raw, "view").cloned()) {
@@ -39,62 +38,51 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
         egui::Color32::from_rgb(13, 15, 21),
     );
 
-    // ── the camera: eye position (px,pz) on the ground + yaw. Local view state, kept in egui memory ──
-    let cam_id = egui::Id::new("fp_cam");
-    let (mut px, mut pz, mut yaw) = ui.data(|d| d.get_temp::<(f32, f32, f32)>(cam_id).unwrap_or((0.0, -4.5, 0.0)));
+    // ── the scene: every being/space/matter stands at its REAL folded coord (coord.x, coord.y) in the
+    //    space's grid. Moving is a Word → position folds → the body is drawn at the new coord. Nothing is
+    //    faked client-side. ──
+    let nodes = collect_nodes(&face);
+    let world_of = |n: &super::scene::Node| -> Option<(f32, f32)> { n.coord.map(|(x, y)| (x as f32 * CELL, y as f32 * CELL)) };
 
-    // mouse look — local only (dragging the world turns your head; never an act).
+    // the centre of everything placed — the default vantage when you have no body yet (a new Name at
+    // @arrival looks in on the space from just outside the crowd).
+    let mut sum = (0.0f32, 0.0f32, 0.0f32);
+    for n in &nodes {
+        if let Some((x, z)) = world_of(n) {
+            sum = (sum.0 + x, sum.1 + z, sum.2 + 1.0);
+        }
+    }
+    let centre = if sum.2 > 0.0 { (sum.0 / sum.2, sum.1 / sum.2) } else { (0.0, 0.0) };
+
+    // ── the camera: FIRST-PERSON at your driven being's coord (you look out of its eyes); else a vantage
+    //    pulled back from the centre, looking in. Only YAW is local (the mouse turns your head); your
+    //    ground position IS your being's folded position — walk by saying the move Word. ──
+    let cam_id = egui::Id::new("fp_yaw");
+    let mut yaw = ui.data(|d| d.get_temp::<f32>(cam_id).unwrap_or(0.0));
     if resp.dragged() {
         yaw += resp.drag_delta().x * 0.005;
     }
+    ui.data_mut(|d| d.insert_temp(cam_id, yaw));
 
-    // ── W/A/S/D = MOVE WORDS. Edge-triggered (one per press) → one act = one moment. The camera also
-    //    steps locally along its facing for immediate feel; the being's real coord syncs when the move
-    //    Word executes server-side (gated on the free-Word runtime). ──
-    let (s, c) = yaw.sin_cos();
-    let fwd = egui::vec2(s, c); // camera facing on the ground
-    let right = egui::vec2(c, -s);
-    // The move-Word strings must MATCH the server's do:move fold (the other agent's lane): each press
-    // lays one `do:move <dir>` fact and the being's position IS the fold of its move facts. WASD is the
-    // keyboard feel; the WORD is a compass direction. (Confirm the exact `<dir>` tokens with that agent.)
-    let mut moves: Vec<(&str, egui::Vec2)> = Vec::new();
-    ui.input(|i| {
-        if i.key_pressed(egui::Key::W) {
-            moves.push(("move north", fwd));
-        }
-        if i.key_pressed(egui::Key::S) {
-            moves.push(("move south", -fwd));
-        }
-        if i.key_pressed(egui::Key::A) {
-            moves.push(("move west", -right));
-        }
-        if i.key_pressed(egui::Key::D) {
-            moves.push(("move east", right));
-        }
-    });
-    for (word, dir) in &moves {
-        px += dir.x * STEP;
-        pz += dir.y * STEP;
-        p.say_word(word); // the move Word — one moment per step (the WASD-as-Word stamp test)
-    }
-    ui.data_mut(|d| d.insert_temp(cam_id, (px, pz, yaw)));
-
+    let my_id = p.active_being.as_ref().map(|(bid, _)| bid.clone());
+    let my_coord = my_id.as_ref().and_then(|bid| nodes.iter().find(|n| &n.id == bid)).and_then(world_of);
+    let (px, pz) = match my_coord {
+        Some((x, z)) => (x, z),           // stand in your body
+        None => (centre.0, centre.1 - 12.0), // hover back from the crowd, looking toward it (+z)
+    };
     let cam = FpCam { px, pz, yaw, focal: rect.height() * 1.05, center: rect.center() };
 
-    draw_grid(&painter, &cam, 7);
+    draw_grid(&painter, &cam, 12);
 
-    // ── bodies at coords: each being/space/matter from the scene, projected. Draw far→near. ──
-    let nodes = collect_nodes(&face);
-    let n = nodes.len().max(1);
     let mut placed: Vec<(f32, egui::Pos2, egui::Pos2, &super::scene::Node)> = Vec::new();
-    for (i, node) in nodes.iter().enumerate() {
-        let (wx, wz) = match node.coord {
-            Some((x, y)) => (x as f32 * CELL, y as f32 * CELL),
-            None => {
-                // unsized: a deterministic ring in FRONT of the spawn, so a placeless scene still reads.
-                let a = i as f32 / n as f32 * std::f32::consts::TAU;
-                (a.cos() * 3.5 * CELL, a.sin() * 3.5 * CELL)
-            }
+    for node in &nodes {
+        // don't draw the body you're looking OUT of (first-person)
+        if my_coord.is_some() && my_id.as_deref() == Some(node.id.as_str()) {
+            continue;
+        }
+        let (wx, wz) = match world_of(node) {
+            Some(c) => c,
+            None => continue,
         };
         let h = body_height(&node.kind);
         if let (Some((base, depth)), Some((top, _))) = (cam.project(wx, 0.0, wz), cam.project(wx, h, wz)) {
@@ -131,8 +119,8 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
         painter.text(rect.center_top() + egui::vec2(0.0, 16.0), egui::Align2::CENTER_CENTER, name, egui::FontId::monospace(13.0), egui::Color32::from_gray(150));
     }
     let hud = match &p.st.target_being {
-        Some((_, nm)) => format!("WASD move · drag look · target @{nm}"),
-        None => "WASD move · drag look · click a being to address it, a doorway to walk in".to_string(),
+        Some((_, nm)) => format!("drag to look · say the Word (bottom bar) · calling @{nm}"),
+        None => "drag to look · say the Word in the bar below · click a being to address it".to_string(),
     };
     painter.text(rect.left_bottom() + egui::vec2(10.0, -8.0), egui::Align2::LEFT_BOTTOM, hud, egui::FontId::proportional(11.0), egui::Color32::from_gray(100));
 
@@ -142,9 +130,6 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
     } else if let Some(sid) = click_space {
         p.st.address = format!("space/{sid}");
         p.perceive_address();
-    }
-    if !moves.is_empty() {
-        ui.ctx().request_repaint();
     }
 }
 
@@ -211,19 +196,23 @@ impl FpCam {
 fn draw_grid(painter: &egui::Painter, cam: &FpCam, half: i32) {
     let col = egui::Color32::from_rgb(30, 34, 44);
     let stroke = egui::Stroke::new(1.0, col);
-    let lo = -half;
-    let hi = half;
+    // centre the grid on the camera's ground cell, so it always spans where you (and the beings) stand —
+    // coords live in a big space (0..100), far from the origin.
+    let cgx = (cam.px / CELL).round() as i32;
+    let cgz = (cam.pz / CELL).round() as i32;
     let steps = 24;
-    // lines of constant world-x (running along z), and constant world-z (running along x)
-    for i in lo..=hi {
-        let a = i as f32 * CELL;
+    for i in -half..=half {
+        let a = (cgx + i) as f32 * CELL;
+        let b = (cgz + i) as f32 * CELL;
+        // a line of constant world-x running along z (spanning the camera's z window)
         polyline_ground(painter, cam, stroke, steps, |t| {
-            let z = (lo as f32 + t * (hi - lo) as f32) * CELL;
+            let z = ((cgz - half) as f32 + t * (2 * half) as f32) * CELL;
             (a, z)
         });
+        // a line of constant world-z running along x
         polyline_ground(painter, cam, stroke, steps, |t| {
-            let x = (lo as f32 + t * (hi - lo) as f32) * CELL;
-            (x, a)
+            let x = ((cgx - half) as f32 + t * (2 * half) as f32) * CELL;
+            (x, b)
         });
     }
 }

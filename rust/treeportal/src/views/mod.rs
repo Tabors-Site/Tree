@@ -1,4 +1,5 @@
 pub mod explorer;
+pub mod fourd;
 pub mod map2d;
 pub mod rain;
 pub mod scene;
