@@ -56,6 +56,16 @@ Want a one-shot integrity check instead? Run the binary with no subcommand to re
 
 Sign in with a Name + password, drive a being, and move through the world: the 2D map, first-person 3D, the Story render, the 4D branch tree, and the Rain.
 
+### Find peers on the LAN (no DNS)
+
+`serve` advertises this reality over mDNS as `_treeos._tcp`, carrying its **signed address-fact** — the I-key's signature over `{name, host, port, transport}`. Another reality on the same network finds it by **name**, with no DNS and no registrar:
+
+```bash
+./rust/target/release/treeos discover        # browse a few seconds, verify each signature, pin the valid ones
+```
+
+Every discovered reality's signature is checked against its own I public key; a bad or missing signature is **refused**, and the verified ones are pinned into `.story/peers.json` (the Peering cache that federation resolves through). This is TreeOS resolving names to network addresses by **cryptographic identity** instead of DNS — the first rung of [`philosophy/dns.md`](philosophy/dns.md).
+
 ### Where the binaries are
 
 After `cargo build --release`:
@@ -67,9 +77,13 @@ Copy a binary anywhere and run it — no toolchain, no Node, no `node_modules`.
 
 ## Config (first-boot settings)
 
-A Story's boot-critical identity — its outward domain, port, store name, display name, and token secret — is the first-boot config: the equivalent of what you'd set on an OS's first boot. Today these live in **`.env`** (see `.env.example`); the canonical values fold onto the Story's **library reel** once the store is open, and runtime knobs live in the `.config` heaven space.
+A Story's first-boot identity lives in **`.env`** (copy `.env.example`) — read by the `treeos` binary at startup, the equivalent of what you'd set on an OS's first boot:
 
-> Status: the Rust runtime currently defaults the Story domain to `localhost` and doesn't yet read `.env`. Wiring the Rust genesis to read these settings (or a native Rust config) and stamp a custom domain / name / secret into the library on first boot is the next step. Until then, `.env` holds the intended settings and the Rust binary runs a local `localhost` Story.
+- **`STORY_DOMAIN`** — the Story's **name / alias**, its identity handle. It becomes the library reel id: how the Story is addressed (`name::path@being`) and what its acts commit to. This is **not** a DNS domain — a TreeOS reality is its I key plus a chosen alias, resolved through Peering, not DNS (see [`philosophy/dns.md`](philosophy/dns.md)). Pick whatever name you want; `genesis` plants the Story under it (`STORY_DOMAIN=tabors-site treeos genesis store/mine seed`).
+- **`PORT`** — where `treeos serve` answers (default 7070).
+- **`STORE_NAME`** — the store folder `store/<name>` (default `past`); name it fresh for an isolated Story.
+
+Everything else a Story *is* — display bits, runtime knobs, `JWT_SECRET` — is a **live config word**: I acts `set-config <key> <value>`, which lands a `config-set` name-act on the library reel and takes effect immediately (no restart, no `.env`). So `.env` is just the three deployment lines above; the Story's identity and settings live on-chain, changeable in-system by I.
 
 ## Read deeper
 

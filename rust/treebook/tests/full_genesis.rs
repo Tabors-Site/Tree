@@ -191,7 +191,8 @@ fn i_reads_the_whole_book_and_the_world_is_born() {
     assert_eq!(render(made_heaven).as_deref(), Some("I make heaven."), "heaven re-utters as I spoke it");
     let cherub = read_reel_file(&dir, "0", "being", "Cherub", None, None);
     let made_cherub = cherub.iter().find(|f| gs(f, "act") == Some("birth")).unwrap();
-    assert_eq!(render(made_cherub).as_deref(), Some("I make Cherub."), "Cherub re-utters as I spoke it");
+    // Cherub is born word-driven `I am Cherub in root` (bare birth + home) — re-utters to the be:birth form.
+    assert_eq!(render(made_cherub).as_deref(), Some("I am Cherub in root."), "Cherub re-utters as I spoke it");
 
     // NODE-FREE: nothing here shelled out; the whole genesis is Rust over the spine.
     let _ = std::fs::remove_dir_all(&dir);

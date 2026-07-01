@@ -106,6 +106,20 @@ fn gate_moment(req: &Json, conn: u64, root: &Path) -> Result<(), IbpError> {
         Some(sig) if treesign::verify_moment_proof(&name_id, req, &sig) => {
             gate_being_password(req, root)?; // the optional extra gate (only if the being set one)
             crate::live::authenticate(conn, &name_id); // the open moment IS the session
+            // ONE BEING, ONE OPEN MOMENT (presentism: a being cannot be present twice). If this moment
+            // EMBODIES a being, that being must be free — or already held by THIS conn (ordinary
+            // navigation). Held by another conn -> refuse. The shared @arrival being is exempt (many
+            // beingless visitors ride it). In the SHARED gate, so WebSocket and the HTTP bridge obey it
+            // identically — the one low-level rule, one path.
+            if let Some(being) = get_str(actor, "beingId").filter(|b| !b.is_empty() && b != "I") {
+                let history = get_str(req, "history").unwrap_or_else(|| "0".to_string());
+                if !is_arrival_being(root, &history, &being) && !crate::live::open_being_moment(&being, conn) {
+                    return Err(IbpError::new(
+                        code::RESOURCE_CONFLICT,
+                        format!("being '{being}' already has an open moment elsewhere — a being can hold only one open moment at a time"),
+                    ));
+                }
+            }
             Ok(())
         }
         _ => Err(IbpError::new(

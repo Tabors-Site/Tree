@@ -236,33 +236,10 @@ fn rules() -> &'static [(Regex, Builder)] {
         // and `am`'s meaning must be FOLDED, not frozen, so it can grow. Birth is JUST birth + home (the
         // reducer defaults position from homeSpace). See WORD-DRIVEN-PARSER.md ("A WORD IS FOLDED, NOT
         // FROZEN"). parse() calls the reader BEFORE this table, so `I am …` never reaches these rules.
-        // My name is <Name>.   -> RENAME the current being (first-person: "my" = the being you drive). A
-        // self `do:set-being` on the `name` field; NO `of` — the subject is the actor's own being, set at
-        // rasterize (treeibp short-circuits a self set-being onto $caller). Not a birth — just a rename.
-        (
-            Regex::new(r"^My name is ([A-Za-z][\w.-]*)\.$").unwrap(),
-            |m| obj(vec![
-                ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("set-being")),
-                ("params", obj(vec![("field", jstr("name")), ("value", jstr(&m[1]))])),
-            ]),
-        ),
-        // I make <Capitalized>[, <description>].   -> birth a being
-        (
-            Regex::new(r"^I make ([A-Z][\w.-]*)(?:, (.+?))?\.$").unwrap(),
-            |m| {
-                let mut params = vec![("able", jstr(&m[1].to_lowercase()))];
-                if let Some(d) = m.get(2) {
-                    if !d.as_str().is_empty() {
-                        params.push(("description", jstr(d.as_str())));
-                    }
-                }
-                obj(vec![
-                    ("kind", jstr("act")), ("verb", jstr("be")), ("act", jstr("birth")), ("by", jstr("I")),
-                    ("of", obj(vec![("kind", jstr("being")), ("id", jstr(&m[1]))])),
-                    ("params", obj(params)),
-                ])
-            },
-        ),
+        // (`My name is <Name>` -> do:set-being (RENAME) is now the WORD-DRIVEN READER — reader.rs,
+        // `read_rename`: "My" = first-person possessive, "is" a Be copula from the word. Its regex was DELETED.)
+        // (`I make <Capitalized>` for a BEING is DEAD — retired to `I am <Name>` in the word-driven reader;
+        // nothing in the .word uses it. Its regex was DELETED.)
         // I make [the] <space> [in [the] <parent>] at <x>, <y>.   -> create a space AT a coord, optionally
         // INSIDE a parent. A child's coord is its spot in the parent (the parent assigns it): coord folds
         // onto the space, `parent` -> position. This is the "I make X in Y" grammar the flat seed flagged.
@@ -285,48 +262,14 @@ fn rules() -> &'static [(Regex, Builder)] {
                 ])
             },
         ),
-        // I make [the] <space> in [the] <parent>.   -> create a space under a parent (parent -> position).
-        (
-            Regex::new(r"^I make (?:the )?([a-z][\w.-]*) in (?:the )?([a-z][\w.-]*)\.$").unwrap(),
-            |m| obj(vec![
-                ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("create-space")), ("by", jstr("I")),
-                ("of", obj(vec![("kind", jstr("space")), ("id", jstr(&m[1]))])),
-                ("params", obj(vec![("parent", jstr(&m[2]))])),
-            ]),
-        ),
-        // I make [the] <lowercase>[, <gloss>].   -> create a space
-        (
-            Regex::new(r"^I make (?:the )?([a-z][\w.-]*)(?:, (.+?))?\.$").unwrap(),
-            |m| {
-                let mut o = vec![
-                    ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("create-space")), ("by", jstr("I")),
-                    ("of", obj(vec![("kind", jstr("space")), ("id", jstr(&m[1]))])),
-                ];
-                if let Some(g) = m.get(2) {
-                    if !g.as_str().is_empty() {
-                        o.push(("params", obj(vec![("gloss", jstr(g.as_str()))])));
-                    }
-                }
-                obj(o)
-            },
-        ),
-        // I stand in [the] <space>.   -> a move act (rule 9, the genesis life-register).
-        (
-            Regex::new(r"(?i)^I stand in (?:the )?([\w.-]+)\.$").unwrap(),
-            |m| obj(vec![
-                ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("move")), ("by", jstr("I")),
-                ("of", obj(vec![("kind", jstr("space")), ("id", jstr(&m[1]))])),
-            ]),
-        ),
-        // I give the <matter> to <Receiver>.   -> a give act carrying the `to` receiver (rule 17/19).
-        (
-            Regex::new(r"^I give the ([\w.-]+) to ([A-Z][\w.-]*)\.$").unwrap(),
-            |m| obj(vec![
-                ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("give")), ("by", jstr("I")),
-                ("of", obj(vec![("kind", jstr("matter")), ("id", jstr(&m[1]))])),
-                ("to", jstr(&m[2])),
-            ]),
-        ),
+        // (`I make <space>` and `I make <space> in <parent>` -> do:create-space are now the WORD-DRIVEN
+        // READER — reader.rs, `make` a Do-verb from do.word. `I stand in <space>` is RETIRED: there is no
+        // `stand`; it is `I move to <space>` (do:move — the move word). Those regexes were DELETED. Only the
+        // coord form (`I make <space> [in <parent>] at <x>, <y>`) stays above — the reader defers it (the
+        // coord's comma splits the clause, so read_act returns empty and falls back here). `I make X, <gloss>`
+        // is unused in the .word.)
+        // (`I give the <matter> to <Receiver>` -> do:give is now the WORD-DRIVEN READER — reader.rs, `give`
+        // a Do-verb from do.word, the `to` role the receiver. Its regex was DELETED.)
         // A <name> is a <isA>.   (generic kind — LAST so `is a space` / `is a able for a Y` win first)
         (
             Regex::new(r"(?i)^A ([\w.-]+) is a (.+?)\.$").unwrap(),

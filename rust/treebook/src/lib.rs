@@ -386,7 +386,7 @@ fn seal_word(
         ("by", jstr(by)),
         ("through", through),
         ("to", jstr(by)),
-        ("story", jstr(STORY)),
+        ("story", jstr(STORY.as_str())),
         ("history", jstr(history)),
         ("deltaF", Json::Arr(vec![fact])),
     ]);
@@ -404,9 +404,10 @@ fn seal_word(
     Ok(fid)
 }
 
-/// The story domain the reader's acts ride (act.story). The runtime story; "localhost" matches the dev
-/// store, the same constant treeibp uses. The library reel id genesis planted under.
-const STORY: &str = "localhost";
+/// The story's NAME/ALIAS the reader's acts ride (act.story) = the library reel id genesis plants under.
+/// Set at first boot via `STORY_DOMAIN` (default "localhost"); NOT a DNS requirement (philosophy/dns.md:
+/// a reality is its I key + a chosen alias resolved through Peering). Matches config.rs + treeibp.
+static STORY: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| std::env::var("STORY_DOMAIN").unwrap_or_else(|_| "localhost".to_string()));
 
 /// Read ONE word (one statement) onto Am's reel, with BOTH guards. `sign` is the optional story-key signer.
 ///
@@ -754,7 +755,7 @@ pub fn full_genesis(
 ) -> Result<BornWorld, GenesisBookError> {
     // 1. IGNITE - the razor-thin egg: the ONE moment that brings the SIGNER into being, the Name "I".
     //    The being "Am" is NOT egg-born; it is the FIRST WORD I read from the book (below).
-    let (planted, key) = treegenesis::plant_and_ignite(dir, STORY)
+    let (planted, key) = treegenesis::plant_and_ignite(dir, STORY.as_str())
         .map_err(|e| GenesisBookError::Message(format!("ignite: {e}")))?;
 
     // the story-key signer — the sig is ALWAYS `by` the Name "I" (I signs everything, whatever being it

@@ -66,6 +66,41 @@ pub fn is_authenticated(conn: u64, name_id: &str) -> bool {
 /// the session is in-memory and dies with the connection; NO chain write.
 pub fn forget_conn(conn: u64) {
     lock(sessions()).remove(&conn);
+    release_being_moments(conn); // the socket dropped -> free every being this conn held present
+}
+
+// ── ONE BEING, ONE OPEN MOMENT (presentism: a being IS a present; it cannot be present twice) ────────
+//
+// A being holds AT MOST ONE open moment at a time. Whoever opens it — a WS connection, or an HTTP
+// moment's borrowed conn — HOLDS the being until that moment is SPENT (an act) or the conn drops. A
+// second party opening a moment for an already-held being is REFUSED (the first keeps it). Enforced in
+// gate_moment, so WebSocket and the HTTP bridge obey the SAME low-level rule (WS is the model; HTTP just
+// rides it). The shared @arrival being is exempt — many beingless visitors ride it at once — and the
+// gate passes it through before reaching here.
+
+fn being_moments() -> &'static Mutex<HashMap<String, u64>> {
+    static B: OnceLock<Mutex<HashMap<String, u64>>> = OnceLock::new();
+    B.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Open (or keep) `being`'s single moment for connection `conn`. True if `conn` now holds it — it was
+/// free, or `conn` already held it (re-opening on the SAME conn is ordinary navigation, not a conflict).
+/// False if ANOTHER conn holds it: the caller must REFUSE the moment (the being is present elsewhere).
+pub fn open_being_moment(being_id: &str, conn: u64) -> bool {
+    let mut map = lock(being_moments());
+    match map.get(being_id) {
+        Some(&owner) if owner != conn => false, // held elsewhere — one being, one open moment
+        _ => {
+            map.insert(being_id.to_string(), conn);
+            true
+        }
+    }
+}
+
+/// Free every being `conn` held — its moment was spent by an act, or the conn dropped. The being is
+/// immediately available to the next opener.
+pub fn release_being_moments(conn: u64) {
+    lock(being_moments()).retain(|_, &mut owner| owner != conn);
 }
 
 struct Stamper {

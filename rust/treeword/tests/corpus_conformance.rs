@@ -33,13 +33,23 @@ fn treeword_matches_the_js_parser_on_the_real_corpus() {
     let vectors = as_arr(get(&doc, "vectors").expect("vectors"));
     assert!(vectors.len() > 200, "expected a large corpus, got {}", vectors.len());
 
-    // INTENTIONAL DIVERGENCES from the legacy JS parser (the name-being refactor, project_name_being_
-    // refactor): the split is a deliberate Rust-side change, NOT a port gap, so the JS golden vector is
-    // knowingly stale for these statements.
-    //   - the genesis verse `I am "what?" I am.`: the JS parser emits the conflated `name:i-am` token; the
-    //     Rust parser splits it into the be:birth of the FIRST BEING "Am" (signed by the Name "I"), carried
-    //     as the verse. The conflated single token is retired here on purpose.
-    let intentional_divergence = |text: &str| -> bool { text.trim() == r#"I am "what?" I am."# };
+    // INTENTIONAL DIVERGENCES from the legacy JS parser — deliberate RUST-SIDE changes (the word-driven
+    // migration, WORD-DRIVEN-PARSER.md), NOT port gaps, so the JS golden vector is knowingly stale:
+    //   - `I am "what?" I am.` — the genesis verse (name-being split): the be:birth of the being "Am".
+    //   - `I make <Capitalized>.` — make-a-BEING is RETIRED -> `I am <Name>` (the word-driven reader).
+    //     `make` is now a Do-verb that makes a SPACE (do.word), so a Capitalized object no longer births.
+    //   - `I make <space>, <gloss>.` — the gloss form is retired (unused in the live .word).
+    //   - `I stand in <space>.` — RETIRED -> `I move to <space>` (there is no `stand`; move is the word).
+    // JS-parity is being DROPPED for the Word layer as forms migrate (JS is dead — Tabor). This list grows
+    // until the JS-parity conformance is replaced by a Word-driven one (does the declared grammar parse the
+    // real .word). The 316 UN-migrated forms still parse byte-identical, which is what this now guards.
+    let intentional_divergence = |text: &str| -> bool {
+        let t = text.trim();
+        t == r#"I am "what?" I am."#
+            || (t.starts_with("I make ") && t[7..].chars().next().map_or(false, |c| c.is_uppercase()))
+            || (t.starts_with("I make ") && t.contains(", "))
+            || t.starts_with("I stand in ")
+    };
 
     let mut pass = 0;
     let mut fails: Vec<String> = Vec::new();

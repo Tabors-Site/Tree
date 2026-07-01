@@ -47,10 +47,12 @@ use treeval::auth::{authorize_decide, DecideArgs};
 // treegenesis::AM_BEING / treewordfold::AM_BEING. (`am` is the being's birth word; i-am/I_AM were drift.)
 const I_AM: &str = "I";
 
-/// The story = the substrate domain (crossOrigin.js: "story — the substrate domain, e.g. tabors.site").
-/// The on-disk store keys act-chains under it AND the act-sig commits to it, so it must be stable. A
-/// config follow-up (env STORY_NAME / the domain); "localhost" matches the dev store on disk.
-const STORY: &str = "localhost";
+/// The story = its NAME/ALIAS (crossOrigin.js: "the substrate domain, e.g. tabors.site"). The on-disk
+/// store keys act-chains under it AND the act-sig commits to it, so it must be stable per store. Set at
+/// first boot via `STORY_DOMAIN` (default "localhost"). NOT a DNS requirement — per philosophy/dns.md a
+/// reality is its I key + a chosen alias resolved through Peering ("whatever name they want"). Matches the
+/// same static in config.rs + treebook (all read the env `.env` loads at startup).
+static STORY: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| std::env::var("STORY_DOMAIN").unwrap_or_else(|_| "localhost".to_string()));
 
 /// Per-reel STRIPE LOCKS (256). A reel is a hash chain: writes to ONE reel MUST serialize (no fork, no
 /// silent same-seq drop), but different reels are independent. So same-reel writers hash to the same
@@ -495,7 +497,7 @@ fn seal_one(
         ("by", jstr(by)),
         ("through", get(spec, "through").cloned().unwrap_or(Json::Null)),
         ("to", get(spec, "to").cloned().unwrap_or(Json::Null)),
-        ("story", jstr(STORY)),
+        ("story", jstr(STORY.as_str())),
         ("history", jstr(history)),
         ("deltaF", Json::Arr(vec![fact])),
     ];

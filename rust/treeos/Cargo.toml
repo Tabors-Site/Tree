@@ -39,6 +39,9 @@ treebook = { path = "../treebook" }
 # being's LLM able reaching its connected provider); the INBOUND wire stays plain WS (IBP). The local
 # http:// path (ollama on the LAN) keeps the zero-dep TcpStream client; https:// routes through ureq.
 ureq = { version = "3", default-features = false, features = ["rustls"] }
+# mDNS / DNS-SD for LAN peering (dns.md phase 1): advertise this reality as `_treeos._tcp` carrying its
+# SIGNED address-fact, and discover peers on the LAN with no DNS. Pure-Rust, no C deps.
+mdns-sd = "0.11"
 
 [dev-dependencies]
 treecognition = { path = "../treecognition" }

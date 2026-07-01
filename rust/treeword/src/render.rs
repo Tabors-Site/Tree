@@ -675,11 +675,12 @@ fn render_act(node: &Json) -> Option<String> {
     }
     match (verb, act) {
         ("be", "birth") if has_id => {
-            // "I make <Capitalized>[, <description>]." — of.id carries the case the parser keys on.
+            // `I am <Name> [in <space>].` — the word-driven birth (make-a-being is retired; `I make` no
+            // longer births). The home rides `in <space>` (params.homeSpace); the being is bare otherwise.
             let id = of_id(node);
-            match get(node, "params").and_then(|p| get(p, "description")) {
-                Some(Json::Str(d)) if !d.is_empty() => Some(format!("I make {id}, {d}.")),
-                _ => Some(format!("I make {id}.")),
+            match get(node, "params").and_then(|p| get(p, "homeSpace")) {
+                Some(Json::Str(h)) if !h.is_empty() => Some(format!("I am {id} in {h}.")),
+                _ => Some(format!("I am {id}.")),
             }
         }
         ("do", "create-space") if has_id => {
@@ -691,7 +692,7 @@ fn render_act(node: &Json) -> Option<String> {
         }
         // the stand-in genesis always has a target (a space to stand in); a bare `do move` (no target)
         // is an imperative deed, not a genesis — let it fall through to render_inline.
-        ("do", "move") if has_id => Some(format!("I stand in {}.", of_id(node))),
+        ("do", "move") if has_id => Some(format!("I move to {}.", of_id(node))),
         ("do", "give") if has_id => Some(format!("I give the {} to {}.", of_id(node), s(node, "to"))),
         _ => None, // a bare do-op deed / be / see / call — rendered by render_effect_word's body path
     }
@@ -746,7 +747,7 @@ mod tests {
     fn genesis_shape_still_renders_to_its_genesis_text() {
         for (src, expect) in [
             ("I make grove.", "I make grove."),
-            ("I stand in grove.", "I stand in grove."),
+            ("I move to grove.", "I move to grove."),
             ("I give the apple to Bob.", "I give the apple to Bob."),
         ] {
             let node = parse(src).remove(0);

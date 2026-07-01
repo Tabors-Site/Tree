@@ -70,7 +70,8 @@ fn story_default(key: &str) -> Option<Json> {
     match key {
         "allowedLlmDomains" | "allowedFrameDomains" | "disabledExtensions" => Some(Json::Arr(vec![])),
         "storyUrl" | "storyLlmConnection" | "timezone" | "seedVersion" | "cookieDomain" => Some(Json::Null),
-        "STORY_NAME" => Some(Json::Str("My Place".to_string())),
+        // STORY_NAME retired: the Story's name IS its alias (STORY_DOMAIN = the library reel id). One name,
+        // not two. (STORY_NAME is still a settable generic config key, just no longer a special default.)
         "uploadEnabled" => Some(Json::Bool(true)),
         "contentRetention" => Some(Json::Str("all".to_string())),
         _ => None,

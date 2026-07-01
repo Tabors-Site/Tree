@@ -44,10 +44,12 @@ fn is_name(s: &str) -> bool {
         && s.chars().all(|c| c.is_alphanumeric() || matches!(c, '-' | '.' | '_'))
 }
 
-/// The prepositional roles a statement carries: `in <space>` (home), etc. (extended as forms migrate).
+/// The prepositional roles a statement carries: `in <space>` (home/parent), `to <space>` (destination),
+/// … (extended as forms migrate).
 #[derive(Default)]
 struct Roles {
     in_space: Option<String>,
+    to_space: Option<String>,
 }
 
 /// Read a Word statement into its IR act(s), resolving verbs from `vocab`. Returns EMPTY if the statement
@@ -116,8 +118,18 @@ fn split_clauses(s: &str) -> Vec<String> {
 /// `I am a judge`, the verse `I am "what?" I am`) is NOT a birth base -> None (parse() falls back).
 fn read_base(clause: &str, vocab: &Vocabulary) -> Option<(Vec<Json>, String)> {
     let tokens: Vec<&str> = clause.split_whitespace().collect();
-    if tokens.len() < 2 || tokens[0] != "I" {
-        return None; // only the signer "I" voice migrated yet (other subjects later)
+    if tokens.len() < 2 {
+        return None;
+    }
+    // `My name is <Name>` -> RENAME the current being (a self `do:set-being` on `name`). First-person
+    // POSSESSIVE: "My" = the being you DRIVE, not "I" the signer — so there is NO `of`; the reducer
+    // short-circuits a self set-being onto $caller. The copula "is" is resolved from the word (a Be present
+    // form). A rename is a self-STATE declared with be, distinct from `I am <Name>` (which BIRTHS a being).
+    if tokens[0] == "My" {
+        return read_rename(&tokens[1..], vocab);
+    }
+    if tokens[0] != "I" {
+        return None; // only the "I" signer + "My" possessive voices migrated yet (other subjects later)
     }
     // resolve the verb FROM THE WORD: the surface present shape -> its verb (am -> be, make -> make).
     let verb = vocab.verb_by_present(tokens[1])?;
@@ -137,15 +149,111 @@ fn read_base(clause: &str, vocab: &Vocabulary) -> Option<(Vec<Json>, String)> {
         }
         // `I make <space> [in <parent>]` -> do:create-space (make is a Do form). The op name "create-space"
         // is DRIFTED (flagged for the op-alignment pass — the word is "make"); the object is a SPACE.
-        Some(Family::Do) if verb.present == "make" => {
-            let space = strip_article(&object);
-            if !is_name(&space) {
+        Some(Family::Do) if verb.present.as_str() == "make" => {
+            // a SPACE id is lowercase (`heaven`, `root`) — a Space Name is Capitalized in Word but its id
+            // canonicalizes to lowercase ("the id derivation lowercases"). So accept any case here (not
+            // the Capitalized `is_name`, which is for beings) and lowercase the id.
+            let space = strip_article(&object).to_lowercase();
+            if !is_space_id(&space) {
                 return None;
             }
             Some((vec![make_space_act(&space, &roles)], space))
         }
+        // `I move to <space>` -> do:move to the destination space (move is a Do; verbs.word "Move is a
+        // verb"). We already have move words for spaces + coords — there is NO `stand` (Tabor). The `to`
+        // role is the destination (its id lowercases).
+        Some(Family::Do) if verb.present.as_str() == "move" => {
+            let target = roles.to_space.as_ref()?.to_lowercase();
+            if !is_space_id(&target) {
+                return None;
+            }
+            Some((vec![move_act(&target)], target))
+        }
+        // `I give the <matter> to <Receiver>` -> do:give the matter to the receiver being (give is a Do;
+        // do.word "to give ... are dos"). The object is the matter (id lowercases); the `to` role is the
+        // receiving being (a Capitalized Name, kept as-is).
+        Some(Family::Do) if verb.present.as_str() == "give" => {
+            let matter = strip_article(&object).to_lowercase();
+            let to = roles.to_space.as_ref()?;
+            if !is_space_id(&matter) || !is_name(to) {
+                return None;
+            }
+            Some((vec![give_act(&matter, to)], matter))
+        }
         _ => None, // other verbs/families not migrated to the reader yet -> parse() falls back to the regex
     }
+}
+
+/// `My name is <Name>` -> ([do:set-being name=<Name>], <Name>) — a self RENAME. Matches the retired regex
+/// EXACTLY: kind:act, verb:do, act:set-being, params:{field, value}, and NO `by`/`of` (the subject is the
+/// actor's own being, resolved to $caller at rasterize). `<Name>` is Capitalized (a Name), per the doctrine.
+///
+/// FLAGGED STOPGAP (the SAME seam as be_act's birth, honestly marked): "is" is resolved from the word and
+/// the sentence is split generically — that is FLOOR. But the MAPPING "a be-copula on a being's field SETS
+/// that field" is MEANING (be's own definition), and by the leash it belongs in be.word ("the present of be
+/// on a being's <field> is to set that field"), which would also fold birth (be on a being = birth it). It
+/// lowers a be-form to a `do:set-being` op just as the able form lowers `be`+article to `do:grant-able` —
+/// both bound for the op/be.word pass. Only `name` is migrated (the form that existed); the general
+/// `My <field> is <value>` (any field, typed by the reducer's fold — "flat storage, typed fold") awaits it.
+fn read_rename(rest: &[&str], vocab: &Vocabulary) -> Option<(Vec<Json>, String)> {
+    // shape: `name is <Value>` — field, copula, value (exactly three tokens).
+    if rest.len() != 3 || rest[0] != "name" {
+        return None;
+    }
+    let verb = vocab.verb_by_present(rest[1])?; // the copula "is", resolved FROM THE WORD
+    if !matches!(verb.family, Some(Family::Be)) {
+        return None; // a Be copula (is/am/are) only — "My name <verb> X" for a non-be verb is not a rename
+    }
+    let value = rest[2];
+    if !is_name(value) {
+        return None; // the new name is a Name (Capitalized)
+    }
+    Some((vec![set_being_act("name", value)], value.to_string()))
+}
+
+/// A self `do:set-being <field> = <value>` (no `by`/`of` — resolves onto $caller at rasterize). The shape
+/// the retired `My name is <Name>` regex laid.
+fn set_being_act(field: &str, value: &str) -> Json {
+    obj(vec![
+        ("kind", jstr("act")),
+        ("verb", jstr("do")),
+        ("act", jstr("set-being")),
+        ("params", obj(vec![("field", jstr(field)), ("value", jstr(value))])),
+    ])
+}
+
+/// `I give the <matter> to <Receiver>` -> do:give the matter to a receiver being. Matches the retired
+/// regex: verb:do, act:give, of:{matter, id}, to:<Receiver>.
+fn give_act(matter: &str, to: &str) -> Json {
+    obj(vec![
+        ("kind", jstr("act")),
+        ("verb", jstr("do")),
+        ("act", jstr("give")),
+        ("by", jstr("I")),
+        ("of", obj(vec![("kind", jstr("matter")), ("id", jstr(matter))])),
+        ("to", jstr(to)),
+    ])
+}
+
+/// `I move to <space>` -> do:move to the destination space. (Same shape the retired `I stand in <space>`
+/// produced: verb:do, act:move, of:{space, id}. `stand` is gone — move is the word.)
+fn move_act(target: &str) -> Json {
+    obj(vec![
+        ("kind", jstr("act")),
+        ("verb", jstr("do")),
+        ("act", jstr("move")),
+        ("by", jstr("I")),
+        ("of", obj(vec![("kind", jstr("space")), ("id", jstr(target))])),
+    ])
+}
+
+/// A space id: a single lowercase word (letters/digits + `-._`), not an article. (Space Names are
+/// Capitalized in Word; the id lowercases — this checks the lowercased id.)
+fn is_space_id(s: &str) -> bool {
+    !s.is_empty()
+        && !is_article(s)
+        && s.chars().next().map_or(false, |c| c.is_alphabetic())
+        && s.chars().all(|c| c.is_alphanumeric() || matches!(c, '-' | '.' | '_'))
 }
 
 /// Drop a leading article (a/an/the) from an object — `the root` -> `root`. (`I make the root` names the
@@ -166,7 +274,7 @@ fn strip_article(s: &str) -> String {
 fn make_space_act(space: &str, roles: &Roles) -> Json {
     let mut params: Vec<(&str, Json)> = vec![];
     if let Some(parent) = &roles.in_space {
-        params.push(("parent", jstr(parent)));
+        params.push(("parent", jstr(&parent.to_lowercase()))); // a space id lowercases
     }
     obj(vec![
         ("kind", jstr("act")),
@@ -225,10 +333,11 @@ fn read_roles(rest: &[&str]) -> Roles {
         }
         if j < rest.len() {
             let arg = rest[j].to_string();
-            if prep == "in" {
-                roles.in_space = Some(arg);
+            match prep.as_str() {
+                "in" => roles.in_space = Some(arg),
+                "to" => roles.to_space = Some(arg),
+                _ => {} // (with/at/on roles are read as later forms migrate.)
             }
-            // (to/with/at/on roles are read as later forms migrate.)
         }
         i = j + 1;
     }
@@ -354,10 +463,6 @@ mod tests {
     #[test]
     fn reads_i_make_space_off_the_word() {
         let v = full_vocab();
-        // DEBUG: pinpoint the resolve.
-        assert!(v.verb_by_present("make").is_some(), "DEBUG: make resolves as a verb");
-        assert_eq!(v.verb_by_present("make").and_then(|x| x.family), Some(Family::Do), "DEBUG: make is a Do");
-        assert_eq!(v.verb_by_present("make").map(|x| x.present.as_str()), Some("make"), "DEBUG: present is make");
         // `I make heaven in root.` -> do:create-space heaven, parent root. `make` is a Do verb (do.word);
         // the verb decides being-vs-space -> a SPACE (not a being).
         let acts = read_act("I make heaven in root.", &v);
@@ -371,5 +476,39 @@ mod tests {
         let r = read_act("I make the root.", &v);
         assert_eq!(of_id(&r[0]), Some("root"));
         assert!(get(&r[0], "params").and_then(|p| gs(p, "parent")).is_none(), "no `in` -> no parent");
+
+        // `I move to heaven.` -> do:move to heaven (the retired `I stand in` is now move; no `stand`).
+        let mv = read_act("I move to heaven.", &v);
+        assert_eq!(mv.len(), 1, "one move: {mv:?}");
+        assert_eq!(gs(&mv[0], "verb"), Some("do"));
+        assert_eq!(gs(&mv[0], "act"), Some("move"));
+        assert_eq!(of_id(&mv[0]), Some("heaven"), "the `to` role -> the destination space");
+
+        // `I give the apple to Bob.` -> do:give the matter `apple` to the receiver being `Bob`.
+        let g = read_act("I give the apple to Bob.", &v);
+        assert_eq!(g.len(), 1, "one give: {g:?}");
+        assert_eq!(gs(&g[0], "act"), Some("give"));
+        assert_eq!(get(&g[0], "of").and_then(|o| gs(o, "kind")), Some("matter"), "give -> a matter");
+        assert_eq!(of_id(&g[0]), Some("apple"));
+        assert_eq!(gs(&g[0], "to"), Some("Bob"), "the `to` role -> the receiver being (kept Capitalized)");
+    }
+
+    #[test]
+    fn reads_my_name_is_as_a_rename() {
+        let v = full_vocab();
+        // `My name is Bob.` -> a self do:set-being name=Bob (RENAME, not a birth). "My" = first-person
+        // possessive; the copula "is" resolves to Be from the word. No `by`/`of` (resolves onto $caller).
+        let r = read_act("My name is Bob.", &v);
+        assert_eq!(r.len(), 1, "one rename: {r:?}");
+        assert_eq!(gs(&r[0], "verb"), Some("do"));
+        assert_eq!(gs(&r[0], "act"), Some("set-being"));
+        assert_eq!(get(&r[0], "params").and_then(|p| gs(p, "field")), Some("name"), "the name field");
+        assert_eq!(get(&r[0], "params").and_then(|p| gs(p, "value")), Some("Bob"), "the new name");
+        assert!(get(&r[0], "of").is_none(), "no `of` — a self set-being resolves onto $caller");
+        assert!(get(&r[0], "by").is_none(), "no `by` — matches the retired regex shape exactly");
+        // `My name is Bob` must NOT be read as a BIRTH of "name" (the `I am <Name>` path) — it is a rename.
+        assert_ne!(gs(&r[0], "act"), Some("birth"), "a rename is never a birth");
+        // a non-`name` field or a non-Be verb is not this form -> falls back (empty).
+        assert!(read_act("My home is heaven.", &v).is_empty(), "only `name` migrated (other fields later)");
     }
 }

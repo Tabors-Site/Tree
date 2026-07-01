@@ -15,6 +15,17 @@ pub struct Request {
     pub path: String,
     pub body: Vec<u8>,
     pub ws_key: Option<String>,
+    /// every request header as (lowercased-name, value) — the HTTP→IBPA bridge reads `authorization`
+    /// (name+password), the `x-moment` open-moment token, and the LEFT-stance `x-history`/`x-being`/… .
+    pub headers: Vec<(String, String)>,
+}
+
+impl Request {
+    /// A request header by case-insensitive name (the first, if repeated).
+    pub fn header(&self, name: &str) -> Option<&str> {
+        let name = name.to_ascii_lowercase();
+        self.headers.iter().find(|(k, _)| *k == name).map(|(_, v)| v.as_str())
+    }
 }
 
 fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
@@ -43,12 +54,19 @@ pub fn read_request(stream: &mut TcpStream) -> Option<Request> {
     let method = rl.next()?.to_string();
     let path = rl.next()?.to_string();
     let (mut content_length, mut ws_key) = (0usize, None);
+    let mut headers: Vec<(String, String)> = Vec::new();
     for line in lines {
-        let lower = line.to_ascii_lowercase();
-        if let Some(v) = lower.strip_prefix("content-length:") {
-            content_length = v.trim().parse().unwrap_or(0);
-        } else if lower.starts_with("sec-websocket-key:") {
-            ws_key = line.splitn(2, ':').nth(1).map(|x| x.trim().to_string());
+        if line.is_empty() {
+            continue;
+        }
+        if let Some((k, v)) = line.split_once(':') {
+            let (k, v) = (k.trim().to_ascii_lowercase(), v.trim().to_string());
+            if k == "content-length" {
+                content_length = v.parse().unwrap_or(0);
+            } else if k == "sec-websocket-key" {
+                ws_key = Some(v.clone());
+            }
+            headers.push((k, v));
         }
     }
     let mut body = buf[header_end..].to_vec();
@@ -59,7 +77,7 @@ pub fn read_request(stream: &mut TcpStream) -> Option<Request> {
         }
         body.extend_from_slice(&tmp[..n]);
     }
-    Some(Request { method, path, body, ws_key })
+    Some(Request { method, path, body, ws_key, headers })
 }
 
 pub fn respond(stream: &mut TcpStream, status: &str, content_type: &str, body: &str) {

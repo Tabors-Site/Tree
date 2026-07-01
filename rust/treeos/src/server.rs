@@ -27,15 +27,32 @@ pub fn run() {
     load_dotenv(); // first-boot settings (STORY_DOMAIN = the story's name/alias, PORT, …) reach the runtime
     let args: Vec<String> = env::args().collect();
     if args.get(1).map(String::as_str) == Some("serve") {
-        let addr = args.get(2).cloned().unwrap_or_else(|| "127.0.0.1:7070".to_string());
-        let root = args.get(3).cloned().unwrap_or_else(|| "store/past".to_string());
+        // arg wins, else the .env defaults (PORT, STORE_NAME), else the built-ins.
+        let addr = args.get(2).cloned().unwrap_or_else(default_addr);
+        let root = args.get(3).cloned().unwrap_or_else(default_store);
+        // advertise this reality on the LAN (dns.md phase 1) — best-effort; keep the daemon alive for the
+        // serve loop so peers can discover us by name, no DNS.
+        let reality = env::var("STORY_DOMAIN").unwrap_or_else(|_| "localhost".to_string());
+        let port = addr.rsplit(':').next().and_then(|p| p.parse().ok()).unwrap_or(7070);
+        let _mdns = crate::mdns::advertise(&reality, port);
         serve(&addr, Path::new(&root));
+    } else if args.get(1).map(String::as_str) == Some("discover") {
+        // find TreeOS realities on the LAN, verify each signed address-fact, pin the verified ones:
+        //   treeos discover [seconds]
+        let secs = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(3);
+        let peers = crate::mdns::discover(secs, true);
+        if peers.is_empty() {
+            println!("no TreeOS realities found on the LAN");
+        }
+        for p in &peers {
+            println!("{}", treehash::stringify(p));
+        }
     } else if args.get(1).map(String::as_str) == Some("genesis") {
         // (RE)PLANT A FRESH WORLD from the seed:  treeos genesis [store-dir] [seed-dir]
         // The store is gitignored, so a delete is recovered here — the I reads the whole book (vocabulary
         // coined, spaces + delegates born, grants run) via treebook::full_genesis. This is pure EDGE: the
         // CLI wiring the genesis WORDS (genesis-spaces/-delegates/-home.word) to disk; it decides nothing.
-        let store = args.get(2).cloned().unwrap_or_else(|| "store/past".to_string());
+        let store = args.get(2).cloned().unwrap_or_else(default_store);
         let seed = args.get(3).cloned().unwrap_or_else(|| "seed".to_string());
         std::process::exit(plant_world(Path::new(&store), Path::new(&seed)));
     } else if args.get(1).map(String::as_str) == Some("peer-fact") {
@@ -81,6 +98,18 @@ fn load_dotenv() {
             }
         }
     }
+}
+
+/// The serve address when no CLI arg: `127.0.0.1:<PORT>` (PORT from `.env`, default 7070).
+fn default_addr() -> String {
+    let port = env::var("PORT").ok().filter(|p| !p.is_empty()).unwrap_or_else(|| "7070".to_string());
+    format!("127.0.0.1:{port}")
+}
+
+/// The store dir when no CLI arg: `store/<STORE_NAME>` (STORE_NAME from `.env`, default "past").
+fn default_store() -> String {
+    let name = env::var("STORE_NAME").ok().filter(|n| !n.is_empty()).unwrap_or_else(|| "past".to_string());
+    format!("store/{name}")
 }
 
 // ── genesis: (re)plant a fresh world from the seed's genesis book ─────────────
@@ -262,6 +291,17 @@ fn route(req: &Request, root: &Path) -> (&'static str, &'static str, String) {
     }
     if req.method == "POST" && segs == ["cognize"] {
         return cognize::cognize_seam(&req.body, root);
+    }
+    // IBP OVER HTTP (the bridge): a GET opens a moment of the address (the RIGHT stance), a POST acts one
+    // Word on the open moment it returned. A pure translator over the SAME route (`handle_wire_conn`); no
+    // logic rebuilt. `GET /ibp/<address>` · `POST /ibp` (body = one Word, `X-Moment` = the moment token).
+    if segs.first() == Some(&"ibp") {
+        if get {
+            return crate::ibp_http::get_moment(req, root);
+        }
+        if req.method == "POST" && segs.len() == 1 {
+            return crate::ibp_http::post_act(req, root);
+        }
     }
     // SEE ops are MOMENTS now, not REST routes — reach classify-matter / address over WS:
     //   {"verb":"moment","op":"classify-matter","args":{…}}
