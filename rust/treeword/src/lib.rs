@@ -210,9 +210,11 @@ fn rules() -> &'static [(Regex, Builder)] {
             |m| obj(vec![("kind", jstr(&m[1].to_lowercase())), ("subject", Json::Null), ("items", items(&m[2]))]),
         ),
         // I am "what?" I am.   (the genesis verse)
+        // TODO genesis verse: restructure as Am (be:birth, the first being) wrapped by I (the
+        // name/signer) -- part of the name-being refactor; kept as "i-am" until that lands.
         (
             Regex::new(r#"(?i)^I am "what\?" I am\.$"#).unwrap(),
-            |_m| obj(vec![("kind", jstr("act")), ("verb", jstr("name")), ("act", jstr("I")), ("by", jstr("I"))]),
+            |_m| obj(vec![("kind", jstr("act")), ("verb", jstr("name")), ("act", jstr("i-am")), ("by", jstr("I"))]),
         ),
         // I make <Capitalized>[, <description>].   -> birth a being
         (

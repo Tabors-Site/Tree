@@ -185,10 +185,9 @@ impl Portal {
 
     /// Build a moment message for an address, SIGNED with the active Name's key-proof so the server
     /// authenticates it at the moment (anonymous/I moments carry no proof and need none).
-    fn moment_msg(&self, address: &str) -> String {
-        let actor = self.actor();
-        let mut req = wire::proto::moment_req(address, &self.history, &actor);
-        if let Some(name_id) = wire::proto::actor_name_id(&actor) {
+    /// Sign a moment req (if a Name is active — the server verifies the key-proof at the moment) + stringify.
+    fn finalize_moment(&self, mut req: Json) -> String {
+        if let Some(name_id) = wire::proto::actor_name_id(&self.actor()) {
             if let Some(sig) = self.vault.sign_moment(&name_id, &req) {
                 if let Json::Obj(e) = &mut req {
                     e.push(("proof".to_string(), Json::Obj(vec![("value".to_string(), Json::Str(sig))])));
@@ -196,6 +195,33 @@ impl Portal {
             }
         }
         treehash::stringify(&req)
+    }
+
+    fn moment_msg(&self, address: &str) -> String {
+        let mut req = wire::proto::moment_req(address, &self.history, &self.actor());
+        // time-travel: perceive the place AS OF a past ord (the history scrubber).
+        if let Some(at) = self.st.at_ord {
+            if let Json::Obj(e) = &mut req {
+                e.push(("at".to_string(), Json::Num(at)));
+            }
+        }
+        self.finalize_moment(req)
+    }
+
+    /// Perceive the RAIN: your Name's beings (as a driven being → its Name via trueName), else story-wide.
+    pub fn perceive_rain(&mut self) {
+        let addr = match &self.active_being {
+            Some((_, name)) => format!("@{name}"),
+            None => "/".to_string(),
+        };
+        let mut req = wire::proto::moment_req(&addr, &self.history, &self.actor());
+        if let Json::Obj(e) = &mut req {
+            e.push(("rain".to_string(), Json::Bool(true)));
+        }
+        let msg = self.finalize_moment(req);
+        if let Some(w) = &self.wire {
+            w.send(msg);
+        }
     }
 
     /// Speak one Word (act) AS the active being. The result returns as the live re-rasterized moment.
@@ -250,7 +276,15 @@ impl eframe::App for Portal {
         for t in incoming {
             let rx = wire::proto::parse_received(&t);
             match rx.kind {
-                wire::proto::RxKind::Moment => self.st.moment = Some(rx),
+                wire::proto::RxKind::Moment => {
+                    // read the timeline's right edge (now) from the scene, for the history scrubber
+                    if let Some(v) = wire::proto::get(&rx.raw, "view") {
+                        if let Some(Json::Num(o)) = wire::proto::get(v, "ord") {
+                            self.st.now_ord = *o;
+                        }
+                    }
+                    self.st.moment = Some(rx);
+                }
                 wire::proto::RxKind::Act => {
                     let ok = matches!(wire::proto::get(&rx.raw, "ok"), Some(Json::Bool(true)));
                     self.st.log.push(if ok { "act ok".into() } else { format!("act: {}", short_reason(&rx.raw)) });
@@ -335,10 +369,15 @@ impl eframe::App for Portal {
             }
         }
 
-        // switching to the Story view takes a story moment (the kernel render of a name's Words)
+        // switching view re-perceives what that view needs (story render / rain / the place scene)
         if self.st.view != self.last_view {
-            if self.st.view == View::Story {
-                self.perceive_story();
+            match self.st.view {
+                View::Story => self.perceive_story(),
+                View::Rain => self.perceive_rain(),
+                View::Map2d | View::World3d => {
+                    let a = self.st.address.clone();
+                    self.navigate(&a, false);
+                }
             }
             self.last_view = self.st.view;
         }
@@ -348,10 +387,38 @@ impl eframe::App for Portal {
         chrome::word_bar::show(ctx, self); // very bottom
         chrome::history_bar::show(ctx, self); // above the word bar
 
+        // the Rain side panel: a clicked being's column → name + jump into 2D/Story or drive it
+        if let Some((bid, bname)) = self.st.side_being.clone() {
+            egui::SidePanel::right("rain_side").resizable(false).default_width(230.0).show(ctx, |ui| {
+                ui.add_space(8.0);
+                ui.label(egui::RichText::new(format!("@{bname}")).size(18.0).strong());
+                ui.label(egui::RichText::new(&bid[..bid.len().min(16)]).monospace().small().weak());
+                ui.separator();
+                ui.label(egui::RichText::new("its projection in your language lands with the story render.").small().weak());
+                ui.add_space(8.0);
+                if ui.button("drive this being").clicked() {
+                    self.drive_being(&bid, &bname);
+                }
+                if ui.button("enter Story").clicked() {
+                    self.st.view = View::Story;
+                    self.st.side_being = None;
+                }
+                if ui.button("enter 2D").clicked() {
+                    self.st.view = View::Map2d;
+                    self.st.side_being = None;
+                }
+                ui.add_space(6.0);
+                if ui.button("close").clicked() {
+                    self.st.side_being = None;
+                }
+            });
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| match self.st.view {
             View::Map2d => views::map2d::show(ui, self),
             View::Story => views::story::show(ui, self),
             View::World3d => views::world3d::show(ui, self),
+            View::Rain => views::rain::show(ui, self),
         });
     }
 }

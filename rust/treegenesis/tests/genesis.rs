@@ -18,9 +18,7 @@
 // genesis with no exemption.
 
 use treefold::fold;
-use treegenesis::{
-    load_or_mint_i_key, plant_genesis, GenesisError, Planted, I_NAME_DEFAULT, I_NAME_LEGACY,
-};
+use treegenesis::{load_or_mint_i_key, plant_genesis, GenesisError, Planted};
 use treestore::{
     read_act_chain_file, read_reel_file, verify_act_chain, verify_fact_chain, Json, GENESIS_PREV,
 };
@@ -65,14 +63,14 @@ fn canon(v: &Json) -> String {
     treestore::canonicalize(v)
 }
 
-/// Plant a genesis under `i_name` into a fresh temp dir and return (dir, planted, story_pub).
-fn plant(tag: &str, i_name: &str, story_domain: &str) -> (std::path::PathBuf, Planted, [u8; 32]) {
+/// Plant a genesis (the I-name is always "I") into a fresh temp dir and return (dir, planted, story_pub).
+fn plant(tag: &str, story_domain: &str) -> (std::path::PathBuf, Planted, [u8; 32]) {
     let dir = std::env::temp_dir().join(format!("treegenesis-{tag}"));
     let _ = std::fs::remove_dir_all(&dir);
     // Mint the I key (the story key) under the store's own .story dir. First boot -> minted + written.
     let key = load_or_mint_i_key(&dir.join(".story")).expect("mint the I key");
     assert!(key.minted, "first boot mints the story key");
-    let planted = plant_genesis(&dir, story_domain, i_name, &key, None).expect("plant genesis");
+    let planted = plant_genesis(&dir, story_domain, &key, None).expect("plant genesis");
     (dir, planted, key.raw_pub)
 }
 
@@ -81,7 +79,7 @@ fn plant(tag: &str, i_name: &str, story_domain: &str) -> (std::path::PathBuf, Pl
 #[test]
 fn plants_folds_verifies_and_signs_genesis() {
     let story_domain = "localhost";
-    let (dir, planted, story_pub) = plant("full", I_NAME_DEFAULT, story_domain);
+    let (dir, planted, story_pub) = plant("full", story_domain);
 
     assert_eq!(planted.i_name, "I", "default I-name is I");
     assert_eq!(planted.being_id, "I", "the I-Am's id IS the I-name");
@@ -250,7 +248,7 @@ fn plants_folds_verifies_and_signs_genesis() {
 #[test]
 fn re_plant_is_refused_and_genesis_is_immutable() {
     let story_domain = "localhost";
-    let (dir, planted, _pub) = plant("immutable", I_NAME_DEFAULT, story_domain);
+    let (dir, planted, _pub) = plant("immutable", story_domain);
 
     // capture the committed bytes of fact #0 on both reels + BOTH acts.
     let lib0 = canon(&read_reel_file(&dir, "0", "library", story_domain, None, None)[0]);
@@ -261,7 +259,7 @@ fn re_plant_is_refused_and_genesis_is_immutable() {
     // a SECOND plant (same key) must refuse - the being reel is not empty.
     let key = load_or_mint_i_key(&dir.join(".story")).expect("reload the I key");
     assert!(!key.minted, "the key was already on disk (loaded, not re-minted)");
-    let again = plant_genesis(&dir, story_domain, I_NAME_DEFAULT, &key, None);
+    let again = plant_genesis(&dir, story_domain, &key, None);
     assert!(
         matches!(again, Err(GenesisError::AlreadyPlanted)),
         "a second plant is refused (AlreadyPlanted)"
@@ -283,72 +281,3 @@ fn re_plant_is_refused_and_genesis_is_immutable() {
     println!("  treegenesis: re-plant refused + genesis immutable (two acts)  OK");
 }
 
-/// THE I-NAME IS PARAMETERIZED: the default is now "I" (the correct name), but a caller MAY still plant
-/// under the LEGACY "i-am" label to inter-operate with a pre-existing JS store. Planting under "i-am"
-/// folds + verifies + signs exactly the same TWO-moment shape, with the being id / names key / sig.by all
-/// = "i-am" instead of "I". This proves the I-name is parameterized end-to-end (not hardcoded), the
-/// legacy label the default leaves behind at "i-am".
-#[test]
-fn plants_under_the_legacy_i_name() {
-    let story_domain = "treeos.ai";
-    let (dir, planted, story_pub) = plant("legacy", I_NAME_LEGACY, story_domain);
-
-    assert_eq!(planted.i_name, "i-am", "planted under the legacy I-name");
-    assert_eq!(planted.being_id, "i-am", "the being id IS the legacy I-name");
-
-    // the library catalog keys by "i-am" under the legacy label.
-    let lib_facts = read_reel_file(&dir, "0", "library", story_domain, None, None);
-    let lib_state = fold("library", &lib_facts);
-    assert!(
-        dig(&lib_state, &["names", "i-am"]).is_some(),
-        "the names catalog keys by the legacy I-name: {}",
-        canon(&lib_state)
-    );
-    assert!(
-        matches!(dig(&lib_state, &["names", "i-am", "parentNameId"]), Some(Json::Null)),
-        "still the root name under the legacy label"
-    );
-
-    // the being folds parentless under "i-am"; its fact records be:birth.
-    let be_facts = read_reel_file(&dir, "0", "being", "i-am", None, None);
-    assert_eq!(
-        fact_verb_act(&be_facts[0]),
-        Some(("be".to_string(), "birth".to_string())),
-        "MOMENT 2 = be:birth under the legacy label"
-    );
-    let be_state = fold("being", &be_facts);
-    assert!(matches!(get(&be_state, "parentBeingId"), Some(Json::Null)), "parentless under the legacy label");
-    assert_eq!(sget(&be_state, "trueName").as_deref(), Some("i-am"), "trueName = i-am");
-    // MOMENT 1's Word under the legacy label: the library fact records name:declare.
-    assert_eq!(
-        fact_verb_act(&lib_facts[0]),
-        Some(("name".to_string(), "declare".to_string())),
-        "MOMENT 1 = name:declare under the legacy label"
-    );
-
-    // TWO acts under "i-am", in order; both sigs by "i-am" verify against the story pubkey (the story
-    // signer, whatever the name string is - the label does not change the key, only the on-disk label).
-    let acts = read_act_chain_file(&dir, story_domain, "0", "i-am");
-    assert_eq!(acts.len(), 2, "two genesis acts under the legacy I-name");
-    let name_act = &acts[0];
-    let being_act = &acts[1];
-    assert_eq!(sget(name_act, "p").as_deref(), Some(GENESIS_PREV), "the I act chains from GENESIS_PREV under the legacy label");
-    assert_eq!(sget(being_act, "p").as_deref(), Some(planted.name_act_id.as_str()), "be:birth chains off name:declare");
-
-    let name_sig_value = sget(get(name_act, "sig").unwrap(), "value").unwrap();
-    let being_sig_value = sget(get(being_act, "sig").unwrap(), "value").unwrap();
-    assert_eq!(sget(get(name_act, "sig").unwrap(), "by").as_deref(), Some("i-am"), "name sig by the legacy name");
-    assert_eq!(sget(get(being_act, "sig").unwrap(), "by").as_deref(), Some("i-am"), "being sig by the legacy name");
-    assert!(
-        treesign::verify_act_sig(&story_pub, name_act, &[planted.library_fact_id.clone()], &name_sig_value),
-        "the legacy-i-am name:declare act verifies against the story pubkey"
-    );
-    assert!(
-        treesign::verify_act_sig(&story_pub, being_act, &[planted.being_fact_id.clone()], &being_sig_value),
-        "the legacy-i-am be:birth act verifies against the story pubkey"
-    );
-    assert!(verdict_ok(&verify_act_chain(&acts)), "the legacy two-act act-chain verifies");
-
-    let _ = std::fs::remove_dir_all(&dir);
-    println!("  treegenesis: I-name parameterized (plant under legacy \"i-am\") TWO moments fold + verify + both sigs  OK");
-}

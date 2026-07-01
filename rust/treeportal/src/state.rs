@@ -10,6 +10,7 @@ pub enum View {
     Map2d,
     Story,
     World3d,
+    Rain,
 }
 
 impl View {
@@ -18,6 +19,7 @@ impl View {
             View::Map2d => "2D",
             View::Story => "Story",
             View::World3d => "3D",
+            View::Rain => "Rain",
         }
     }
 }
@@ -40,6 +42,12 @@ pub struct PortalState {
     /// the LEFT stance buffer (who you are: `@being#history/path`) — editable; editing #history switches
     /// your branch, @being switches the being you drive, the path moves your position.
     pub left_stance: String,
+    /// the history scrubber: `at_ord` = a past global ord being viewed (None = live/now); `now_ord` = the
+    /// world's now (the timeline's right edge), read from each scene. Shared across all views.
+    pub at_ord: Option<f64>,
+    pub now_ord: f64,
+    /// the being whose Rain column is selected (beingId, name) — opens the side panel.
+    pub side_being: Option<(String, String)>,
     /// the MANUAL-mode composer (the keyboard ACT/FACT model — words matter most).
     pub composer: Composer,
     /// word-at-a-time sending (the user's preference): each sealed word is its own act. False batches
@@ -67,6 +75,9 @@ impl Default for PortalState {
             nav_stack: vec!["/".to_string()],
             nav_index: 0,
             left_stance: "@I#0".to_string(),
+            at_ord: None,
+            now_ord: 1.0,
+            side_being: None,
             composer: Composer::default(),
             per_word: true,
             moment: None,

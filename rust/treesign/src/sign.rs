@@ -20,7 +20,7 @@ use base64::Engine;
 use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 
 use crate::nameid::{encode_key_id, key_id_to_pubkey};
-use crate::payload::{build_act_sig_payload, build_act_sig_payload_legacy, build_moment_proof_payload};
+use crate::payload::{build_act_sig_payload, build_moment_proof_payload};
 use treehash::{canonicalize, parse, Json};
 
 /// A name keypair rebuilt from a seed: the 32-byte seed, the raw 32-byte public
@@ -90,48 +90,26 @@ pub fn verify_with_pubkey(raw_pub: &[u8; 32], payload_json: &str, sig_b64: &str)
     verify_with_pubkey_str(raw_pub, payload_json, sig_b64)
 }
 
-/// Verify an act's signature against a raw public key, TRYING THE PURE PAYLOAD
-/// FIRST and falling back to the LEGACY (wall-clock-carrying) payload only if the
-/// pure one fails. This is the READ path: it transparently accepts BOTH new pure
-/// Rust acts (clock-free, NO `time`) AND pre-existing JS-signed acts (which baked
-/// the act's wall-clock `at` into the sig as `time`), while SIGNING is ALWAYS
-/// pure (new acts never use the legacy shape). The pure-vs-legacy split is the
-/// `time` field alone (see payload.rs).
-///
-/// `act` + `fact_ids` are rebuilt into the canonical payload here (the caller
-/// does not pre-build it): pure via `build_act_sig_payload`, legacy via
-/// `build_act_sig_payload_legacy`. `raw_pub` is the signer's 32-byte ed25519 key
-/// - for a Name-signed act that is `key_id_to_pubkey(sig.by)`; for a story
-/// "i-am" act it is the story public key (resolved by the caller, since "i-am"
-/// is not a pubkey id).
-///
-/// Returns true on the FIRST shape that verifies (pure preferred), false if
-/// neither does. A new Rust act verifies on the pure attempt and never builds the
-/// legacy payload at all; an old JS act fails pure and verifies on the legacy
-/// fallback - the one place the wall-clock-bearing shape is still honored.
+/// Verify an act's signature against a raw public key over the clock-free act-sig
+/// payload. `act` + `fact_ids` are rebuilt into the canonical payload here (the
+/// caller does not pre-build it) via `build_act_sig_payload`. `raw_pub` is the
+/// signer's 32-byte ed25519 key - for a Name-signed act that is
+/// `key_id_to_pubkey(sig.by)`; for a story "i-am" act it is the story public key
+/// (resolved by the caller, since "i-am" is not a pubkey id).
 pub fn verify_act_sig(
     raw_pub: &[u8; 32],
     act: &Json,
     fact_ids: &[String],
     sig_b64: &str,
 ) -> bool {
-    // PURE first (the going-forward, clock-free shape). New Rust acts land here.
-    let pure = build_act_sig_payload(act, fact_ids);
-    if verify_value(raw_pub, &pure, sig_b64) {
-        return true;
-    }
-    // LEGACY fallback (the old JS shape with the wall-clock `time`). ONLY old
-    // JS-signed acts that baked `at` into the sig reach this; new acts never do.
-    let legacy = build_act_sig_payload_legacy(act, fact_ids);
-    verify_value(raw_pub, &legacy, sig_b64)
+    let payload = build_act_sig_payload(act, fact_ids);
+    verify_value(raw_pub, &payload, sig_b64)
 }
 
 /// The Name-id peer of `verify_act_sig`: resolve the signer's public key from a
-/// Name id (which IS the public key) and verify the act PURE-then-LEGACY. Returns
-/// false if the id does not decode to a key (e.g. the literal "i-am", whose key
-/// is the story key, not a pubkey id - use `verify_act_sig` with the story pubkey
-/// for that). Same try-both read path as `verify_act_sig`: pure accepted first,
-/// legacy only as a fallback for old JS acts.
+/// Name id (which IS the public key) and verify the act. Returns false if the id
+/// does not decode to a key (e.g. the literal "i-am", whose key is the story key,
+/// not a pubkey id - use `verify_act_sig` with the story pubkey for that).
 pub fn verify_act_sig_by_name(
     name_id: &str,
     act: &Json,
@@ -229,26 +207,26 @@ mod tests {
         assert!(!verify_with_pubkey(&[0u8; 32], payload, &sig));
     }
 
-    // An act carrying a wall-clock `at`. New Rust signing ignores `at` (the PURE
-    // payload is clock-free); the legacy shape folds `at` in as `time`.
+    // An act carrying a wall-clock `at`. Rust signing ignores `at` (the payload
+    // is clock-free), so it never leaks into the signature.
     fn act_with_at() -> Json {
         parse(r#"{"_id":"abc","by":"i-am","through":"i-am","to":"i-am","story":"localhost","history":"0","p":"0000000000000000000000000000000000000000000000000000000000000000","at":"2026-06-25T13:01:25.361Z"}"#).unwrap()
     }
 
     #[test]
     fn verify_act_sig_accepts_pure_new_act() {
-        // SIGN THE PURE PAYLOAD (the going-forward, clock-free shape) -> the read
-        // path verifies it on the FIRST (pure) attempt, never touching legacy.
+        // SIGN THE clock-free PAYLOAD -> the read path verifies it. The wall-clock
+        // `at` on the act never enters the signature.
         let kp = keypair_from_seed(&SEED);
         let act = act_with_at();
         let fids = vec!["zeta".to_string(), "alpha".to_string()];
         let pure = build_act_sig_payload(&act, &fids);
         let sig = sign_value(&SEED, &pure);
 
-        assert!(verify_act_sig(&kp.raw_pub, &act, &fids, &sig), "pure act verifies (pure attempt)");
+        assert!(verify_act_sig(&kp.raw_pub, &act, &fids, &sig), "act verifies");
         assert!(
             verify_act_sig_by_name(&kp.name_id, &act, &fids, &sig),
-            "pure act verifies by Name id too"
+            "act verifies by Name id too"
         );
         // a wrong key fails both attempts.
         assert!(!verify_act_sig(&[0u8; 32], &act, &fids, &sig), "wrong key fails");
@@ -279,30 +257,29 @@ mod tests {
     }
 
     #[test]
-    fn verify_act_sig_accepts_legacy_js_act_via_fallback() {
-        // SIGN THE LEGACY PAYLOAD (the OLD JS shape WITH `time`) -> the pure
-        // attempt FAILS (no `time`), and the read path verifies it on the LEGACY
-        // fallback. This is the one place the wall-clock-bearing shape is honored.
+    fn verify_act_sig_rejects_wall_clock_shape() {
+        // Prove the wall-clock is gone: a sig over a payload that appended `time`
+        // does NOT verify against the clock-free act-sig path. Only the clock-free
+        // shape is honored now (the legacy fallback is removed).
         let kp = keypair_from_seed(&SEED);
         let act = act_with_at();
         let fids = vec!["zeta".to_string(), "alpha".to_string()];
-        let legacy = build_act_sig_payload_legacy(&act, &fids);
-        let sig = sign_value(&SEED, &legacy);
+        // rebuild the OLD shape by hand: the clock-free payload plus a `time` field.
+        let mut entries = match build_act_sig_payload(&act, &fids) {
+            Json::Obj(e) => e,
+            _ => unreachable!(),
+        };
+        entries.push(("time".into(), Json::Str("2026-06-25T13:01:25.361Z".into())));
+        let with_time = Json::Obj(entries);
+        let sig = sign_value(&SEED, &with_time);
 
-        // the pure shape alone does NOT verify a legacy sig (proves the fallback is real).
-        let pure_json = canonicalize(&build_act_sig_payload(&act, &fids));
         assert!(
-            !verify_with_pubkey(&kp.raw_pub, &pure_json, &sig),
-            "a legacy sig does NOT verify against the pure payload"
-        );
-        // but the try-both read path accepts it via the legacy fallback.
-        assert!(
-            verify_act_sig(&kp.raw_pub, &act, &fids, &sig),
-            "legacy JS act verifies via the legacy fallback"
+            !verify_act_sig(&kp.raw_pub, &act, &fids, &sig),
+            "a wall-clock-bearing sig no longer verifies (no legacy fallback)"
         );
         assert!(
-            verify_act_sig_by_name(&kp.name_id, &act, &fids, &sig),
-            "legacy act verifies by Name id too"
+            !verify_act_sig_by_name(&kp.name_id, &act, &fids, &sig),
+            "same by Name id"
         );
     }
 }

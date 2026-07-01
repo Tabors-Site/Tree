@@ -15,6 +15,20 @@
 // The able SPEC production (foldAbleNoun) is INJECTED as `able_spec_of` — the JS side is porting
 // parseAbleWord → the engine; treeibp takes a resolver so it stays decoupled from that work. The able
 // SPEC SHAPE { canSee, canDo, canCall, canBe, reach } is the stable contract.
+//
+// ── THE ONE PATH (Tabor: "the I reads the .word through the stamper as an act") ───────────────────────
+//
+//   parse → act_inner → run_body_expand → seal_specs → moments
+//
+// EVERY act entry converges here. `act_inner` is the single private pipeline: parse the Word, run its
+// body through the ONE real body loop (`run_body_expand` — acts, flows, control flow, threading
+// bindings + state, and the composite-by-reference expansion), then AUTHORIZE + SEAL each produced spec
+// as a moment (`seal_specs` → `seal_one` → treestore's `commit_moment`). The public entries `act`,
+// `act_via_fold`, `act_via_fold_bound` are thin wrappers that differ ONLY in the two injected closures
+// they hand `act_inner` — the op-word resolver (`op_word_of`: inline / fold-backed) and the initial ctx
+// binds (empty / caller-supplied anchors). There is no second runner: `run_body` / `run_body_host` are
+// no-expand wrappers over `run_body_expand`, so ONE body loop is the whole vocabulary. The I reads the
+// .word through the stamper as an act: same words → same specs → same sealed facts → same ids.
 
 use std::path::Path;
 use std::sync::Mutex;
@@ -419,18 +433,23 @@ pub enum Outcome {
 /// family NEVER auto-stamps — it ONLY seals the specs the body produced (`seal_specs` opens one moment
 /// per spec). So this is structural here, and the marker is a TRUE assertion over the outcome list: an
 /// outcome list IS the N moments (one Outcome per deed-fact / refusal), never a single fused composite
-/// fact. Holds for `act` / `act_via_fold` / `act_with_ops` by construction — the runner has no
-/// composite-fact path to skip. (Surfaced as a predicate so a caller / test can name the invariant.)
+/// fact. Holds for every `act` entry by construction — they all converge on `act_inner`, whose runner
+/// has no composite-fact path to skip. (Surfaced as a predicate so a caller / test can
+/// name the invariant.)
 pub fn ran_as_moments(_outcomes: &[Outcome]) -> bool {
     true // the act family always runs as N moments; there is no auto-stamp of the composite word
 }
 
-/// The ACT primitive — a being speaks a Word: parse → run its body (`run_body`: acts, flows, and
+/// The ACT primitive — a being speaks a Word: parse → run its body (`run_body_expand`: acts, flows, and
 /// control flow, threading bindings + state) → AUTHORIZE + SEAL each act that targets a reel (the
 /// moment-seal, `seal_one`). ONE entry; declarations are skipped, and a state-only act threads its
 /// `sets` without sealing. `sign` is the optional injected signer (treeibp stays crypto-free; the edge
 /// binary supplies the story/Name key) — present = the acts land ed25519-signed, `None` = unsigned.
 /// (Paired with `moment`, the read primitive — the two-primitive surface.)
+///
+/// A thin wrapper over `act_inner` (THE ONE PATH) with INLINE ops (an empty `op_word_of` — every node
+/// rasterizes inline, no composite-by-reference expansion) and NO initial binds. Byte-identical to the
+/// old `act_with_ops(..., |_| None, ...)`.
 pub fn act(
     word: &str,
     actor: &Json,
@@ -440,42 +459,22 @@ pub fn act(
     basis: Option<f64>,
     sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
 ) -> Vec<Outcome> {
-    act_with_ops(word, actor, dir, history, able_spec_of, |_| None, basis, sign)
+    act_inner(word, actor, dir, history, able_spec_of, |_| None, &obj(vec![]), basis, sign)
 }
 
-/// `act` with the materials-op body resolver injected — the COMPOSITE-by-reference seam. A WORD-SOLE
-/// materials op (set-being / set-space / create-space / end-space / set-matter / create-matter) carries
-/// NO inline body in the act; its body is its co-located `.word`, and the act NAMES it. `op_word_of(op)`
-/// returns that `.word` source (the binary resolves it off disk the way it resolves able words), and an
-/// act-node naming such an op is EXPANDED: the trigger is derived from the act's OWN fields (its `of` /
-/// `params` / `history` / `by`/`through`, exactly do.js's STANDARD trigger), the op's `.word` runs
-/// through the host see-op seam, and the do-fact the `Return` synthesizes seals as the moment. The act
-/// stays the single entry; the trigger is INTERNAL, derived from the act — there is NO external trigger
-/// channel. A node with no materials body runs the existing inline path. `act` is the `op_word_of=None`
-/// case (every node inline) so existing callers are byte-identical.
+/// THE ONE PATH — the single act pipeline every public entry converges on: parse → run the body via the
+/// EXPANDING runner (`run_body_expand`, the one real body loop) → AUTHORIZE + SEAL each produced spec as
+/// a moment (`seal_specs`). PRIVATE: the public entries (`act`, `act_via_fold`, `act_via_fold_bound`) are
+/// thin wrappers differing ONLY in the two injected closures — `op_word_of` (the COMPOSITE-by-reference
+/// resolver: a WORD-SOLE materials op — set-being / set-space / create-space / end-space / set-matter /
+/// create-matter — carries NO inline body; `op_word_of(op)` returns its co-located `.word` and the deed
+/// naming it is EXPANDED, its trigger derived from the act's OWN fields, its `Return` do-fact sealed as
+/// the moment) and `binds` (the WORLD-ANCHOR seam: a `{ <anchor>: <id>, ... }` object the genesis reader
+/// seeds into ctx.bindings so a creation Word's `of`/`params` refs resolve to already-created ids). A
+/// node with no materials body runs the inline path. There is NO external trigger channel — the trigger
+/// is INTERNAL, derived from the act.
 #[allow(clippy::too_many_arguments)]
-pub fn act_with_ops(
-    word: &str,
-    actor: &Json,
-    dir: &Path,
-    history: &str,
-    able_spec_of: impl Fn(&str) -> Option<Json>,
-    op_word_of: impl Fn(&str) -> Option<String>,
-    basis: Option<f64>,
-    sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
-) -> Vec<Outcome> {
-    act_with_ops_bound(word, actor, dir, history, able_spec_of, op_word_of, &obj(vec![]), basis, sign)
-}
-
-/// `act_with_ops` with INITIAL ctx bindings seeded — the WORLD-ANCHOR seam. The genesis reader holds
-/// the ids of the spaces/beings it has already created (the `$heaven` / `$root` / `$cherub` anchors the
-/// header of genesis.word describes); it passes them as `binds` so a creation Word's `of`/`params` refs
-/// resolve to those live ids (the parent space a child is born under, the being a grant lands on).
-/// `binds` is a `{ <anchor>: <id>, ... }` object merged into ctx.bindings BEFORE the body runs. Looking
-/// up an already-created id is FLOOR (the reader holds it); the act is the WORD. `act_with_ops` is the
-/// empty-binds case (every prior caller is byte-identical).
-#[allow(clippy::too_many_arguments)]
-pub fn act_with_ops_bound(
+fn act_inner(
     word: &str,
     actor: &Json,
     dir: &Path,
@@ -683,11 +682,12 @@ fn find_word_file(dir: &Path, op: &str, depth: usize) -> Option<String> {
 }
 
 /// `act_via_fold` — the act entry that resolves each op word's body FROM the chain word-fold (the
-/// keystone wiring). It is `act_with_ops` with the `op_word_of` closure built by `op_word_via_fold`:
-/// the word-fold (treewordfold, reading the declare-word facts off `dir`/`history`) decides whether an
-/// act-node names a declared op word, and the host `file_of` loads that op's `.word` off disk. So the
-/// runner consults the FOLD, never a hardcoded op list. `file_of` is the binary's seed-`.word` path map
-/// (op_word_file); everything else (authorize, seal, sign) is unchanged.
+/// keystone wiring). A thin wrapper over `act_inner` (THE ONE PATH) with the `op_word_of` closure built
+/// by `op_word_via_fold`: the word-fold (treewordfold, reading the declare-word facts off `dir`/`history`)
+/// decides whether an act-node names a declared op word, and the host `file_of` loads that op's `.word`
+/// off disk. So the runner consults the FOLD, never a hardcoded op list. `file_of` is the binary's
+/// seed-`.word` path map (op_word_file); the binds are empty; everything else (authorize, seal, sign) is
+/// unchanged.
 #[allow(clippy::too_many_arguments)]
 pub fn act_via_fold(
     word: &str,
@@ -699,22 +699,24 @@ pub fn act_via_fold(
     basis: Option<f64>,
     sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
 ) -> Vec<Outcome> {
-    act_with_ops(
+    act_inner(
         word,
         actor,
         dir,
         history,
         able_spec_of,
         |op| op_word_via_fold(dir, history, op, &file_of),
+        &obj(vec![]),
         basis,
         sign,
     )
 }
 
-/// `act_via_fold` with INITIAL ctx bindings — the genesis world-anchor seam (see `act_with_ops_bound`).
-/// The genesis reader threads the `$root` / `$heaven` / `$cherub` … anchors it has already created so a
-/// creation Word's parent/target/grant refs resolve to the live ids. The empty-binds case IS
-/// `act_via_fold` (byte-identical for every existing caller).
+/// `act_via_fold` with INITIAL ctx bindings — the genesis world-anchor seam. A thin wrapper over
+/// `act_inner` (THE ONE PATH) with the fold-backed `op_word_of` AND the caller's `binds`: the genesis
+/// reader threads the `$root` / `$heaven` / `$cherub` … anchors it has already created so a creation
+/// Word's parent/target/grant refs resolve to the live ids. The empty-binds case IS `act_via_fold`
+/// (byte-identical for every existing caller).
 #[allow(clippy::too_many_arguments)]
 pub fn act_via_fold_bound(
     word: &str,
@@ -727,7 +729,7 @@ pub fn act_via_fold_bound(
     basis: Option<f64>,
     sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
 ) -> Vec<Outcome> {
-    act_with_ops_bound(
+    act_inner(
         word,
         actor,
         dir,

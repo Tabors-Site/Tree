@@ -6,19 +6,12 @@
 //
 //   (a) keypair_from_seed(seed).name_id  ==  JS keypairFromSeed(seed).nameId.
 //       (Unchanged: the key derivation has no wall-clock; still byte-identical.)
-//   (b) a PURE Rust act-sig ROUND-TRIP: build_act_sig_payload (CLOCK-FREE, NO
-//       `time`) -> sign_value -> verify_act_sig is TRUE. The old JS-byte-identity
-//       no longer applies here BY DESIGN: the JS baked the act's wall-clock `at`
+//   (b) a Rust act-sig ROUND-TRIP: build_act_sig_payload (CLOCK-FREE, NO `time`)
+//       -> sign_value -> verify_act_sig is TRUE. The old JS-byte-identity no
+//       longer applies here BY DESIGN: the JS baked the act's wall-clock `at`
 //       into the sig as `time`, and the going-forward Rust does NOT - it is
 //       PURER than the JS. So (b) proves the Rust signs+verifies its own pure
-//       clock-free shape; the JS legacy shape is proven separately by (c).
-//   (c) a REAL signed act from the on-disk genesis store verifies via the
-//       EXPLICIT LEGACY PATH: that JS act carried the wall-clock in its sig, so
-//       its payload is rebuilt with build_act_sig_payload_legacy (the marked
-//       legacy helper, NOT the going-forward pure builder) + the act's committed
-//       factIds, and verify_with_pubkey against the story public key (the
-//       signer "i-am" is the story key, not a Name pubkey). New Rust acts do NOT
-//       carry that wall-clock; this is the read-old-JS-store path only.
+//       clock-free shape (the legacy wall-clock path is fully removed).
 //   (d) a FIXED BIP39 mnemonic yields the SAME seed and nameId as the JS.
 //   (e) the key-load adapter: the seed decoded from the PRIVATE PKCS8 PEM
 //       (.story/story.key) names the SAME being as the PUBLIC SPKI PEM
@@ -31,10 +24,10 @@
 
 use base64::Engine;
 use treesign::{
-    build_act_sig_payload, build_act_sig_payload_legacy, canonicalize, encode_key_id,
-    generate_mnemonic, keypair_from_mnemonic, keypair_from_seed, load_story_seed, mnemonic_to_seed,
-    parse, seed_from_pkcs8_pem, seed_to_mnemonic, sign_payload, sign_value, verify_act_sig,
-    verify_name_sig, verify_with_pubkey, Json,
+    build_act_sig_payload, canonicalize, encode_key_id, generate_mnemonic, keypair_from_mnemonic,
+    keypair_from_seed, load_story_seed, mnemonic_to_seed, parse, seed_from_pkcs8_pem,
+    seed_to_mnemonic, sign_payload, sign_value, verify_act_sig, verify_name_sig,
+    verify_with_pubkey,
 };
 
 // ── pinned JS reference vectors (refvec.mjs; seed = bytes 0..31) ──
@@ -54,10 +47,6 @@ const ACT_JSON: &str = r#"{"_id":"abc123","by":"z6MkehRgf7yJbgaGfYsdoAsKdBPE3dj2
 // the PURE canonical bytes build_act_sig_payload(act, ["zeta","alpha","mid"])
 // produces: factIds SORTED, `through` kept (present on the row), and NO `time`.
 const PURE_CANON: &str = r#"{"actId":"abc123","by":"z6MkehRgf7yJbgaGfYsdoAsKdBPE3dj2CYhowQdcjqSJgvVd","factIds":["alpha","mid","zeta"],"history":"0","p":"0000000000000000000000000000000000000000000000000000000000000000","story":"localhost","through":"i-am","to":"i-am"}"#;
-
-// ── (c) the real act pinned from the live store (verifyact.mjs) ──
-// The "am" genesis act on history "0", signed by the story key ("i-am").
-const REAL_ACT_ID: &str = "47f13daacad477b33865c516e29177a2f48931dff1542e3bba5049eb860e43f2";
 
 // ── (d) BIP39 mnemonic vectors pinned from the JS (mnref.mjs) ──
 // The JS treats the raw 24-word ENTROPY as the seed directly (NO PBKDF2, NO
@@ -120,69 +109,6 @@ fn b_pure_act_sig_round_trip_clock_free() {
     // a tamper anywhere in the pure payload fails.
     let tampered = pure_json.replace("\"history\":\"0\"", "\"history\":\"1\"");
     assert!(!verify_with_pubkey(&kp.raw_pub, &tampered, &sig), "a tampered pure payload fails");
-}
-
-/// (c) verify a REAL signed act read from the on-disk genesis store, via the
-/// EXPLICIT LEGACY PATH. This is a legacy JS act: it carried the wall-clock in
-/// its sig (the old JS baked the act's `at` into the payload as `time`), so its
-/// payload is rebuilt with build_act_sig_payload_legacy (the marked legacy
-/// helper) - NOT the going-forward pure builder. New Rust acts do NOT carry that
-/// wall-clock; this proves the read-old-JS-store path. We also assert the PURE
-/// builder does NOT verify this old act (it has no `time`), which is exactly why
-/// the legacy helper is required to read it.
-#[test]
-fn c_real_legacy_js_act_verifies_via_legacy_path() {
-    let root = repo_root().expect(
-        "could not locate the repo root (a dir with store/past/acts and .story/story.key.pub)",
-    );
-
-    // the act's home reel (story=localhost, history=0, by/through=i-am).
-    let acts_path = root.join("store/past/acts/localhost/0/i-/i-am.acts");
-    let reel_path = root.join("store/past/reels/0/being/i-/i-am.reel");
-    let story_pub_pem = root.join(".story/story.key.pub");
-
-    let act = read_act(&acts_path, REAL_ACT_ID);
-    let fact_ids = committed_fact_ids(&reel_path, REAL_ACT_ID);
-
-    // the act IS signed, and by the story key "i-am".
-    let sig = act_sig_value(&act).expect("the real act carries a sig.value");
-    assert_eq!(act_sig_by(&act).as_deref(), Some("i-am"), "this act is story-signed");
-    assert!(!fact_ids.is_empty(), "the 'am' act commits exactly one fact");
-
-    // the signer id is "i-am" (not a Name pubkey), so verification routes to the
-    // story public key, decoded from the SPKI PEM on disk.
-    let story_pub = read_ed25519_spki_pub(&story_pub_pem);
-
-    // LEGACY: this old JS act carried the wall-clock `at` in its sig, so rebuild
-    // the OLD payload shape (with `time`) via the explicit legacy helper.
-    let legacy_json = canonicalize(&build_act_sig_payload_legacy(&act, &fact_ids));
-    assert!(
-        verify_with_pubkey(&story_pub, &legacy_json, &sig),
-        "the legacy JS act must verify against the story pubkey via the LEGACY (with-`time`) payload"
-    );
-
-    // the going-forward PURE builder does NOT verify this old act: it drops the
-    // wall-clock the JS signed, so the bytes differ. THIS is why the legacy helper
-    // exists - new Rust acts are clock-free, but old JS acts carried the clock.
-    let pure_json = canonicalize(&build_act_sig_payload(&act, &fact_ids));
-    assert!(
-        !verify_with_pubkey(&story_pub, &pure_json, &sig),
-        "the PURE payload must NOT verify this legacy act (it baked the wall-clock in)"
-    );
-
-    // and the read-path try-both helper transparently accepts it (PURE fails,
-    // LEGACY fallback succeeds), so callers need not know which shape it is.
-    assert!(
-        verify_act_sig(&story_pub, &act, &fact_ids, &sig),
-        "verify_act_sig accepts the legacy act via its legacy fallback"
-    );
-
-    // negative control: a tampered legacy payload must NOT verify.
-    let tampered = legacy_json.replace("\"history\":\"0\"", "\"history\":\"1\"");
-    assert!(
-        !verify_with_pubkey(&story_pub, &tampered, &sig),
-        "a tampered payload must fail verification"
-    );
 }
 
 /// (d) a FIXED mnemonic yields the SAME seed and the SAME nameId as the JS.
@@ -319,70 +245,6 @@ fn repo_root() -> Option<std::path::PathBuf> {
         if !dir.pop() {
             return None;
         }
-    }
-}
-
-/// Read the act row with the given _id from a .acts file (one JSON doc per line).
-fn read_act(path: &std::path::Path, act_id: &str) -> Json {
-    let body = std::fs::read_to_string(path)
-        .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-    for line in body.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let doc = parse(line).expect("act line parses");
-        if let Some(Json::Str(id)) = obj_get(&doc, "_id") {
-            if id == act_id {
-                return doc;
-            }
-        }
-    }
-    panic!("act {act_id} not found in {}", path.display());
-}
-
-/// The committed fact ids for an act: the reel facts whose `actId` matches,
-/// their `_id`s. (verifyActSig reads these via getFactsByActId; sorting happens
-/// inside build_act_sig_payload, so we return them unsorted here.)
-fn committed_fact_ids(reel_path: &std::path::Path, act_id: &str) -> Vec<String> {
-    let body = std::fs::read_to_string(reel_path)
-        .unwrap_or_else(|e| panic!("read {}: {e}", reel_path.display()));
-    let mut out = Vec::new();
-    for line in body.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let doc = parse(line).expect("reel line parses");
-        if let Some(Json::Str(a)) = obj_get(&doc, "actId") {
-            if a == act_id {
-                if let Some(Json::Str(id)) = obj_get(&doc, "_id") {
-                    out.push(id.clone());
-                }
-            }
-        }
-    }
-    out
-}
-
-fn obj_get<'a>(v: &'a Json, key: &str) -> Option<&'a Json> {
-    match v {
-        Json::Obj(e) => e.iter().find(|(k, _)| k == key).map(|(_, val)| val),
-        _ => None,
-    }
-}
-
-fn act_sig_value(act: &Json) -> Option<String> {
-    match obj_get(act, "sig").and_then(|s| obj_get(s, "value")) {
-        Some(Json::Str(s)) => Some(s.clone()),
-        _ => None,
-    }
-}
-
-fn act_sig_by(act: &Json) -> Option<String> {
-    match obj_get(act, "sig").and_then(|s| obj_get(s, "by")) {
-        Some(Json::Str(s)) => Some(s.clone()),
-        _ => None,
     }
 }
 

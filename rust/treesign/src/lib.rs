@@ -22,11 +22,8 @@
 // NO WALL TIME (the time-purge, philosophy/crystalized.md). TIME is ORDER (the
 // chain position p, the clock-free seq/ord), NEVER a wall-clock. The act-sig
 // payload the Rust SIGNS + VERIFIES is CLOCK-FREE: build_act_sig_payload carries
-// NO `time` field. The old JS baked the act's wall-clock `at` into the sig as
-// `time`; build_act_sig_payload_legacy reproduces that OLD shape ONLY to verify
-// pre-existing JS-signed acts, never for new signing. verify_act_sig /
-// verify_act_sig_by_name are the read path: PURE first, LEGACY on fallback - so
-// reads accept old JS AND new pure acts while signing stays pure.
+// NO `time` field. verify_act_sig / verify_act_sig_by_name are the read path;
+// they verify this one clock-free shape and nothing else.
 //
 // Public surface mirrors the JS:
 //   encode_key_id(&[u8;32]) -> String           (keys.js encodeKeyId)
@@ -36,10 +33,9 @@
 //   sign_payload(&[u8;32], &str) -> String       (keys.js signAsName, by seed)
 //   verify_name_sig(name_id, &str, sig_b64)      (keys.js verifyNameSig)
 //   verify_with_pubkey(&[u8;32], &str, sig_b64)  (keys.js verifyWithPublicKeyPem, by raw pub)
-//   verify_act_sig(&[u8;32], &Json, &[String], sig)      read path: PURE then LEGACY, by raw pub
+//   verify_act_sig(&[u8;32], &Json, &[String], sig)      read path: clock-free payload, by raw pub
 //   verify_act_sig_by_name(name_id, &Json, &[String], sig)  the Name-id peer (key from the id)
-//   build_act_sig_payload(&Json, &[String])      (actSig.js, PURE: NO wall-clock, going-forward)
-//   build_act_sig_payload_legacy(&Json, &[String])  LEGACY: the OLD shape WITH `time`, read-only
+//   build_act_sig_payload(&Json, &[String])      (actSig.js: NO wall-clock, clock-free)
 //   mnemonic_to_seed(mnemonic, passphrase)       (mnemonic.js mnemonicToEntropy: entropy IS the seed)
 //   seed_to_mnemonic(&[u8;32]) -> String          (mnemonic.js entropyToMnemonic)
 //   generate_mnemonic() -> String                 (a fresh 24-word paper key, OS entropy)
@@ -73,7 +69,7 @@ pub use credential::{credential_key, decrypt_credential, encrypt_credential, has
 pub use jwt::{decode_jwt, sign_jwt_hs256, verify_jwt_hs256};
 pub use nameid::{encode_key_id, is_key_id, key_id_to_pubkey, MAX_KEY_ID_LEN};
 pub use password_lock::{decrypt_with_password, encrypt_with_password, is_password_locked};
-pub use payload::{build_act_sig_payload, build_act_sig_payload_legacy, build_moment_proof_payload};
+pub use payload::{build_act_sig_payload, build_moment_proof_payload};
 pub use sign::{
     keypair_from_seed, sign_moment_proof, sign_payload, sign_value, verify_act_sig,
     verify_act_sig_by_name, verify_moment_proof, verify_name_sig, verify_with_pubkey, Keypair,

@@ -10,6 +10,6 @@ license = "AGPL-3.0"
 treehash = { path = "../treehash" }
 treestore = { path = "../treestore" }
 
-[dev-dependencies]
-# the conformance test reads the genuine on-disk store (the genesis declare-word vocabulary).
-treehash = { path = "../treehash" }
+# The fold-from-chain contract (a fresh "I" world genesised through the stamper, its vocabulary folded)
+# is proven end-to-end by treebook's full_genesis test — words laid the only legitimate way, through I
+# + the stamper — so this crate needs no test-only store fixtures of its own.

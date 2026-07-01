@@ -254,7 +254,14 @@ fn moment(req: &Json, root: &Path) -> Json {
         let h = get_str(req, "history").unwrap_or_else(|| "0".to_string());
         // `at` = a past global ord to fold up to (time-travel); absent = live/now.
         let at = num_field(req, "at");
-        let view = match crate::resolve::scene(&addr, &h, at, root) {
+        // `rain:true` -> the RAIN view (all the Name's beings as symbol chains); else the place scene.
+        let is_rain = matches!(get(req, "rain"), Some(Json::Bool(true)));
+        let view = if is_rain {
+            crate::resolve::rain(&addr, &h, at, root)
+        } else {
+            crate::resolve::scene(&addr, &h, at, root)
+        };
+        let view = match view {
             Ok(v) => v,
             Err(e) => IbpError::new(code::SPACE_NOT_FOUND, e).envelope(),
         };

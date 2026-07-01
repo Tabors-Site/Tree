@@ -7,16 +7,12 @@
 // verifier agree.
 //
 // NO WALL TIME (the time-purge, philosophy/crystalized.md). TIME is ORDER - the
-// chain position p, the clock-free seq/ord - never a wall-clock. So the PURE
-// (going-forward) payload carries NO `time` field; the Rust SIGNS and VERIFIES
-// this clock-free shape. The old JS baked the act's wall-clock `at` into the
-// signature payload as `time`; those pre-existing JS-signed acts verify ONLY
-// through the explicit, clearly-marked LEGACY helper below
-// (build_act_sig_payload_legacy), never through the going-forward path.
+// chain position p, the clock-free seq/ord - never a wall-clock. So the payload
+// carries NO `time` field; the Rust SIGNS and VERIFIES this clock-free shape.
 //
-// The PURE JS-shaped object (the exact fields + the exact null/undefined
-// handling, because canonicalize drops undefined keys but keeps null ones, so
-// the two differ on the wire):
+// The JS-shaped object (the exact fields + the exact null/undefined handling,
+// because canonicalize drops undefined keys but keeps null ones, so the two
+// differ on the wire):
 //
 //   {
 //     actId:   String(act._id),
@@ -29,9 +25,6 @@
 //     factIds: [...factIds].map(String).sort(),   // sorted string copies
 //   }
 //
-// The LEGACY object is identical PLUS a trailing `time: timeISO(act)` (act.at as
-// an ISO string, else null). That `time` is the ONLY difference between the two.
-//
 // The asymmetry that matters: `through` is the ONE field assigned raw (no `??`).
 // In an act ROW on disk `through` is present as `null` (kept on the wire); in a
 // 5D name-act it is absent/undefined (dropped). We reproduce both: if the act
@@ -40,34 +33,18 @@
 
 use treehash::Json;
 
-/// Build the PURE act-sig payload from an act row + its committed fact ids. This
-/// is the GOING-FORWARD sign + verify shape: CLOCK-FREE, no `time`/wall-clock
-/// field. TIME is order (the chain position `p`), never a wall-clock. `fact_ids`
-/// are the ids of the facts the moment laid on the actor's being reel; they are
-/// copied, stringified (already strings here), and sorted, exactly as the JS
-/// does. New Rust signing ALWAYS uses this; never `..._legacy`.
+/// Build the act-sig payload from an act row + its committed fact ids. This is
+/// the sign + verify shape: CLOCK-FREE, no `time`/wall-clock field. TIME is order
+/// (the chain position `p`), never a wall-clock. `fact_ids` are the ids of the
+/// facts the moment laid on the actor's being reel; they are copied, stringified
+/// (already strings here), and sorted, exactly as the JS does.
 pub fn build_act_sig_payload(act: &Json, fact_ids: &[String]) -> Json {
-    build_payload(act, fact_ids, false)
+    build_payload(act, fact_ids)
 }
 
-/// LEGACY ONLY. Build the OLD act-sig payload that ALSO carries `time` (the act's
-/// wall-clock `at` as an ISO string, else null) at the tail. This is the EXACT
-/// shape the pre-time-purge JS signed, and it exists for ONE reason: to verify
-/// pre-existing JS-signed acts that baked the wall-clock into their signature
-/// payload. Reading old JS stores is the only use.
-///
-/// NEVER sign with this. New Rust acts are CLOCK-FREE - they sign + verify the
-/// PURE `build_act_sig_payload`. Using this for new signing would re-introduce
-/// the wall-clock the time-purge removed.
-pub fn build_act_sig_payload_legacy(act: &Json, fact_ids: &[String]) -> Json {
-    build_payload(act, fact_ids, true)
-}
-
-/// The shared builder: the PURE payload, plus a trailing `time` field ONLY when
-/// `legacy` (the old JS shape). The pure-vs-legacy split is exactly this one
-/// field; everything else is byte-identical between the two.
-fn build_payload(act: &Json, fact_ids: &[String], legacy: bool) -> Json {
-    let mut entries: Vec<(String, Json)> = Vec::with_capacity(9);
+/// The builder: the clock-free payload. No wall-clock ever enters it.
+fn build_payload(act: &Json, fact_ids: &[String]) -> Json {
+    let mut entries: Vec<(String, Json)> = Vec::with_capacity(8);
 
     entries.push(("actId".into(), Json::Str(act_id_str(act))));
     entries.push(("by".into(), coalesce_null(get(act, "by"))));
@@ -92,12 +69,6 @@ fn build_payload(act: &Json, fact_ids: &[String], legacy: bool) -> Json {
         "factIds".into(),
         Json::Arr(ids.into_iter().map(Json::Str).collect()),
     ));
-
-    // LEGACY ONLY: the old JS baked the act's wall-clock `at` in as `time`. The
-    // PURE going-forward payload omits this entirely (NO WALL TIME).
-    if legacy {
-        entries.push(("time".into(), time_iso(act)));
-    }
 
     Json::Obj(entries)
 }
@@ -180,21 +151,6 @@ fn norm_history(v: Option<&Json>) -> String {
     }
 }
 
-/// LEGACY helper. timeISO: the act's wall-clock witness (act.at) as an ISO
-/// string, else null. Used ONLY by build_act_sig_payload_legacy to rebuild the
-/// old JS payload; the PURE going-forward payload never touches `at`. On a sealed
-/// JS row `act.at` is already an ISO-8601 string (e.g. "2026-06-25T13:01:25.361Z"),
-/// which is exactly what `new Date(at).toISOString()` reproduces, so the stored
-/// string is taken verbatim. A row with no/invalid `at` yields null. (We do NOT
-/// re-parse/re-format: the stored ISO string IS the canonical form the JS signer
-/// signed, and re-deriving it would only risk a drift from that signer.)
-fn time_iso(act: &Json) -> Json {
-    match get(act, "at") {
-        Some(Json::Str(s)) if !s.is_empty() => Json::Str(s.clone()),
-        _ => Json::Null,
-    }
-}
-
 /// Minimal scalar-to-string for the defensive _id branch (never hit on a real
 /// row). Mirrors JS `String(x)` for the scalar cases.
 fn json_to_string(v: &Json) -> String {
@@ -220,26 +176,6 @@ mod tests {
         let canon = canonicalize(&build_act_sig_payload(&act, &[]));
         assert!(!canon.contains("time"), "PURE payload must drop time even with at: {canon}");
         assert!(!canon.contains("2026-06-25"), "no wall-clock leaks into the pure payload: {canon}");
-    }
-
-    #[test]
-    fn legacy_payload_keeps_time_from_at() {
-        // The LEGACY payload (old JS shape) DOES carry the wall-clock `at` as
-        // `time` - the one field that differs from the pure shape.
-        let act = parse(r#"{"_id":"a","by":"i-am","through":"i-am","to":"i-am","story":"localhost","history":"0","p":"0","at":"2026-06-25T13:01:25.361Z"}"#).unwrap();
-        let canon = canonicalize(&build_act_sig_payload_legacy(&act, &[]));
-        assert!(canon.contains(r#""time":"2026-06-25T13:01:25.361Z""#), "legacy keeps time: {canon}");
-    }
-
-    #[test]
-    fn pure_and_legacy_differ_only_by_time() {
-        // Drop `time` from the legacy canonical bytes and the two must coincide:
-        // `time` is the SOLE difference between pure and legacy.
-        let act = parse(r#"{"_id":"a","by":"i-am","through":"i-am","to":"i-am","story":"localhost","history":"0","p":"0","at":"2026-06-25T13:01:25.361Z"}"#).unwrap();
-        let pure = canonicalize(&build_act_sig_payload(&act, &["b".into(), "a".into()]));
-        let legacy = canonicalize(&build_act_sig_payload_legacy(&act, &["b".into(), "a".into()]));
-        let legacy_no_time = legacy.replace(r#","time":"2026-06-25T13:01:25.361Z""#, "");
-        assert_eq!(pure, legacy_no_time, "pure == legacy minus time\n pure:  {pure}\n legacy:{legacy}");
     }
 
     #[test]

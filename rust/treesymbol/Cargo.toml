@@ -1,0 +1,8 @@
+[package]
+name = "treesymbol"
+version = "0.1.0"
+edition = "2021"
+description = "The DERIVED Word<->symbol codec. Every WORD maps to exactly one single-token SYMBOL, derived from the vocabulary's order (the chain's coin-order) — never a hand-authored map. The symbol IS the canonical token; each language is a PROJECTION function, so no per-word translation is ever stored. Alphabet = CJK glyphs (large, distinct, the Matrix-rain look). Zero-dep core; the vocabulary (grammar + concepts + coined words) is passed in."
+license = "AGPL-3.0"
+
+[dependencies]

@@ -167,6 +167,79 @@ pub fn scene(input: &str, ctx_history: &str, at: Option<f64>, root: &Path) -> Re
     ]))
 }
 
+// ── RAIN: all of a Name's beings, each as a falling SYMBOL chain (philosophy/wordRain/rain.md) ────────
+
+/// A rain descriptor: the beings a Name owns (or story-wide as I), each with its fact-chain encoded as a
+/// chain of one-token symbols (treesymbol) — the projection chains the portal rains down. `@being` names
+/// the Name (via its being's trueName); `@I`/story → all beings.
+pub fn rain(input: &str, ctx_history: &str, at: Option<f64>, root: &Path) -> Result<Json, String> {
+    let ctx = treeaddress::Ctx { current_history: Some(ctx_history.to_string()), ..Default::default() };
+    let addr = treeaddress::parse(input, &ctx).map_err(|e| format!("bad address: {e:?}"))?;
+    let st = treeaddress::expand(&addr, &ctx).right;
+    let history = st.history.clone().unwrap_or_else(|| ctx_history.to_string());
+
+    let beings = all_of_kind(root, &history, "being", at);
+    // the Name: the trueName of the @being, unless @I/@story → story-wide (all beings)
+    let being_name = st.being.clone().unwrap_or_default();
+    let story_wide = being_name.is_empty() || being_name == "I";
+    let name_id = if story_wide {
+        String::new()
+    } else {
+        beings
+            .iter()
+            .find(|(_, s)| sget(s, "name").as_deref() == Some(&being_name))
+            .and_then(|(_, s)| sget(s, "trueName"))
+            .unwrap_or_default()
+    };
+
+    let vocab = treesymbol::vocabulary(&[]); // v1: grammar+concept base (coined-word read = the coupling point)
+    let owned: Vec<Json> = beings
+        .iter()
+        .filter(|(_, s)| story_wide || sget(s, "trueName").as_deref() == Some(&name_id))
+        .map(|(id, s)| {
+            let chain = being_symbol_chain(root, &history, id, at, &vocab);
+            obj(vec![
+                ("beingId", jstr(id)),
+                ("name", sget(s, "name").map(|n| jstr(&n)).unwrap_or(Json::Null)),
+                ("trueName", sget(s, "trueName").map(|n| jstr(&n)).unwrap_or(Json::Null)),
+                ("chain", Json::Arr(chain)),
+            ])
+        })
+        .collect();
+
+    Ok(obj(vec![
+        ("kind", jstr("rain")),
+        ("nameId", jstr(&name_id)),
+        ("history", jstr(&history)),
+        ("ord", Json::Num(now_ord(root, &history))),
+        ("beings", Json::Arr(owned)),
+    ]))
+}
+
+/// A being's fact-chain as a symbol chain: each fact -> one glyph (a vocabulary Word's symbol if the act
+/// names one, else an ord-derived glyph so every fact still rains).
+fn being_symbol_chain(root: &Path, history: &str, id: &str, at: Option<f64>, vocab: &[String]) -> Vec<Json> {
+    let facts = treestore::read_reel_file(root, history, "being", id, None, None);
+    facts
+        .iter()
+        .filter(|f| at.map_or(true, |cap| fact_ord(f).map_or(true, |o| o <= cap)))
+        .map(|f| jstr(&fact_symbol(f, vocab)))
+        .collect()
+}
+
+fn fact_symbol(f: &Json, vocab: &[String]) -> String {
+    // a vocabulary Word named in the act -> its symbol
+    let act = sget(f, "act").or_else(|| sget(f, "verb")).unwrap_or_default();
+    for part in act.split(['-', ' ', ':']) {
+        if let Some(c) = treesymbol::symbol(part, vocab) {
+            return c.to_string();
+        }
+    }
+    // fallback: an ord-derived glyph from the same alphabet (deterministic, keeps the rain falling)
+    let o = fact_ord(f).unwrap_or(0.0) as usize;
+    treesymbol::glyph(o % treesymbol::alphabet_len().max(1)).map(|c| c.to_string()).unwrap_or_else(|| "·".to_string())
+}
+
 fn coord_of(s: &Json) -> Json {
     get(s, "coord").cloned().unwrap_or(Json::Null)
 }

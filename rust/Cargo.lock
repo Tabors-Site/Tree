@@ -3598,6 +3598,7 @@ dependencies = [
  "treesecondary",
  "treesign",
  "treestore",
+ "treesymbol",
  "treeval",
  "treeverify",
  "treeword",
@@ -3667,6 +3668,10 @@ dependencies = [
  "treesign",
  "treeverify",
 ]
+
+[[package]]
+name = "treesymbol"
+version = "0.1.0"
 
 [[package]]
 name = "treeval"
