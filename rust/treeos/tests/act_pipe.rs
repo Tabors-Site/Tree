@@ -70,7 +70,6 @@ fn authorize_act(act: &Json, identity: &Json, grants_json: &Json, able_spec: &Js
     let able_result = able_walk(&WalkArgs {
         identity: Some(identity),
         verb,
-        i_am: "I",
         owner_claim: None,
         grants: &grant_structs,
         target_space: Some(target_space),
@@ -82,7 +81,6 @@ fn authorize_act(act: &Json, identity: &Json, grants_json: &Json, able_spec: &Js
         verb,
         target: None,
         audit_being_id: None,
-        i_am: "I",
         ext_blocked: None,
         able_result: &able_result,
         inheritation_ok: false,

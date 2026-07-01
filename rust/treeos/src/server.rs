@@ -293,7 +293,10 @@ fn ws_loop(stream: &mut TcpStream, root: &Path) {
         ws_send_text(&mut w, &json(&health(root))); // greet with the boot summary
     }
     while let Some(msg) = ws_read_text(stream) {
-        let reply = ibp::handle_wire(&msg, root);
+        // AUTH-AT-MOMENT: this conn IS the open-moment session. A moment proves the Name's key (then the
+        // session opens); an act must ride an open authenticated moment for its actor. (ibp::handle_wire,
+        // the conn-less custodial path, is for HTTP /word + federation + the live re-rasterize.)
+        let reply = ibp::handle_wire_conn(&msg, root, conn);
         {
             let mut w = writer.lock().unwrap_or_else(|e| e.into_inner());
             ws_send_text(&mut w, &reply);
@@ -301,6 +304,7 @@ fn ws_loop(stream: &mut TcpStream, root: &Path) {
         live::after_message(conn, &writer, &msg, root, &reply);
     }
     live::close_conn(conn); // the eyes closed — drop its open moments
+    live::forget_conn(conn); // the socket closed — drop the ephemeral session (no chain write)
 }
 
 fn ok(body: String) -> (&'static str, &'static str, String) {

@@ -113,7 +113,6 @@ pub struct DecideArgs<'a> {
     pub verb: &'a str,
     pub target: Option<&'a Json>,
     pub audit_being_id: Option<&'a str>,
-    pub i_am: &'a str,
     pub ext_blocked: Option<&'a str>,
     pub able_result: &'a Json,
     pub inheritation_ok: bool,
@@ -125,9 +124,9 @@ pub struct DecideArgs<'a> {
 pub fn authorize_decide(a: &DecideArgs) -> Json {
     let field = |k: &str| a.identity.and_then(|i| get(i, k)).and_then(as_str);
 
-    // 1. I-Am bypass — the bootstrap axiom
-    if field("name") == Some(a.i_am) || field("beingId") == Some(a.i_am) {
-        return obj(vec![("ok", Json::Bool(true)), ("actor", jstr(a.i_am))]);
+    // 1. I-Am bypass — the bootstrap axiom (the I-being is "I")
+    if field("name") == Some("I") || field("beingId") == Some("I") {
+        return obj(vec![("ok", Json::Bool(true)), ("actor", jstr("I"))]);
     }
     // 2. SEE on .discovery — the pre-identity surface every client reads on socket open
     let is_discovery = matches!(a.target.and_then(|t| get(t, "isDiscovery")), Some(Json::Bool(true)));

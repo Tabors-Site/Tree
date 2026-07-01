@@ -34,13 +34,11 @@
 // run-on refusal). That was a DRIFT from the Spacebar Law and is now REMOVED:
 // genesis is two normal moments, sealed by the general path, no exemption.
 //
-// THE I-NAME IS "I" (the rename LANDED). The I-being's name is "I"; the JS/on-disk
-// "i-am" was a WRONG artifact and the Rust genesis plants "I" on purpose. The sig
-// routes to the story pubkey (the literal "I" is not a pubkey id, so verification
-// routes by raw pub, not an id-recovered key). treeibp carries `const I_AM = "I"`,
-// treewordfold reads the "I" reel, and plant_genesis now DEFAULTS to "I"
-// (I_NAME_DEFAULT). The I-name stays PARAMETERIZED (I_NAME_LEGACY "i-am" exists
-// only for inter-op with a pre-existing JS store). See Planted.i_name.
+// THE I-NAME IS "I". The I-being's name is "I"; the fresh world is born by this
+// Rust genesis and plants "I" on purpose. The sig routes to the story pubkey (the
+// literal "I" is not a pubkey id, so verification routes by raw pub, not an
+// id-recovered key). treeibp carries `const I_AM = "I"`, treewordfold reads the
+// "I" reel, and plant_genesis hard-codes "I" (I_NAME_DEFAULT). See Planted.i_name.
 //
 // THE I-IMMUTABILITY (project_iam_genesis_immutable: genesis facts are never
 // overwritten). The general seal's never-overwrite-committed covers it:
@@ -61,27 +59,15 @@ use treestore::{
 
 pub use keymint::{load_or_mint_i_key, KeyMintError, StoryKey};
 
-/// The default I-name: the literal `"I"`. The I-being's name IS "I" — the
-/// on-disk/JS `"i-am"` was a WRONG artifact, and the Rust genesis plants "I" on
-/// purpose (DIVERGES from the JS store deliberately; doctrine: "Rust plants I").
-/// The sig routes to the story pubkey (the literal "I" is not a pubkey id, so the
-/// story path verifies by raw pub). treeibp already carries `const I_AM = "I"` and
-/// treewordfold reads the "I" reel; this default makes the whole Rust line agree.
+/// The I-name: the literal `"I"`. The I-being's name IS "I" — the fresh world is
+/// born by this Rust genesis and plants "I". The sig routes to the story pubkey
+/// (the literal "I" is not a pubkey id, so the story path verifies by raw pub).
+/// treeibp carries `const I_AM = "I"` and treewordfold reads the "I" reel; this
+/// makes the whole Rust line agree.
 pub const I_NAME_DEFAULT: &str = "I";
 
-/// The legacy I-name the old JS store used: `"i-am"`. Kept ONLY so a caller that
-/// must inter-operate with a pre-existing on-disk JS store can plant under the old
-/// label. New Rust Stories use `I_NAME_DEFAULT` ("I"). The I-name is parameterized
-/// end-to-end (folds + verifies + signs the same under either label).
-pub const I_NAME_LEGACY: &str = "i-am";
-
-/// Back-compat alias for the renamed-I const. `I_NAME_RENAMED` == `I_NAME_DEFAULT`
-/// == `"I"` now that "I" is the default (the rename landed). Retained so existing
-/// callers/tests that reference `I_NAME_RENAMED` keep compiling.
-pub const I_NAME_RENAMED: &str = I_NAME_DEFAULT;
-
 /// What a planted genesis returns: the two acts' + facts' ids, the reels they
-/// landed on, and the I-name the caller chose (the FORK surfaced in the return).
+/// landed on, and the I-name ("I").
 #[derive(Debug, Clone)]
 pub struct Planted {
     /// MOMENT 1's act id ("I" = name:declare, on the I-name's act-chain, ord 0).
@@ -92,8 +78,7 @@ pub struct Planted {
     pub library_fact_id: String,
     /// The be:birth fact's id (on the being reel). The genesis being.
     pub being_fact_id: String,
-    /// The I-name used (default `"i-am"`, or `"I"` under the rename). Surfaced so
-    /// the caller can see which side of the fork this Story was planted on.
+    /// The I-name used (always `"I"`). Surfaced so the caller can read it back.
     pub i_name: String,
     /// The being id (== the I-name on a fresh install: the I-Am's _id IS the
     /// I-name string, the doctrinal shape - sprout.js ensureIAm).
@@ -176,7 +161,7 @@ fn default_i_qualities() -> Json {
 }
 
 /// The name:declare fact spec - the LIBRARY reel opening. `through` is the
-/// I-name (self-stamping: i-am declares its own name). of:{kind:"library",
+/// I-name (self-stamping: I declares its own name). of:{kind:"library",
 /// id:<storyDomain>}. The spec mirrors sprout.js exactly: parentNameId=null (the
 /// root name), privateKeyEnc=null (signs with the story key), identity keyEnc=
 /// "story-key", soulType="scripted". CLOCK-FREE (no date). It is the lone entry
@@ -278,10 +263,6 @@ fn genesis_act(i_name: &str, story_domain: &str, fact: Json) -> Json {
 ///
 /// - `root`         the store root (where reels/ + acts/ live).
 /// - `story_domain` the Story's domain (the library reel id; also act.story).
-/// - `i_name`       the I-name. Pass `I_NAME_DEFAULT` ("I") for a fresh Rust
-///                  Story (the correct name), or `I_NAME_LEGACY` ("i-am") only to
-///                  inter-operate with a pre-existing JS store. The being id is the
-///                  I-name (the I-Am's _id IS the I-name string - sprout.js).
 /// - `story_key`    the I key (the story key) that signs BOTH genesis acts. Load
 ///                  it with `load_or_mint_i_key`. Its `raw_pub` is what an
 ///                  I act verifies against (the literal "I" is not a
@@ -306,10 +287,10 @@ fn genesis_act(i_name: &str, story_domain: &str, fact: Json) -> Json {
 pub fn plant_genesis(
     root: &Path,
     story_domain: &str,
-    i_name: &str,
     story_key: &StoryKey,
     qualities: Option<Json>,
 ) -> Result<Planted, GenesisError> {
+    let i_name = I_NAME_DEFAULT; // the I-being's name IS "I"
     let being_id = i_name.to_string(); // the I-Am's _id IS the I-name (sprout.js)
     let quals = qualities.unwrap_or_else(default_i_qualities);
 
@@ -379,7 +360,7 @@ pub fn plant_genesis(
 /// else from the book (20.md: a one-time bootstrap seed in the host; after ignition, Word runs Word).
 /// This is that one-time seed in ONE call:
 ///   1. mint (or load) the I key — the story key (`<root>/.story/story.key`), persistent.
-///   2. plant the TWO I-Am moments under "I" (the correct name; NOT the legacy "i-am" artifact):
+///   2. plant the TWO I-Am moments under "I" (the I-being's name):
 ///      MOMENT 1 = name:declare "I" on the library reel, MOMENT 2 = be:birth "am" (being-id "I",
 ///      parentBeingId=null — THE genesis marker), each a signed clock-free moment.
 ///
@@ -403,6 +384,6 @@ pub fn plant_and_ignite(
         other => GenesisError::Io(io::Error::new(io::ErrorKind::Other, format!("{other}"))),
     })?;
     // 2. plant the TWO I-Am moments under "I" (the minimal ignition seed — nothing else).
-    let planted = plant_genesis(root, story_domain, I_NAME_DEFAULT, &key, None)?;
+    let planted = plant_genesis(root, story_domain, &key, None)?;
     Ok((planted, key))
 }

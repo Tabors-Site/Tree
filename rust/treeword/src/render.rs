@@ -655,7 +655,7 @@ fn render_kindverb(node: &Json) -> String {
     }
 }
 
-/// The genesis life-register acts (rule 9): i-am, make (being/space), stand, give.
+/// The genesis life-register acts (rule 9): name:I, make (being/space), stand, give.
 ///
 /// Each genesis act is keyed on `of.id` (the genesis RULES build `of:{kind,id}`, never a `ref`), so a
 /// branch fires ONLY when the node is the genesis SHAPE. A flow-body `do <op>` deed of the same op carries
@@ -668,7 +668,7 @@ fn render_act(node: &Json) -> Option<String> {
     let act = s(node, "act");
     let has_id = !of_id(node).is_empty();
     match (verb, act) {
-        ("name", "i-am") => Some("I am \"what?\" I am.".to_string()),
+        ("name", "I") => Some("I am \"what?\" I am.".to_string()),
         ("be", "birth") if has_id => {
             // "I make <Capitalized>[, <description>]." — of.id carries the case the parser keys on.
             let id = of_id(node);

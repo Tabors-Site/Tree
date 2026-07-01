@@ -43,7 +43,7 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
 
     let radius = (rect.width().min(rect.height()) * 0.34).max(70.0);
     let hover = resp.hover_pos();
-    let mut clicked: Option<(String, String)> = None;
+    let mut clicked: Option<(String, String, String)> = None; // (kind, id, label)
 
     for (i, n) in nodes.iter().enumerate() {
         let pos = match n.coord {
@@ -66,17 +66,29 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
         }
         if hovered {
             painter.circle_stroke(pos, r + 4.0, egui::Stroke::new(1.5, egui::Color32::WHITE));
-            if resp.clicked() && !n.id.is_empty() {
-                clicked = Some((n.kind.clone(), n.id.clone()));
+            if resp.clicked() && !n.label.is_empty() {
+                clicked = Some((n.kind.clone(), n.id.clone(), n.label.clone()));
             }
         }
         painter.text(pos + egui::vec2(0.0, r + 11.0), egui::Align2::CENTER_CENTER, &n.label, egui::FontId::monospace(11.0), egui::Color32::from_gray(205));
     }
 
-    if let Some((kind, id)) = clicked {
-        p.st.address = format!("{kind}/{id}");
-        p.perceive_address();
+    // click a SPACE -> walk into it (append its name to the path); a BEING -> DRIVE it (pull it).
+    if let Some((kind, id, label)) = clicked {
+        match kind.as_str() {
+            "being" => p.drive_being(&id, label.trim_start_matches('@')),
+            _ => {
+                let target = child_address(&p.st.address, &label);
+                p.navigate(&target, true);
+            }
+        }
     }
+}
+
+/// Append a child space name to the current path (dropping any trailing @being).
+fn child_address(current: &str, name: &str) -> String {
+    let base = current.split('@').next().unwrap_or(current).trim_end_matches('/');
+    format!("{base}/{name}")
 }
 
 fn draw_grid(painter: &egui::Painter, rect: egui::Rect) {

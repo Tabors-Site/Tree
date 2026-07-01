@@ -29,6 +29,11 @@ treeprotocol = { path = "../treeprotocol" }
 # the binary is the EDGE that holds the story key: it loads .story/story.key and signs the story's (I)
 # own acts. Crypto lives here + in treesign, never in the spine/treeibp lib (which takes the closure).
 treesign = { path = "../treesign" }
+# OUTBOUND HTTPS at the edge: ureq (blocking, rustls — no OpenSSL, tiny surface) lets cognize POST a
+# chat-completion to an OpenAI-compatible cloud provider over TLS. This is the OUTBOUND edge ONLY (a
+# being's LLM able reaching its connected provider); the INBOUND wire stays plain WS (IBP). The local
+# http:// path (ollama on the LAN) keeps the zero-dep TcpStream client; https:// routes through ureq.
+ureq = { version = "3", default-features = false, features = ["rustls"] }
 
 [dev-dependencies]
 treecognition = { path = "../treecognition" }

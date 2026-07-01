@@ -102,6 +102,42 @@ fn build_payload(act: &Json, fact_ids: &[String], legacy: bool) -> Json {
     Json::Obj(entries)
 }
 
+// ── THE MOMENT KEY-PROOF (auth-at-moment, Rust-native, no JS antecedent) ─────
+//
+// A Name opens a moment by PROVING its key AT THE MOMENT: a signature by the Name's key over the
+// moment-request's stable identity fields. The edge recovers the pubkey straight from the Name id (the
+// key IS the id) and verifies this canonical payload. This is NEW (the JS had no per-moment proof); the
+// shape is deliberately small and clock-free so it is cheap to sign on every moment.
+//
+// The signed object — the moment's identity, NOT its transient envelope (no `actor` blob, no `verb`, no
+// federation marker), so the SAME perceive re-signs identically:
+//
+//   {
+//     nameId:  the Name opening the moment (its id IS its public key),
+//     history: normHistory(req.history),   // "" / absent -> "0"
+//     kind:    req.kind    ?? null,        // a reel perceive
+//     id:      req.id      ?? null,        // the reel id
+//     op:      req.op      ?? null,        // a see-op moment
+//     address: req.address ?? null,        // a scene-address moment
+//   }
+//
+// Every field is the moment's own; nothing wall-clock, nothing per-connection. The portal signs this
+// with the active being's seed; the edge verifies it with the pubkey decoded from `nameId`.
+
+/// Build the canonical MOMENT-PROOF payload a Name signs to open an authenticated moment. `req` is the
+/// moment request (its `history`/`kind`/`id`/`op`/`address` fields are read); `name_id` is the Name
+/// opening it (bound into the payload so a proof for one Name cannot be replayed as another).
+pub fn build_moment_proof_payload(name_id: &str, req: &Json) -> Json {
+    Json::Obj(vec![
+        ("nameId".into(), Json::Str(name_id.to_string())),
+        ("history".into(), Json::Str(norm_history(get(req, "history")))),
+        ("kind".into(), coalesce_null(get(req, "kind"))),
+        ("id".into(), coalesce_null(get(req, "id"))),
+        ("op".into(), coalesce_null(get(req, "op"))),
+        ("address".into(), coalesce_null(get(req, "address"))),
+    ])
+}
+
 // ── helpers (mirror the JS) ──
 
 /// Look up a key in a Json object. None when the value is not an object or the

@@ -20,9 +20,34 @@ pub fn actor_i() -> Json {
     jobj(vec![("beingId", jstr("I")), ("name", jstr("I"))])
 }
 
-/// The actor for a loaded being (a being's id is its pubkey/key-id, per the id-derivation rule).
-pub fn actor_for(name: &str, key_id: &str) -> Json {
-    jobj(vec![("beingId", jstr(key_id)), ("name", jstr(name)), ("nameId", jstr(key_id))])
+
+/// The actor for the active NAME (no being yet): `{nameId, name}`. The server reads `nameId` to gate.
+pub fn actor_name(name_id: &str, label: &str) -> Json {
+    jobj(vec![("nameId", jstr(name_id)), ("name", jstr(label))])
+}
+
+/// The actor for a Name DRIVING a being: `{beingId, nameId, name}`. The being holds no key; the Name
+/// (nameId) signs + authenticates; the beingId rides for attribution.
+pub fn actor_being(being_id: &str, name_id: &str, name: &str) -> Json {
+    jobj(vec![("beingId", jstr(being_id)), ("nameId", jstr(name_id)), ("name", jstr(name))])
+}
+
+/// The Name id of an actor (None for the anonymous I-Am actor — which needs no key-proof).
+pub fn actor_name_id(actor: &Json) -> Option<String> {
+    match get(actor, "nameId") {
+        Some(Json::Str(s)) if s != "I" => Some(s.clone()),
+        _ => None,
+    }
+}
+
+/// A moment request as Json (so the caller can sign it before stringifying).
+pub fn moment_req(address: &str, history: &str, actor: &Json) -> Json {
+    jobj(vec![
+        ("verb", jstr("moment")),
+        ("address", jstr(address)),
+        ("history", jstr(history)),
+        ("actor", actor.clone()),
+    ])
 }
 
 /// Take a moment of a stored reel — a place (a `space`), a `being`, `matter`, … : perceive + the face.
@@ -36,10 +61,7 @@ pub fn moment_reel(kind: &str, id: &str, history: &str, actor: &Json) -> String 
     ]))
 }
 
-/// Take a moment of the reel index — the catalog of what exists (no target).
-pub fn moment_index() -> String {
-    treehash::stringify(&jobj(vec![("verb", jstr("moment"))]))
-}
+
 
 /// Take a STORY moment of a name — the kernel's special render that gets the Words for that name. The
 /// `render:"story"` hint asks the kernel for the woven narrative face (it returns the plain being face

@@ -22,13 +22,11 @@ treesign = { path = "../treesign" }
 # dependency is one-way (treecognition is pure: treehash/treeword/treeval/treeaddress only; it does NOT
 # depend on treehost), so no cycle.
 treecognition = { path = "../treecognition" }
-# AES-256-CBC for the LLM api-key encryptor INJECTED into resolve_connection / resolve_connection_update.
-# The JS floor (connect.js) encrypts the key as `ivHex:ciphertextHex` (aes-256-cbc, 16-byte random IV)
-# under CUSTOM_LLM_API_SECRET_KEY so the stored ciphertext stays decryptable by the JS reality. treesign
-# only carries AES-GCM (a different cipher), so the CBC primitive lives here, scoped to the LLM seam.
-cbc = "0.4"
-aes = "0.8"
-hex = "0.4"
+# The LLM api-key encryptor INJECTED into resolve_connection / resolve_connection_update is the FRESH
+# treesign at-rest seal (AES-256-GCM under credential_key(JWT_SECRET) — treesign::encrypt_credential), the
+# same envelope every other at-rest secret uses; the outbound edge unseals with treesign::decrypt_credential.
+# The legacy AES-256-CBC `ivHex:ciphertextHex` shim (cbc/aes/hex deps) is GONE — one crypto, one reality.
+# getrandom stays for the connection-id mint (a fresh positional uuid keying the connections Map).
 getrandom = "0.2"
 
 # The resolver tests plant rows the SAME way treeproj/treefold's write-half tests do: stamp a reel

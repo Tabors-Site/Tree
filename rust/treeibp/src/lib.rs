@@ -240,7 +240,7 @@ pub fn has_authority_over(dir: &Path, history: &str, name_id: &str, being_id: &s
     if name_id.is_empty() || being_id.is_empty() {
         return false;
     }
-    if name_id == I_AM || name_id == "i-am" || name_id == "I" {
+    if name_id == I_AM {
         return true; // I is the source of all authority on its own story
     }
     let mut seen = std::collections::HashSet::new();
@@ -319,7 +319,6 @@ pub fn authorize(
     let able_result = able_walk(&WalkArgs {
         identity: Some(identity),
         verb,
-        i_am: I_AM,
         owner_claim: owner_claim.as_ref(),
         grants: &grant_structs,
         target_space,
@@ -339,7 +338,6 @@ pub fn authorize(
         verb,
         target: None,
         audit_being_id,
-        i_am: I_AM,
         ext_blocked: None,
         able_result: &able_result,
         inheritation_ok,
@@ -497,7 +495,7 @@ pub fn act_with_ops_bound(
     // being is a `caller`. The closure closes over (dir, history, resolver, auth) and calls
     // treehost::Resolvers - the faithful mirror of the `host`/`able_spec_of` injection seams.
     let auth = match get_str(actor, "beingId") {
-        Some(b) if b == I_AM || b == "i-am" => treehost::AuthCtx::i_am(),
+        Some(b) if b == I_AM => treehost::AuthCtx::i_am(),
         Some(b) if !b.is_empty() => treehost::AuthCtx::caller(b),
         _ => treehost::AuthCtx::default(),
     };
@@ -801,7 +799,7 @@ pub fn run_op_word(
     sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
 ) -> Vec<Outcome> {
     let auth = match get_str(actor, "beingId") {
-        Some(b) if b == I_AM || b == "i-am" => treehost::AuthCtx::i_am(),
+        Some(b) if b == I_AM => treehost::AuthCtx::i_am(),
         Some(b) if !b.is_empty() => treehost::AuthCtx::caller(b),
         _ => treehost::AuthCtx::default(),
     };
@@ -1151,6 +1149,11 @@ fn fact_binding_of(see_op: &str) -> Option<(&'static str, &'static str)> {
         "resolve-birth-space" => Some(("create-space", "space")),
         "resolve-birth-spec" => Some(("create-matter", "matter")),
         "resolve-end-space-spec" => Some(("end-space", "space")),
+        // LLM connection update/delete: the `.word` has NO explicit `do` deed — its `Return beingId:...,
+        // factParams: $patch.setBeingParams` IS the fact terminator (the dispatcher lays the one
+        // do:set-being on the caller's being from the returned block). add-llm-connection / assign-llm-
+        // slot / set-*-llm carry explicit `do` deeds instead, so they need no entry here.
+        "resolve-connection-update" | "resolve-connection-removal" => Some(("set-being", "being")),
         _ => None,
     }
 }

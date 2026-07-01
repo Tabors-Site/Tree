@@ -259,7 +259,6 @@ pub struct Grant<'a> {
 pub struct WalkArgs<'a> {
     pub identity: Option<&'a Json>, // { beingId, name }
     pub verb: &'a str,
-    pub i_am: &'a str,
     pub owner_claim: Option<&'a Json>, // { ownerIds:[…], spaceId } — nearest owned ancestor
     pub grants: &'a [Grant<'a>],
     pub target_space: Option<&'a str>,
@@ -272,9 +271,9 @@ pub struct WalkArgs<'a> {
 pub fn able_walk(a: &WalkArgs) -> Json {
     let field = |k: &str| a.identity.and_then(|i| get(i, k)).and_then(as_str);
 
-    // 1. I-Am bootstrap axiom
+    // 1. I-Am bootstrap axiom — the I-being is "I"
     let being_id = field("beingId");
-    if being_id == Some(a.i_am) || field("name") == Some(a.i_am) {
+    if being_id == Some("I") || field("name") == Some("I") {
         return grant("i-am", Json::Null);
     }
     // 2. ownership — nearest-claim-wins; an identified actor in the claim's owners ⇒ allow.
@@ -359,32 +358,32 @@ mod tests {
 
         // 1. I-Am bypass
         let iam = spec(r#"{"beingId":"I"}"#);
-        let r = able_walk(&WalkArgs { identity: Some(&iam), verb: "do", i_am: "I", owner_claim: None, grants: &[], target_space: None, target_path: None, req: req_do("x") });
+        let r = able_walk(&WalkArgs { identity: Some(&iam), verb: "do", owner_claim: None, grants: &[], target_space: None, target_path: None, req: req_do("x") });
         assert_eq!(as_str(get(&r, "able").unwrap()), Some("i-am"));
 
         // 2. owner — nearest-claim-wins
         let claim = spec(r#"{"ownerIds":["b1"],"spaceId":"s1"}"#);
-        let r = able_walk(&WalkArgs { identity: Some(&id), verb: "do", i_am: "I", owner_claim: Some(&claim), grants: &[], target_space: None, target_path: None, req: req_do("x") });
+        let r = able_walk(&WalkArgs { identity: Some(&id), verb: "do", owner_claim: Some(&claim), grants: &[], target_space: None, target_path: None, req: req_do("x") });
         assert_eq!(as_str(get(&r, "able").unwrap()), Some("owner"));
         assert_eq!(as_str(get(&r, "anchor").unwrap()), Some("s1"));
 
         // 3. a grant whose reach covers (base) AND whose spec permits
         let gspec = spec(r#"{"canDo":["set-being:*"]}"#);
         let grants = [Grant { able: "editor", anchor_space_id: None, spec: &gspec, host_space_id: Some("root"), base_covered: true }];
-        let r = able_walk(&WalkArgs { identity: Some(&id), verb: "do", i_am: "I", owner_claim: None, grants: &grants, target_space: Some("sX"), target_path: None, req: req_do("set-being:position") });
+        let r = able_walk(&WalkArgs { identity: Some(&id), verb: "do", owner_claim: None, grants: &grants, target_space: Some("sX"), target_path: None, req: req_do("set-being:position") });
         assert_eq!(as_str(get(&r, "able").unwrap()), Some("editor"));
         assert_eq!(as_str(get(&r, "anchor").unwrap()), Some("root"));
 
         // 4. a grant that permits but whose reach EXCLUDES the target -> deny
         let gspec2 = spec(r#"{"canDo":["*"],"reach":["/garden/**"]}"#);
         let grants2 = [Grant { able: "editor", anchor_space_id: None, spec: &gspec2, host_space_id: None, base_covered: false }];
-        let r = able_walk(&WalkArgs { identity: Some(&id), verb: "do", i_am: "I", owner_claim: None, grants: &grants2, target_space: None, target_path: Some("/other"), req: req_do("x") });
+        let r = able_walk(&WalkArgs { identity: Some(&id), verb: "do", owner_claim: None, grants: &grants2, target_space: None, target_path: Some("/other"), req: req_do("x") });
         assert!(matches!(get(&r, "ok"), Some(Json::Bool(false))));
         assert!(as_str(get(&r, "reason").unwrap()).unwrap().starts_with("no granted able permits do:x"));
 
         // 5. anonymous (no being) -> no grants, no owner -> deny (must connect to a public being first)
         let anon = spec("{}");
-        let r = able_walk(&WalkArgs { identity: Some(&anon), verb: "see", i_am: "I", owner_claim: None, grants: &[], target_space: None, target_path: None, req: req_see("place") });
+        let r = able_walk(&WalkArgs { identity: Some(&anon), verb: "see", owner_claim: None, grants: &[], target_space: None, target_path: None, req: req_see("place") });
         assert!(matches!(get(&r, "ok"), Some(Json::Bool(false))));
     }
 

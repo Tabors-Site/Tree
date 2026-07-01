@@ -1,5 +1,9 @@
-// chrome/ibp_bar.rs — the IBP address bar: the glue. Connection dot, back/forward, the full-chain
-// RIGHT address (like a URL), and the view switcher. Editing the address + Enter takes a moment.
+// chrome/ibp_bar.rs — the IBP address bar: the glue. Two stances, both shown as full chains (like a URL):
+//   LEFT  = who you are / where you stand / on what branch  (@being#history/path) — editable: #history
+//           switches your branch, @being the being you drive, the path your position.
+//   RIGHT = what you perceive (story#history/space/space@being) — editable; Enter navigates.
+// Plus browser nav: back ◄ / forward ►, / (jump to your story root), ~ (jump to your being's home),
+// the view switcher, a connection dot, and a cross-history amber tint when LEFT history != RIGHT history.
 
 use eframe::egui;
 
@@ -10,8 +14,9 @@ use crate::Portal;
 pub fn show(ctx: &egui::Context, p: &mut Portal) {
     egui::TopBottomPanel::top("ibp").show(ctx, |ui| {
         ui.add_space(5.0);
+
+        // row 1: connection dot · back/forward · / · ~ · view switcher
         ui.horizontal(|ui| {
-            // connection dot
             let (col, tip) = match p.wire.as_ref().map(|w| w.status()) {
                 Some(Status::Open) => (egui::Color32::from_rgb(90, 200, 130), "connected".to_string()),
                 Some(Status::Connecting) => (egui::Color32::from_rgb(220, 180, 70), "connecting…".to_string()),
@@ -19,10 +24,20 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
                 None => (egui::Color32::GRAY, "offline".to_string()),
             };
             ui.colored_label(col, "●").on_hover_text(tip);
-            ui.add_enabled(false, egui::Button::new("◄").frame(false));
-            ui.add_enabled(false, egui::Button::new("►").frame(false));
 
-            // view switcher, right-aligned
+            if ui.add_enabled(p.can_back(), egui::Button::new("◄").frame(false)).on_hover_text("back").clicked() {
+                p.nav_back();
+            }
+            if ui.add_enabled(p.can_forward(), egui::Button::new("►").frame(false)).on_hover_text("forward").clicked() {
+                p.nav_forward();
+            }
+            if ui.button("/").on_hover_text("your story root").clicked() {
+                p.navigate("/", true);
+            }
+            if ui.button("~").on_hover_text("your being's home").clicked() {
+                p.navigate("~", true);
+            }
+
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 for v in [View::World3d, View::Story, View::Map2d] {
                     if ui.selectable_label(p.st.view == v, v.label()).clicked() {
@@ -32,20 +47,52 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
             });
         });
 
-        // LEFT stance (who you are) :: RIGHT (what you perceive) — the full chain, like a URL bar
+        // row 2: LEFT :: RIGHT  (full chains). Cross-history (LEFT #h != RIGHT #h) tints :: amber.
+        let cross = cross_history(&p.st.left_stance, &p.st.address);
+        let sep_col = if cross { egui::Color32::from_rgb(226, 197, 116) } else { egui::Color32::from_gray(110) };
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new(p.actor_label()).monospace().color(egui::Color32::from_rgb(120, 170, 230)));
-            ui.label(egui::RichText::new("::").weak());
-            let resp = ui.add(
+            // LEFT (actor) — editable; for now #history applies (being/position switching lands with tabs)
+            let left = ui.add(
+                egui::TextEdit::singleline(&mut p.st.left_stance)
+                    .desired_width(ui.available_width() * 0.32)
+                    .font(egui::TextStyle::Monospace)
+                    .text_color(egui::Color32::from_rgb(120, 170, 230)),
+            );
+            if left.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                p.apply_left_stance();
+            }
+
+            ui.label(egui::RichText::new("::").color(sep_col).strong());
+
+            // RIGHT (view) — editable; Enter navigates
+            let right = ui.add(
                 egui::TextEdit::singleline(&mut p.st.address)
-                    .hint_text("kind/id   (e.g. space/<id> · being/<id>) — empty = the index")
                     .desired_width(ui.available_width())
+                    .hint_text("story#history/space/space@being")
                     .font(egui::TextStyle::Monospace),
             );
-            if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            if right.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 p.perceive_address();
             }
         });
+        if cross {
+            ui.label(egui::RichText::new("cross-history — you act on your branch while viewing another").color(egui::Color32::from_rgb(226, 197, 116)).small());
+        }
         ui.add_space(5.0);
     });
+}
+
+/// True when the LEFT stance's #history differs from the RIGHT address's #history.
+fn cross_history(left: &str, right: &str) -> bool {
+    history_of(left) != history_of(right)
+}
+
+fn history_of(s: &str) -> String {
+    // the segment between '#' and the next '/' or '@', else "0"
+    if let Some(i) = s.find('#') {
+        let rest = &s[i + 1..];
+        let end = rest.find(['/', '@']).unwrap_or(rest.len());
+        return rest[..end].to_string();
+    }
+    "0".to_string()
 }

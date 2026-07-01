@@ -212,7 +212,7 @@ fn rules() -> &'static [(Regex, Builder)] {
         // I am "what?" I am.   (the genesis verse)
         (
             Regex::new(r#"(?i)^I am "what\?" I am\.$"#).unwrap(),
-            |_m| obj(vec![("kind", jstr("act")), ("verb", jstr("name")), ("act", jstr("i-am")), ("by", jstr("I"))]),
+            |_m| obj(vec![("kind", jstr("act")), ("verb", jstr("name")), ("act", jstr("I")), ("by", jstr("I"))]),
         ),
         // I make <Capitalized>[, <description>].   -> birth a being
         (

@@ -9,6 +9,7 @@
 // unrelated act wakes nobody. The rasterize is one-shot re-perception (ibp::handle_wire on the stored
 // moment request) — the same fold the first moment ran, so the pushed face matches a fresh perceive.
 
+use std::collections::HashMap;
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -23,6 +24,48 @@ static CONN_SEQ: AtomicU64 = AtomicU64::new(1);
 /// A fresh per-connection id (the open-stamper key).
 pub fn next_conn_id() -> u64 {
     CONN_SEQ.fetch_add(1, Ordering::Relaxed)
+}
+
+// ── THE OPEN MOMENT AS THE SESSION (auth-at-moment) ──────────────────────────
+//
+// A Name opens a moment by proving its key AT THE MOMENT (a signature by the Name's key over the
+// moment-request's identity payload). Once proven, the connection holds an OPEN AUTHENTICATED MOMENT for
+// that Name — an in-memory session keyed on the connection. The Name's ACTS then RIDE the open moment:
+// they are attributed to it WITHOUT re-checking the key (the key was checked at the moment). The session
+// is EPHEMERAL: it lives only in this map, keyed on conn/Name, and dies when the socket closes (see
+// `close_conn` / `forget_conn`). CLOCK-FREE: no wall-clock, no TTL — the open socket IS the lifetime.
+//
+// `I` (the story) never appears here: its custodial story key is verified at the edge's signer, the
+// conn-less path (HTTP /word, federation hops, the legacy read) carries conn 0 and is exempt.
+
+/// The session table: conn -> the set of authenticated Name ids that conn has an open moment for. A
+/// connection may open moments for more than one Name (e.g. switching the active being in the portal);
+/// each authenticated Name persists until the socket closes.
+fn sessions() -> &'static Mutex<HashMap<u64, Vec<String>>> {
+    static S: OnceLock<Mutex<HashMap<u64, Vec<String>>>> = OnceLock::new();
+    S.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Record an authenticated Name on a connection's open moment (the key was proven at THIS moment). The
+/// open moment = the session: every later act by this Name on this conn rides it. Idempotent.
+pub fn authenticate(conn: u64, name_id: &str) {
+    let mut map = lock(sessions());
+    let names = map.entry(conn).or_default();
+    if !names.iter().any(|n| n == name_id) {
+        names.push(name_id.to_string());
+    }
+}
+
+/// True when this connection has an OPEN AUTHENTICATED MOMENT for the named actor (the key was checked
+/// at the moment). An act with no such open moment is rejected — you cannot act without a moment.
+pub fn is_authenticated(conn: u64, name_id: &str) -> bool {
+    lock(sessions()).get(&conn).is_some_and(|names| names.iter().any(|n| n == name_id))
+}
+
+/// Drop a connection's whole session (its open authenticated moments). Called when the socket closes —
+/// the session is in-memory and dies with the connection; NO chain write.
+pub fn forget_conn(conn: u64) {
+    lock(sessions()).remove(&conn);
 }
 
 struct Stamper {
@@ -71,7 +114,9 @@ pub fn after_message(conn: u64, writer: &Arc<Mutex<TcpStream>>, msg: &str, root:
     }
 }
 
-/// Drop a connection's open moments (it acted, or it disconnected).
+/// Drop a connection's open moments (it acted, or it disconnected). On a true disconnect the caller
+/// ALSO calls `forget_conn` to drop the authenticated session; an act-close keeps the session (the Name
+/// is still authenticated, only its perceive closes).
 pub fn close_conn(conn: u64) {
     lock(registry()).retain(|s| s.conn != conn);
 }

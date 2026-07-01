@@ -1,14 +1,25 @@
-// llm_http.rs — the LLM TRANSPORT at the edge: a zero-dep HTTP client (over TcpStream, like the
-// server) that POSTs the assembled Word prompt to an OpenAI-compatible / ollama endpoint and returns
-// the model's text. This is the ONE external boundary treecognition leaves open (it consumes a plain
-// `&str -> Result<String,…>` transport); the protocol shaping (chat body, content extraction) + the
-// socket live HERE, so the decider stays provider-agnostic.
+// llm_http.rs — the LLM TRANSPORT at the edge: the OUTBOUND client that POSTs the assembled Word prompt
+// to an OpenAI-compatible / ollama endpoint and returns the model's text. This is the ONE external
+// boundary treecognition leaves open (it consumes a plain `&str -> Result<String,…>` transport); the
+// protocol shaping (chat body, content extraction) + the socket live HERE, so the decider stays
+// provider-agnostic.
 //
-// HTTP only for now — a local model (ollama/qwen3 on http://, the one-token-per-Word experiment's
-// substrate) needs no TLS. An https:// cloud endpoint needs a TLS client dep at the edge (like
-// treesign's ed25519); that is a deliberate follow-up, not built here. Token-at-a-time streaming
-// (stream:true / SSE) is the next refinement — this first cut requests the full completion and returns
-// the whole Word, which decide_llm parses; the emergent one-token-per-Word decode lands on top.
+// TWO transports, by scheme:
+//   - http://  — a LOCAL model (ollama/qwen3 on the LAN) needs no TLS; the zero-dep TcpStream client
+//                stays (`call_http`), so booting an offline local inference backend pulls in no crypto.
+//   - https:// — a CLOUD provider (OpenAI-compatible) needs TLS; `call_https` uses `ureq` (blocking,
+//                rustls — no OpenSSL, a tiny outbound-only surface). This is the OUTBOUND edge ONLY; the
+//                inbound IBP wire stays plain WS. The SSRF gate runs at the cognize seam BEFORE either
+//                socket opens, so neither path can be reached with a disallowed base URL.
+//
+// The api key is sealed on the chain with the FRESH treesign at-rest envelope (AES-256-GCM under
+// credential_key(JWT_SECRET) — treehost::llm::encrypt_api_key). It DECRYPTS here (`decrypt_api_key`) with
+// the matching treesign::decrypt_credential only to set the Authorization bearer at the moment of the call
+// — the cleartext key never leaves this edge and never returns to a fact.
+//
+// Token-at-a-time streaming (stream:true / SSE) over https is the next refinement — this cut requests the
+// full completion and returns the whole Word, which decide_llm parses; the one-token-per-Word decode lands
+// on top.
 
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -161,10 +172,57 @@ fn dechunk(body: &str) -> String {
 }
 
 /// Call ONE connection: POST the chat body, read the reply, classify failures as a CallError (so
-/// call_with_failover can branch). A non-2xx status carries its code; a socket/timeout error is a
-/// timeout-class failure.
+/// call_with_failover can branch). Dispatches by scheme — https:// -> the ureq/rustls TLS client (cloud
+/// providers), http:// -> the zero-dep TcpStream client (local ollama). The SSRF gate has already passed
+/// the base URL at the cognize seam, so this layer only opens the socket the operator opted into.
 pub fn call_connection(conn: &Conn, system_prompt: &str) -> Result<String, CallError> {
-    let (host, port, base) = parse_http_url(&conn.base_url).ok_or_else(|| CallError::status(0, "base URL must be http:// (no TLS at the edge yet)"))?;
+    if conn.base_url.starts_with("https://") {
+        call_https(conn, system_prompt)
+    } else {
+        call_http(conn, system_prompt)
+    }
+}
+
+/// Pull the spoken Word from a raw response body: a single JSON object (stream:false / non-streaming
+/// server) parses once; a streamed (SSE / NDJSON) body is walked token by token.
+fn word_from_body(resp_body: &str) -> String {
+    match treehash::parse(resp_body.trim()) {
+        Ok(single) => extract_content(&single),
+        Err(_) => accumulate_stream(resp_body),
+    }
+}
+
+/// OUTBOUND HTTPS (cloud provider) over ureq + rustls. POST the chat body with the bearer header, read
+/// the completion. A non-2xx maps to its status (so failover branches); a transport/timeout error is a
+/// timeout-class failure. TLS is the ONLY thing ureq adds — same body, same extraction as the http path.
+fn call_https(conn: &Conn, system_prompt: &str) -> Result<String, CallError> {
+    let url = format!("{}/v1/chat/completions", conn.base_url.trim_end_matches('/'));
+    let body = chat_request_body(&conn.model, system_prompt, false); // full completion (https streaming = follow-up)
+
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(conn.timeout_secs.max(1))))
+        .build()
+        .into();
+    let mut req = agent.post(&url).header("content-type", "application/json");
+    if let Some(k) = &conn.key {
+        req = req.header("authorization", &format!("Bearer {k}"));
+    }
+    match req.send(&body) {
+        Ok(mut resp) => {
+            let text = resp.body_mut().read_to_string().map_err(|e| CallError::timeout(format!("read body: {e}")))?;
+            Ok(word_from_body(&text))
+        }
+        // ureq surfaces a non-2xx as a StatusCode error (status_as_error defaults on). Carry its code so
+        // call_with_failover classifies 429/502/503/504 as retryable, 4xx/500 as fatal.
+        Err(ureq::Error::StatusCode(code)) => Err(CallError::status(code as u32, format!("model endpoint returned {code}"))),
+        Err(e) => Err(CallError::timeout(format!("https transport: {e}"))),
+    }
+}
+
+/// OUTBOUND HTTP (local model) over the zero-dep TcpStream client — no TLS, no crypto dep, so an offline
+/// local inference backend (ollama/qwen3 on the LAN) needs nothing more than the std net stack.
+fn call_http(conn: &Conn, system_prompt: &str) -> Result<String, CallError> {
+    let (host, port, base) = parse_http_url(&conn.base_url).ok_or_else(|| CallError::status(0, "base URL must be http:// or https://"))?;
     let path = format!("{base}/v1/chat/completions");
     let body = chat_request_body(&conn.model, system_prompt, true); // token-at-a-time output
 
@@ -188,17 +246,26 @@ pub fn call_connection(conn: &Conn, system_prompt: &str) -> Result<String, CallE
     if !(200..300).contains(&status) {
         return Err(CallError::status(status as u32, format!("model endpoint returned {status}")));
     }
-    // a streamed reply (SSE / NDJSON) is many chunks, not one object; stream:false or a non-streaming
-    // server returns one object. Single-object parse first, else walk the token stream.
-    let word = match treehash::parse(resp_body.trim()) {
-        Ok(single) => extract_content(&single),
-        Err(_) => accumulate_stream(&resp_body),
-    };
-    Ok(word)
+    Ok(word_from_body(&resp_body))
 }
 
 fn status_guess(_raw: &[u8]) -> u32 {
     502 // a malformed/truncated upstream reply is a retryable gateway-class failure
+}
+
+/// DECRYPT the stored LLM api key with the FRESH treesign shape — AES-256-GCM under
+/// credential_key(JWT_SECRET) (HKDF-SHA256), the same at-rest seal treesign::credential uses for every
+/// other secret. NO legacy AES-256-CBC `ivHex:ciphertextHex` anywhere: the connection-seal's encrypt side
+/// (treehost::llm::encrypt_api_key) now uses the matching treesign::encrypt_credential, so seal and unseal
+/// are the SAME primitive. One envelope, one reality.
+///
+/// JWT_SECRET is the edge secret (read from the process env, like the story key). Returns None on an
+/// absent env secret or a malformed/corrupt blob (never panics); the caller then sends no bearer (a local
+/// model needs none). The cleartext stays in this function's caller and never re-enters a fact.
+pub fn decrypt_api_key(blob: &str) -> Option<String> {
+    let secret = std::env::var("JWT_SECRET").ok().filter(|s| !s.is_empty())?;
+    let key = treesign::credential_key(&secret);
+    treesign::decrypt_credential(blob, &key)
 }
 
 #[cfg(test)]
@@ -253,9 +320,35 @@ mod tests {
     }
 
     #[test]
-    fn rejects_https_base_url() {
+    fn parse_http_url_is_the_http_path_only() {
+        // parse_http_url parses the LOCAL http path; https is routed to call_https (ureq), not parsed here.
         assert!(parse_http_url("https://api.openai.com").is_none());
         assert_eq!(parse_http_url("http://localhost:11434/v1").unwrap(), ("localhost".to_string(), 11434, "/v1".to_string()));
         assert_eq!(parse_http_url("http://host").unwrap(), ("host".to_string(), 80, "".to_string()));
+    }
+
+    #[test]
+    fn decrypt_api_key_uses_the_fresh_treesign_shape() {
+        // FRESH shape only: AES-256-GCM under credential_key(JWT_SECRET) — the same seal treesign uses for
+        // every at-rest secret. NO legacy AES-CBC ivHex:ctHex.
+        let secret = "the-edge-jwt-secret";
+        std::env::set_var("JWT_SECRET", secret);
+        let key = treesign::credential_key(secret);
+        let blob = treesign::encrypt_credential("sk-secret-123", &key).unwrap();
+        assert_eq!(decrypt_api_key(&blob).as_deref(), Some("sk-secret-123"));
+        // a malformed blob -> None (no panic); the caller then sends no bearer
+        assert_eq!(decrypt_api_key("not-base64!!"), None);
+        std::env::remove_var("JWT_SECRET");
+        // no env secret -> None
+        assert_eq!(decrypt_api_key(&blob), None);
+    }
+
+    #[test]
+    fn https_dispatch_uses_non_streaming_body() {
+        // a https conn requests the full completion (stream:false) — the streamed token decode is the
+        // http path / a follow-up; this asserts the body shape the https transport sends.
+        let b = chat_request_body("gpt-4o", "I am Cain.", false);
+        let p = treehash::parse(&b).unwrap();
+        assert!(matches!(get(&p, "stream"), Some(Json::Bool(false))));
     }
 }

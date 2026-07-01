@@ -73,10 +73,10 @@ pub use credential::{credential_key, decrypt_credential, encrypt_credential, has
 pub use jwt::{decode_jwt, sign_jwt_hs256, verify_jwt_hs256};
 pub use nameid::{encode_key_id, is_key_id, key_id_to_pubkey, MAX_KEY_ID_LEN};
 pub use password_lock::{decrypt_with_password, encrypt_with_password, is_password_locked};
-pub use payload::{build_act_sig_payload, build_act_sig_payload_legacy};
+pub use payload::{build_act_sig_payload, build_act_sig_payload_legacy, build_moment_proof_payload};
 pub use sign::{
-    keypair_from_seed, sign_payload, sign_value, verify_act_sig, verify_act_sig_by_name,
-    verify_name_sig, verify_with_pubkey, Keypair,
+    keypair_from_seed, sign_moment_proof, sign_payload, sign_value, verify_act_sig,
+    verify_act_sig_by_name, verify_moment_proof, verify_name_sig, verify_with_pubkey, Keypair,
 };
 
 // The canonicalizer + Json the sig is defined against. Re-exported so a caller

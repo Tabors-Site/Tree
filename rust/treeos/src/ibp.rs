@@ -34,8 +34,157 @@ fn obj(f: Vec<(&str, Json)>) -> Json {
     Json::Obj(f.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
 }
 
-/// Handle one wire message: a moment/act JSON, else the legacy text read. Returns the JSON reply.
+/// The CONN-LESS / custodial path: no open-moment session is tracked. Used by the HTTP `/word` seam,
+/// federation hops, the live re-rasterize, and tests. Auth-at-moment is BYPASSED here (conn 0): only the
+/// story's own custodial path drives it, and `I`'s acts are signed by the edge's story key, not by a
+/// per-connection moment. The WS lane uses `handle_wire_conn` so a Name's key is proven at the moment.
 pub fn handle_wire(msg: &str, root: &Path) -> String {
+    handle_wire_conn(msg, root, 0)
+}
+
+/// AUTH-AT-MOMENT. The `conn` is the open-moment session key (live.rs). A `moment` that names a non-`I`
+/// actor must carry a KEY-PROOF (a signature by the Name's key over the moment's identity); on success
+/// the Name is recorded as authenticated on THIS conn (the open moment = the session). An `act` by a
+/// non-`I` actor must ride an OPEN AUTHENTICATED MOMENT for that actor on this conn (the key was checked
+/// at the moment, not per-act). conn 0 = the custodial path: the gate is skipped (see `handle_wire`).
+pub fn handle_wire_conn(msg: &str, root: &Path, conn: u64) -> String {
+    if conn != 0 {
+        if let Ok(req) = treehash::parse(msg.trim()) {
+            // federation hops carry a foreign address: leave them to the dispatch below (the peer
+            // verifies the I signature; a forwarded act is already signed). Local moment/act gate here.
+            let foreign = get(&req, "federated").is_none()
+                && get_str(&req, "address").is_some_and(|addr| {
+                    let local = crate::config::story_host(root).unwrap_or_else(|| "localhost".to_string());
+                    treecognition::federation::cross_story_target(&addr, &local).is_some()
+                });
+            if !foreign {
+                match get_str(&req, "verb").as_deref() {
+                    Some("moment") => {
+                        if let Err(e) = gate_moment(&req, conn, root) {
+                            return json(&e.envelope());
+                        }
+                    }
+                    Some("act") => {
+                        if let Err(e) = gate_act(&req, conn) {
+                            return json(&e.envelope());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    handle_wire_inner(msg, root)
+}
+
+/// THE MOMENT GATE: verify the Name's key-proof AT THE MOMENT, then open the session. `I` (the story's
+/// custodial key, verified at the edge signer) and an actor-less moment (the reel index) need no proof.
+/// A non-`I` actor MUST carry a `proof.value` signed by its key over this moment's identity; on success
+/// the Name is authenticated on this conn (its later acts ride this open moment). On a bad/absent proof
+/// the moment is REJECTED — you cannot open a Name's moment without its key.
+///
+/// THE OPTIONAL BEING-PASSWORD (the EXTRA gate): the Name's key is the WHOLE gate for MOST beings. A
+/// being MAY set an extra `password` (a hash on its folded state); only THEN must the moment that
+/// perceives it also carry the matching `password`. A passwordless being needs no extra gate; the
+/// Name's key already passed. Checked AFTER the key-proof (the key is primary; the password is the
+/// inner door the Name unlocks to inhabit a protected being).
+fn gate_moment(req: &Json, conn: u64, root: &Path) -> Result<(), IbpError> {
+    let actor = match get(req, "actor") {
+        Some(a) => a,
+        None => return Ok(()), // the reel index / a bare moment — nothing to authenticate
+    };
+    let name_id = actor_name_id(actor);
+    let name_id = match name_id {
+        Some(n) => n,
+        None => return Ok(()), // no named actor (anonymous read) — no session to open
+    };
+    if is_story(&name_id) {
+        return Ok(()); // I: the custodial story key is the edge's, not a per-moment proof
+    }
+    let proof = get(req, "proof").and_then(|p| get_str(p, "value"));
+    match proof {
+        Some(sig) if treesign::verify_moment_proof(&name_id, req, &sig) => {
+            gate_being_password(req, root)?; // the optional extra gate (only if the being set one)
+            crate::live::authenticate(conn, &name_id); // the open moment IS the session
+            Ok(())
+        }
+        _ => Err(IbpError::new(
+            code::UNAUTHORIZED,
+            format!("moment for '{name_id}' needs a valid key-proof (a signature by the Name's key over the moment)"),
+        )),
+    }
+}
+
+/// THE OPTIONAL BEING-PASSWORD gate. If this moment perceives a `being` whose folded state carries a
+/// non-empty `password` (a stored hash), the moment MUST also carry a matching plaintext `password`
+/// (timing-safe-verified against the hash). A being with NO password set is the common case — it needs
+/// no extra gate and returns Ok at once (the Name's key was the whole gate). Only a `kind:"being"`
+/// perceive reads a password; a scene/see-op/index moment has no being to gate, so it is exempt.
+fn gate_being_password(req: &Json, root: &Path) -> Result<(), IbpError> {
+    if get_str(req, "kind").as_deref() != Some("being") {
+        return Ok(()); // not a being perceive; nothing carries a being-password
+    }
+    let being_id = match get_str(req, "id") {
+        Some(id) => id,
+        None => return Ok(()),
+    };
+    let facts = treestore::read_reel_file(root, "0", "being", &being_id, None, None);
+    if facts.is_empty() {
+        return Ok(()); // no such being reel yet — no password to gate (e.g. a fresh perceive)
+    }
+    let state = treefold::fold("being", &facts);
+    let hash = match get_str(&state, "password") {
+        Some(h) if !h.is_empty() => h,
+        _ => return Ok(()), // the dominant case: the being set NO password — the Name's key suffices
+    };
+    let given = get_str(req, "password").unwrap_or_default();
+    if treesign::verify_password(&given, &hash) {
+        Ok(())
+    } else {
+        Err(IbpError::new(
+            code::UNAUTHORIZED,
+            format!("being '{being_id}' is password-protected — this moment needs its password"),
+        ))
+    }
+}
+
+/// THE ACT GATE: an act RIDES the open moment. A non-`I` actor's act is attributed WITHOUT re-checking
+/// the key (it was checked at the moment) — but it MUST have an open authenticated moment for that actor
+/// on this conn. No open moment -> REJECTED (you cannot act without a moment). `I`'s acts are exempt
+/// (custodial). The act still carries its own signature for the FACT's chain provenance, verified
+/// downstream in the seal; this gate is the SESSION check, not the fact-sig check.
+fn gate_act(req: &Json, conn: u64) -> Result<(), IbpError> {
+    let name_id = get(req, "actor").and_then(actor_name_id);
+    let name_id = match name_id {
+        Some(n) => n,
+        None => return Ok(()), // an actor-less act (genesis/legacy) — the edge signer governs it
+    };
+    if is_story(&name_id) {
+        return Ok(()); // I: custodial
+    }
+    if crate::live::is_authenticated(conn, &name_id) {
+        Ok(()) // the key was proven at the open moment — the act rides it
+    } else {
+        Err(IbpError::new(
+            code::UNAUTHORIZED,
+            format!("act by '{name_id}' has no open authenticated moment (open a moment with the Name's key first)"),
+        ))
+    }
+}
+
+/// The actor's Name id (its pubkey/key-id, per the id-derivation rule). Reads `nameId`, else `beingId`
+/// (the portal sends both; `I`'s actor uses `beingId:"I"`).
+fn actor_name_id(actor: &Json) -> Option<String> {
+    get_str(actor, "nameId").or_else(|| get_str(actor, "beingId"))
+}
+
+/// True for the story actor `I` (the custodial path; its key is the edge's story key, not a Name proof).
+fn is_story(name_id: &str) -> bool {
+    name_id == "I"
+}
+
+/// Handle one wire message: a moment/act JSON, else the legacy text read. Returns the JSON reply.
+fn handle_wire_inner(msg: &str, root: &Path) -> String {
     if let Ok(req) = treehash::parse(msg.trim()) {
         // FEDERATION: a moment/act whose `address` names a FOREIGN reality is carried to that peer's
         // wire verbatim (the act is already I-signed; the peer verifies the I key — the trust is the
@@ -97,6 +246,19 @@ fn moment(req: &Json, root: &Path) -> Json {
             None => IbpError::new(code::VERB_NOT_SUPPORTED, format!("unknown see-op '{op}'")).envelope(),
         };
         return obj(vec![("verb", jstr("moment")), ("op", jstr(&op)), ("view", view)]);
+    }
+    // a real IBP ADDRESS (story#history/space/space@being) -> resolve the path to a SCENE descriptor
+    // (the place + its children/occupants/matter). A foreign address was already federated upstream, so
+    // any address that reaches here is LOCAL. This is the portal's navigation primitive.
+    if let Some(addr) = get_str(req, "address") {
+        let h = get_str(req, "history").unwrap_or_else(|| "0".to_string());
+        // `at` = a past global ord to fold up to (time-travel); absent = live/now.
+        let at = num_field(req, "at");
+        let view = match crate::resolve::scene(&addr, &h, at, root) {
+            Ok(v) => v,
+            Err(e) => IbpError::new(code::SPACE_NOT_FOUND, e).envelope(),
+        };
+        return obj(vec![("verb", jstr("moment")), ("view", treeprotocol::redact::redact_secrets(&view))]);
     }
     let view = match get_str(req, "id") {
         Some(id) => {

@@ -20,7 +20,7 @@ use base64::Engine;
 use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 
 use crate::nameid::{encode_key_id, key_id_to_pubkey};
-use crate::payload::{build_act_sig_payload, build_act_sig_payload_legacy};
+use crate::payload::{build_act_sig_payload, build_act_sig_payload_legacy, build_moment_proof_payload};
 use treehash::{canonicalize, parse, Json};
 
 /// A name keypair rebuilt from a seed: the 32-byte seed, the raw 32-byte public
@@ -144,6 +144,25 @@ pub fn verify_act_sig_by_name(
     }
 }
 
+/// Sign the MOMENT KEY-PROOF: a Name proves its key AT THE MOMENT by signing the moment-request's
+/// identity payload with its seed. The portal-side counterpart of `verify_moment_proof`; the returned
+/// base64 is what the moment carries as its `proof.value`. (NEW — the auth-at-moment proof, clock-free.)
+pub fn sign_moment_proof(seed: &[u8; 32], name_id: &str, req: &Json) -> String {
+    sign_value(seed, &build_moment_proof_payload(name_id, req))
+}
+
+/// Verify a MOMENT KEY-PROOF: the key is recovered straight from `name_id` (the key IS the id) and the
+/// signature is checked over the canonical moment-proof payload rebuilt from `req`. True only when the
+/// Name itself signed THIS moment's identity — the auth gate that opens an authenticated session. Returns
+/// false on any decode/verify failure (never panics). `I` is NOT a key id, so it never verifies here;
+/// the story's custodial path is handled by the edge, not this proof.
+pub fn verify_moment_proof(name_id: &str, req: &Json, sig_b64: &str) -> bool {
+    match key_id_to_pubkey(name_id) {
+        Some(raw_pub) => verify_value(&raw_pub, &build_moment_proof_payload(name_id, req), sig_b64),
+        None => false,
+    }
+}
+
 // ── internals ──
 
 fn verify_with_pubkey_str(raw_pub: &[u8; 32], payload_json: &str, sig_b64: &str) -> bool {
@@ -235,6 +254,28 @@ mod tests {
         assert!(!verify_act_sig(&[0u8; 32], &act, &fids, &sig), "wrong key fails");
         // "i-am" is not a pubkey id, so the by-name peer cannot resolve a key.
         assert!(!verify_act_sig_by_name("i-am", &act, &fids, &sig), "i-am is not a key id");
+    }
+
+    #[test]
+    fn moment_proof_roundtrips_and_binds_the_name() {
+        // A Name signs a moment-request's identity; the edge verifies straight from the Name id.
+        let kp = keypair_from_seed(&SEED);
+        let req = parse(r#"{"verb":"moment","kind":"being","id":"zX","history":"0","actor":{"nameId":"ignored"}}"#).unwrap();
+        let proof = sign_moment_proof(&SEED, &kp.name_id, &req);
+        assert!(verify_moment_proof(&kp.name_id, &req, &proof), "the Name's own proof verifies");
+
+        // a DIFFERENT moment (different reel) does NOT verify with the old proof (binds to the moment).
+        let other = parse(r#"{"verb":"moment","kind":"being","id":"zY","history":"0"}"#).unwrap();
+        assert!(!verify_moment_proof(&kp.name_id, &other, &proof), "proof binds to THIS moment's identity");
+
+        // a proof for one Name cannot be claimed under another Name id (nameId is in the payload).
+        let other_kp = keypair_from_seed(&[9u8; 32]);
+        assert!(!verify_moment_proof(&other_kp.name_id, &req, &proof), "proof binds to the signing Name");
+
+        // "I" is not a key id -> never verifies (the story uses the custodial edge path, not a proof).
+        assert!(!verify_moment_proof("I", &req, &proof), "I is not a moment-proof key id");
+        // garbage signature -> false, never panics.
+        assert!(!verify_moment_proof(&kp.name_id, &req, "not-base64!!"));
     }
 
     #[test]

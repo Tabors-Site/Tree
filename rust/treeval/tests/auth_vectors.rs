@@ -110,7 +110,6 @@ fn authorize_decide_control_flow() {
             verb: c.verb,
             target: if matches!(c.target, Json::Null) { None } else { Some(&c.target) },
             audit_being_id: c.audit,
-            i_am: "I",
             ext_blocked: c.ext,
             able_result: &c.able,
             inheritation_ok: c.inh,

@@ -4,10 +4,12 @@
 // The routing + the deciders live in treecognition (pure); this module only supplies the seams.
 //
 // Runnable today for SCRIPTED + DEFAULT beings: the perceived inner-face is provided in the request
-// body (`face`), since the in-binary face projection is the other lane's work-in-progress. LLM mode is
-// reached but its transport is not wired here yet (it needs a native HTTPS client at the edge + the live
-// face); it returns a clear Internal failure until then. When the projection + HTTPS land, the only
-// change is reading the face internally and injecting a real transport — the loop itself is unchanged.
+// body (`face`), since the in-binary face projection is the other lane's work-in-progress. LLM mode now
+// has its TRANSPORT wired at the edge (crate::llm_http): the SSRF gate passes the base URL, the api key
+// decrypts at the edge, and the assembled prompt POSTs to the provider (http for a local model, https via
+// ureq/rustls for a cloud provider) — the model's reply becomes the Word the being speaks. The remaining
+// gap is the in-binary face projection + the connection-store -> active-connection fold (the request still
+// carries the resolved `llm:{...}`); when the projection lands, the loop itself is unchanged.
 
 use std::path::Path;
 
@@ -94,7 +96,7 @@ pub fn cognize_view(req: &Json, root: &Path) -> Result<Json, &'static str> {
                 let mut call = |_id: &str| crate::llm_http::call_connection(c, prompt);
                 treecognition::call::call_with_failover(&["primary".to_string()], &mut call)
             }
-            None => Err((FailShape::Internal, "llm mode needs `llm:{baseUrl,model,key?}` in the request (http only); HTTPS + connection-store chain resolution are follow-ups".to_string())),
+            None => Err((FailShape::Internal, "llm mode needs an `llm:{baseUrl,model,key?|encryptedApiKey?}` connection (http for a local model, https for a cloud provider); the connection-store chain resolution is the follow-up".to_string())),
         }
     };
 
@@ -130,14 +132,24 @@ pub fn cognize_view(req: &Json, root: &Path) -> Result<Json, &'static str> {
 
 // The act seal lives in `act.rs` (shared with the WS act handler) — cognize seals through act::run_word.
 
-/// The LLM connection from the request `llm:{baseUrl,model,key?}` (http only, for now). The per-call
-/// timeout comes from the library reel (internalConfig `llmTimeout`).
+/// The LLM connection from the request `llm:{baseUrl,model,key?|encryptedApiKey?}`. `baseUrl` http -> a
+/// local model (TcpStream), https -> a cloud provider (ureq/rustls). The bearer key is resolved at THIS
+/// edge: a chain-stored `encryptedApiKey` (the FRESH treesign AES-256-GCM at-rest blob) is DECRYPTED here
+/// only to set the header — the cleartext never returns to a fact; a plain `key` (a test / a local model's
+/// optional token) is used as-is. The per-call timeout comes from the library reel (internalConfig
+/// `llmTimeout`). The connection-store -> being's-active-connection fold is the remaining follow-up; the
+/// connection shape is already the resolved one (base url + decrypted key + model).
 fn build_conn(req: &Json, root: &Path) -> Option<crate::llm_http::Conn> {
     let llm = get(req, "llm")?;
+    // the bearer: a stored encryptedApiKey decrypts at the edge; else a cleartext key passes through.
+    let key = match get_str(llm, "encryptedApiKey") {
+        Some(blob) if !blob.is_empty() => crate::llm_http::decrypt_api_key(blob),
+        _ => get_str(llm, "key").map(|s| s.to_string()),
+    };
     Some(crate::llm_http::Conn {
         base_url: get_str(llm, "baseUrl")?.to_string(),
         model: get_str(llm, "model")?.to_string(),
-        key: get_str(llm, "key").map(|s| s.to_string()),
+        key,
         timeout_secs: crate::config::llm_timeout_secs(root),
     })
 }

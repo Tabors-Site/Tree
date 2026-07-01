@@ -14,6 +14,7 @@ pub mod ibp;
 pub mod live;
 pub mod llm_http;
 pub mod moment;
+pub mod resolve;
 pub mod scheduler;
 pub mod seeops;
 pub mod subscriptions;

@@ -3,6 +3,9 @@
 // over WebSocket. P0: connect, take a moment of a place, show the raw face; the IBP bar + word bar;
 // acting auto-updates the face via the live (open-stamper) push.
 
+// On Windows, hide the console window in release builds (keep it in debug for logs/panics).
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod chrome;
 mod identity;
 mod input;
@@ -43,6 +46,11 @@ pub struct Portal {
     pub history: String,
     started: bool,
     last_view: View,
+    /// false until a Name is signed in — the login gate blocks the world until then.
+    pub logged_in: bool,
+    /// the being the active Name is driving (beingId, name) — None = bodiless (acts as the bare Name).
+    /// A being holds no key; its acts are signed by the Name (nameId) it expresses.
+    pub active_being: Option<(String, String)>,
 }
 
 impl Default for Portal {
@@ -56,45 +64,138 @@ impl Default for Portal {
             history: "0".into(),
             started: false,
             last_view: View::Map2d,
+            logged_in: false,
+            active_being: None,
         }
     }
 }
 
 impl Portal {
-    /// Take a moment of the edited address (P0: `kind/id`, or empty = the index).
-    pub fn perceive_address(&mut self) {
-        let a = self.st.address.trim().to_string();
-        let actor = wire::proto::actor_i();
-        let msg = if a.is_empty() {
-            wire::proto::moment_index()
-        } else if let Some((kind, id)) = a.split_once('/') {
-            if id.is_empty() {
-                wire::proto::moment_index()
-            } else {
-                wire::proto::moment_reel(kind, id, &self.history, &actor)
-            }
-        } else {
-            wire::proto::moment_reel("being", &a, &self.history, &actor)
-        };
+    /// Navigate to a real IBP address (the RIGHT stance): take a moment of it → the server resolves the
+    /// path to a SCENE. `push` adds it to the back/forward stack (false for back/forward themselves).
+    pub fn navigate(&mut self, address: &str, push: bool) {
+        let address = if address.trim().is_empty() { "/" } else { address.trim() };
+        let msg = self.moment_msg(address);
         if let Some(w) = &self.wire {
             w.send(msg);
         }
-    }
-
-    /// The actor for ACTS: the active being (you act AS your being), else I.
-    fn actor(&self) -> Json {
-        match self.vault.active_being() {
-            Some(b) => wire::proto::actor_for(&b.name, &b.key_id),
-            None => wire::proto::actor_i(),
+        self.st.address = address.to_string();
+        if push {
+            self.st.nav_stack.truncate(self.st.nav_index + 1); // trim the forward future
+            if self.st.nav_stack.last().map(String::as_str) != Some(address) {
+                self.st.nav_stack.push(address.to_string());
+                self.st.nav_index = self.st.nav_stack.len() - 1;
+            }
         }
     }
 
-    /// The LEFT-stance label (who you are): @being, or @I.
+    /// Navigate the RIGHT address field (Enter in the IBP bar).
+    pub fn perceive_address(&mut self) {
+        let a = self.st.address.clone();
+        self.navigate(&a, true);
+    }
+
+    pub fn nav_back(&mut self) {
+        if self.st.nav_index == 0 {
+            return;
+        }
+        self.st.nav_index -= 1;
+        let a = self.st.nav_stack[self.st.nav_index].clone();
+        self.navigate(&a, false);
+    }
+    pub fn nav_forward(&mut self) {
+        if self.st.nav_index + 1 >= self.st.nav_stack.len() {
+            return;
+        }
+        self.st.nav_index += 1;
+        let a = self.st.nav_stack[self.st.nav_index].clone();
+        self.navigate(&a, false);
+    }
+    pub fn can_back(&self) -> bool {
+        self.st.nav_index > 0
+    }
+    pub fn can_forward(&self) -> bool {
+        self.st.nav_index + 1 < self.st.nav_stack.len()
+    }
+
+    /// Connect an existing vault Name (sign in) and enter the world.
+    pub fn activate_name(&mut self, i: usize) {
+        self.vault.active = Some(i);
+        self.finish_login();
+    }
+
+    /// Enter the world after a Name is active (declare/import already set it; this confirms login). The
+    /// first navigate sends a key-proven moment that authenticates the Name on the connection.
+    pub fn finish_login(&mut self) {
+        self.logged_in = true;
+        self.st.add_msg.clear();
+        if let Some(n) = self.vault.active_name() {
+            self.st.left_stance = format!("@{}#{}", n.label, self.history);
+        }
+        self.navigate("/", true);
+    }
+
+    /// Sign out of the active Name — back to the login gate.
+    pub fn sign_out(&mut self) {
+        self.logged_in = false;
+        self.st.left_stance = "@I#0".to_string();
+    }
+
+    /// Apply the edited LEFT stance: `#history` switches the branch you act on now. (@being switches the
+    /// being you drive and the path moves your position — both wired with the being tabs in P3.)
+    pub fn apply_left_stance(&mut self) {
+        let s = self.st.left_stance.clone();
+        if let Some(i) = s.find('#') {
+            let rest = &s[i + 1..];
+            let end = rest.find(['/', '@']).unwrap_or(rest.len());
+            let h = &rest[..end];
+            if !h.is_empty() {
+                self.history = h.to_string();
+            }
+        }
+    }
+
+    /// The actor: the active Name driving a being `{beingId, nameId, name}`, else the bare Name
+    /// `{nameId, name}`, else I (anonymous). The Name's key signs/authenticates either way.
+    fn actor(&self) -> Json {
+        match (self.vault.active_name(), &self.active_being) {
+            (Some(n), Some((bid, bname))) => wire::proto::actor_being(bid, &n.name_id, bname),
+            (Some(n), None) => wire::proto::actor_name(&n.name_id, &n.label),
+            (None, _) => wire::proto::actor_i(),
+        }
+    }
+
+    /// The LEFT-stance label (who you are): @being (driving), else @name, else @I.
     pub fn actor_label(&self) -> String {
-        match self.vault.active_being() {
-            Some(b) => format!("@{}", b.name),
+        if let Some((_, bname)) = &self.active_being {
+            return format!("@{bname}");
+        }
+        match self.vault.active_name() {
+            Some(n) => format!("@{}", n.label),
             None => "@I".to_string(),
         }
+    }
+
+    /// Drive a being the active Name owns (pull it / be:connect). Its acts are signed by the Name.
+    pub fn drive_being(&mut self, being_id: &str, name: &str) {
+        self.active_being = Some((being_id.to_string(), name.to_string()));
+        self.st.left_stance = format!("@{name}#{}", self.history);
+        self.st.log.push(format!("driving @{name}"));
+    }
+
+    /// Build a moment message for an address, SIGNED with the active Name's key-proof so the server
+    /// authenticates it at the moment (anonymous/I moments carry no proof and need none).
+    fn moment_msg(&self, address: &str) -> String {
+        let actor = self.actor();
+        let mut req = wire::proto::moment_req(address, &self.history, &actor);
+        if let Some(name_id) = wire::proto::actor_name_id(&actor) {
+            if let Some(sig) = self.vault.sign_moment(&name_id, &req) {
+                if let Json::Obj(e) = &mut req {
+                    e.push(("proof".to_string(), Json::Obj(vec![("value".to_string(), Json::Str(sig))])));
+                }
+            }
+        }
+        treehash::stringify(&req)
     }
 
     /// Speak one Word (act) AS the active being. The result returns as the live re-rasterized moment.
@@ -132,12 +233,11 @@ impl Portal {
 
 impl eframe::App for Portal {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // connect once + take a first moment (the index)
+        // connect once + take a moment of the story root (the scene)
         if !self.started {
             self.started = true;
-            let w = wire::client::spawn(self.url.clone(), ctx.clone());
-            w.send(wire::proto::moment_index());
-            self.wire = Some(w);
+            self.wire = Some(wire::client::spawn(self.url.clone(), ctx.clone()));
+            // no pre-login read — the world opens only after a Name signs in (finish_login navigates).
         }
 
         // drain inbound moments (replies + live pushes)
@@ -159,6 +259,12 @@ impl eframe::App for Portal {
                     self.st.log.push(format!("· {}", rx.pretty.lines().next().unwrap_or("")));
                 }
             }
+        }
+
+        // THE NAME GATE: no Name signed in -> the full-screen login blocks the world entirely.
+        if !self.logged_in {
+            chrome::login::show(ctx, self);
+            return;
         }
 
         // Escape toggles input mode

@@ -2386,3 +2386,190 @@ fn wave2_crypto_ops_route_through_table() {
     let bad = table.resolve("not-a-real-op", &args(vec![]), &dir, "0", &AuthCtx::caller("be1"));
     assert!(bad.is_err());
 }
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// LLM connections + config (wave-3): the see-arm reaches treehost::Resolvers, which COMPOSES
+// treecognition::connect's resolver bodies. Drive each through the dispatch table (the exact path the
+// act's see-arm / the survey probe use). Plant a being whose qualities.llmConnections holds a
+// connection, set JWT_SECRET (the FRESH treesign seal) + allowedLlmDomains so the SSRF gate + encrypt run.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+
+/// Plant a being carrying a qualities.llmConnections.<connId> entry (a folded set-being write) plus an
+/// optional beingLlm.slots.main pointer -> stamp birth + the set-being facts + refold.
+fn plant_being_with_conn(dir: &Path, id: &str, conn_id: &str, main_slot: Option<&str>) {
+    plant_being(dir, id, "Alice", "sp1", None);
+    let set_conn = obj(vec![
+        ("through", jstr(id)),
+        ("verb", jstr("do")),
+        ("act", jstr("set-being")),
+        ("of", obj(vec![("kind", jstr("being")), ("id", jstr(id))])),
+        ("params", obj(vec![
+            ("field", jstr(&format!("qualities.llmConnections.{conn_id}"))),
+            ("value", obj(vec![
+                ("name", jstr("old")),
+                ("baseUrl", jstr("https://api.openai.com")),
+                ("model", jstr("gpt-4o")),
+                ("encryptedApiKey", Json::Null),
+            ])),
+        ])),
+    ]);
+    stamp(dir, "being", id, &set_conn, 2.0);
+    if let Some(slot) = main_slot {
+        let set_slot = obj(vec![
+            ("through", jstr(id)),
+            ("verb", jstr("do")),
+            ("act", jstr("set-being")),
+            ("of", obj(vec![("kind", jstr("being")), ("id", jstr(id))])),
+            ("params", obj(vec![
+                ("field", jstr("qualities.beingLlm.slots.main")),
+                ("value", jstr(slot)),
+            ])),
+        ]);
+        stamp(dir, "being", id, &set_slot, 3.0);
+    }
+    refold(dir, "0", "being", id).expect("refold conn being");
+}
+
+#[test]
+fn llm_resolve_connection_validates_encrypts_and_flags_first() {
+    let dir = fresh("llm-add-conn");
+    plant_being(&dir, "be1", "Alice", "sp1", None);
+    // the FRESH treesign at-rest seal reads JWT_SECRET (credential_key -> AES-256-GCM), the same edge
+    // secret every other at-rest secret uses. No legacy CUSTOM_LLM_API_SECRET_KEY / AES-CBC.
+    std::env::set_var("JWT_SECRET", "the-edge-jwt-secret-for-llm-keys");
+    let table = Resolvers;
+    // a PRIVATE/blocked host is refused by the synchronous SSRF gate with no allowlist opt-in (the gate
+    // FIRES). (A public host like api.openai.com passes the SYNC gate — the DNS resolveAndValidateHost
+    // is the edge's, deferred — so the refusal test uses a blocked host.)
+    let local = obj(vec![
+        ("name", jstr("ollama")),
+        ("baseUrl", jstr("http://127.0.0.1:11434")),
+        ("model", jstr("llama3")),
+    ]);
+    let refused = table.resolve(
+        "resolve-connection",
+        &args(vec![target("being", "be1"), local, jstr("be1"), jstr("0")]),
+        &dir, "0", &AuthCtx::caller("be1"),
+    );
+    assert!(refused.is_err(), "SSRF gate refuses a private host with no allowlist opt-in");
+
+    let params = obj(vec![
+        ("name", jstr("my gpt")),
+        ("baseUrl", jstr("https://api.openai.com/v1")),
+        ("model", jstr("gpt-4o")),
+        ("apiKey", jstr("sk-secret")),
+    ]);
+    // opt the host in via story config, then it resolves: encrypted key (never cleartext) + isFirst.
+    let cfg = obj(vec![
+        ("through", jstr("i-am")), ("verb", jstr("do")), ("act", jstr("config-set")),
+        ("of", obj(vec![("kind", jstr("library")), ("id", jstr("localhost"))])),
+        ("params", obj(vec![("key", jstr("allowedLlmDomains")), ("value", Json::Arr(vec![jstr("api.openai.com")]))])),
+    ]);
+    stamp(&dir, "library", "localhost", &cfg, 1.0);
+    refold(&dir, "0", "library", "localhost").ok();
+
+    let block = table.resolve(
+        "resolve-connection",
+        &args(vec![target("being", "be1"), params, jstr("be1"), jstr("0")]),
+        &dir, "0", &AuthCtx::caller("be1"),
+    ).expect("connection resolves once the host is allowlisted");
+    assert_eq!(get_str(&block, "beingId"), Some("be1"));
+    assert!(matches!(get(&block, "isFirst"), Some(Json::Bool(true))), "first connection -> isFirst");
+    assert_eq!(get_str(&block, "field").unwrap_or("").starts_with("qualities.llmConnections."), true);
+    let value = get(&block, "value").unwrap();
+    let v = canonicalize(value);
+    assert!(!v.contains("sk-secret"), "api key is encrypted, never cleartext on the fact");
+    // the FRESH treesign seal: the stored blob round-trips through treesign::decrypt_credential under the
+    // same JWT_SECRET-derived key back to the cleartext (AES-256-GCM, base64 iv||tag||ct — NO ivHex:ct).
+    let blob = get_str(value, "encryptedApiKey").expect("encryptedApiKey on the connection");
+    assert!(!blob.is_empty() && !blob.contains(':'), "fresh treesign blob is base64, not the legacy ivHex:ct");
+    let key = treesign::credential_key("the-edge-jwt-secret-for-llm-keys");
+    assert_eq!(treesign::decrypt_credential(blob, &key).as_deref(), Some("sk-secret"), "the seal round-trips at the edge");
+    std::env::remove_var("JWT_SECRET");
+}
+
+#[test]
+fn llm_update_delete_and_slot_routes_through_dispatch() {
+    let dir = fresh("llm-update");
+    plant_being_with_conn(&dir, "be1", "c1", Some("c1"));
+    let table = Resolvers;
+
+    // update: change the model; the connection IS slot-assigned (main -> c1) so wasAssigned is true.
+    let upd = obj(vec![("connectionId", jstr("c1")), ("baseUrl", jstr("https://api.openai.com")), ("model", jstr("gpt-4o-mini"))]);
+    // allowlist the host so the update's SSRF re-check passes.
+    let cfg = obj(vec![
+        ("through", jstr("i-am")), ("verb", jstr("do")), ("act", jstr("config-set")),
+        ("of", obj(vec![("kind", jstr("library")), ("id", jstr("localhost"))])),
+        ("params", obj(vec![("key", jstr("allowedLlmDomains")), ("value", Json::Arr(vec![jstr("api.openai.com")]))])),
+    ]);
+    stamp(&dir, "library", "localhost", &cfg, 1.0);
+    refold(&dir, "0", "library", "localhost").ok();
+
+    let patch = table.resolve(
+        "resolve-connection-update",
+        &args(vec![target("being", "be1"), upd, jstr("be1"), jstr("0")]),
+        &dir, "0", &AuthCtx::caller("be1"),
+    ).expect("update resolves");
+    assert_eq!(get_str(&patch, "connectionId"), Some("c1"));
+    assert!(matches!(get(&patch, "wasAssigned"), Some(Json::Bool(true))), "main->c1 so wasAssigned");
+    let patch_sbp = get(&patch, "setBeingParams").expect("setBeingParams in update block");
+    assert!(canonicalize(patch_sbp).contains("gpt-4o-mini"), "merged model rides setBeingParams");
+
+    // delete: unsets the connection (value:null).
+    let removal = table.resolve(
+        "resolve-connection-removal",
+        &args(vec![target("being", "be1"), obj(vec![("connectionId", jstr("c1"))]), jstr("be1"), jstr("0")]),
+        &dir, "0", &AuthCtx::caller("be1"),
+    ).expect("removal resolves");
+    let removal_sbp = get(&removal, "setBeingParams").expect("setBeingParams in removal block");
+    assert!(canonicalize(removal_sbp).contains("null"), "removal unsets (value:null)");
+    // a missing connection -> not found.
+    let miss = table.resolve(
+        "resolve-connection-removal",
+        &args(vec![target("being", "be1"), obj(vec![("connectionId", jstr("nope"))]), jstr("be1"), jstr("0")]),
+        &dir, "0", &AuthCtx::caller("be1"),
+    );
+    assert!(miss.is_err(), "deleting a missing connection refuses");
+
+    // slot assignment on a being -> qualities.beingLlm.slots.<slot>.
+    let assigned = table.resolve(
+        "resolve-slot-assignment",
+        &args(vec![target("being", "be1"), obj(vec![("slot", jstr("main")), ("connectionId", jstr("c1"))]), jstr("be1"), jstr("0")]),
+        &dir, "0", &AuthCtx::caller("be1"),
+    ).expect("slot assignment resolves");
+    assert!(matches!(get(&assigned, "isBeing"), Some(Json::Bool(true))));
+    assert_eq!(get_str(&assigned, "field"), Some("qualities.beingLlm.slots.main"));
+}
+
+#[test]
+fn llm_config_being_mode_normalizes_and_mutex_refuses() {
+    let dir = fresh("llm-config");
+    plant_being(&dir, "be1", "Alice", "sp1", None);
+    let table = Resolvers;
+
+    // being mode (no spaceId, no scope:story) targets the caller; legacy connectionId -> default list.
+    let cfg = table.resolve(
+        "resolve-llm-config",
+        &args(vec![obj(vec![("connectionId", jstr("c1"))]), jstr("be1")]),
+        &dir, "0", &AuthCtx::caller("be1"),
+    ).expect("being-mode config resolves");
+    let v = canonicalize(&cfg);
+    assert!(v.contains(r#""targetKind":"being""#) && v.contains(r#""targetId":"be1""#));
+    assert!(v.contains(r#""field":"qualities.llm.default","value":["c1"]"#), "legacy id -> default list");
+
+    // both force flags -> the mutex REFUSES (the JS assertFlagMutex both-true throw).
+    let both = table.resolve(
+        "resolve-llm-config",
+        &args(vec![obj(vec![("forceActor", Json::Bool(true)), ("forceReceiver", Json::Bool(true))]), jstr("be1")]),
+        &dir, "0", &AuthCtx::caller("be1"),
+    );
+    assert!(both.is_err(), "forceActor + forceReceiver both true -> refused");
+
+    // no caller -> unauthorized.
+    let anon = table.resolve(
+        "resolve-llm-config",
+        &args(vec![obj(vec![("connectionId", jstr("c1"))]), Json::Null]),
+        &dir, "0", &AuthCtx::default(),
+    );
+    assert!(anon.is_err(), "being-mode config with no caller refuses");
+}

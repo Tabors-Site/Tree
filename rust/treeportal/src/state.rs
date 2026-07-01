@@ -31,8 +31,15 @@ pub enum Mode {
 pub struct PortalState {
     pub view: View,
     pub mode: Mode,
-    /// the RIGHT address shown/edited (P0: a `kind/id` to take a moment of; empty = the index).
+    /// the RIGHT view address (what you perceive) — a real IBP address `story#history/space/space@being`.
+    /// Edited in the IBP bar; Enter navigates.
     pub address: String,
+    /// the back/forward navigation stack of addresses + the current index.
+    pub nav_stack: Vec<String>,
+    pub nav_index: usize,
+    /// the LEFT stance buffer (who you are: `@being#history/path`) — editable; editing #history switches
+    /// your branch, @being switches the being you drive, the path moves your position.
+    pub left_stance: String,
     /// the MANUAL-mode composer (the keyboard ACT/FACT model — words matter most).
     pub composer: Composer,
     /// word-at-a-time sending (the user's preference): each sealed word is its own act. False batches
@@ -56,7 +63,10 @@ impl Default for PortalState {
         Self {
             view: View::Map2d,
             mode: Mode::Manual,
-            address: String::new(),
+            address: "/".to_string(),
+            nav_stack: vec!["/".to_string()],
+            nav_index: 0,
+            left_stance: "@I#0".to_string(),
             composer: Composer::default(),
             per_word: true,
             moment: None,

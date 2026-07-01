@@ -60,6 +60,7 @@ mod key;
 mod grant;
 mod history_pointers;
 mod inheritation;
+mod llm;
 mod matter;
 mod model;
 mod owner;
@@ -86,6 +87,10 @@ pub use history_pointers::{
     valid_pointer_name,
 };
 pub use inheritation::resolve_inheritation;
+pub use llm::{
+    resolve_connection, resolve_connection_removal, resolve_connection_update, resolve_llm_config,
+    resolve_slot_assignment,
+};
 pub use matter::{resolve_create_matter, resolve_end_matter, resolve_set_matter_spec};
 pub use model::{may_set_model, resolve_model_block};
 pub use owner::resolve_owner;
@@ -480,6 +485,16 @@ impl HostResolver for Resolvers {
             // BIP39 paper form (deterministic via treesign; deferred since its input is the load-key PEM).
             "load-key" => load_key(root, history, args, ctx),
             "paper-form" => paper_form(root, history, args, ctx),
+            // LLM connections + config (llmHost.js / llmAssignerHost.js around connect.js): the wave-3
+            // floor, COMPOSING treecognition::connect's resolver bodies behind this seam (the see-arm an
+            // llm `.word` reaches via run_body_host). Validate / SSRF-gate / encrypt the api key / read
+            // is-first|was-assigned / mint the connection id / normalize the config writes — all pure
+            // spec resolves (no live LLM HTTP). store/words/llm-connection/*.word + llm-assigner/set-*-llm.
+            "resolve-connection" => resolve_connection(root, history, args, ctx),
+            "resolve-connection-update" => resolve_connection_update(root, history, args, ctx),
+            "resolve-connection-removal" => resolve_connection_removal(root, history, args, ctx),
+            "resolve-slot-assignment" => resolve_slot_assignment(root, history, args, ctx),
+            "resolve-llm-config" => resolve_llm_config(root, history, args, ctx),
             other => Err(HostError::invalid(format!(
                 "host: unknown see-op \"{other}\" (SEE_FLOOR reject-unknown)"
             ))),
