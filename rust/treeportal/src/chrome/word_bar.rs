@@ -19,6 +19,13 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
             ui.colored_label(col, egui::RichText::new(txt).monospace().small());
             ui.add_space(8.0);
 
+            // the RIGHT-stance TARGET (a clicked being): a Word you say CALLS it. Shown as `@name ›`.
+            if let Some((_, name)) = &p.st.target_being {
+                ui.colored_label(egui::Color32::from_rgb(180, 140, 230), egui::RichText::new(format!("@{name} ›")).monospace().small())
+                    .on_hover_text("your Word calls this being — release the being tab (✕) to clear");
+                ui.add_space(4.0);
+            }
+
             match p.st.mode {
                 Mode::Manual => {
                     if p.st.composer.is_empty() {

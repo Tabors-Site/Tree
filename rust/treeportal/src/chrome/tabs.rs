@@ -6,6 +6,15 @@ use eframe::egui;
 
 use crate::Portal;
 
+fn lang_label(code: &str) -> &'static str {
+    match code {
+        "es" => "Spanish",
+        "zh" => "Chinese",
+        "fr" => "French",
+        _ => "English",
+    }
+}
+
 pub fn show(ctx: &egui::Context, p: &mut Portal) {
     egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
         ui.add_space(3.0);
@@ -22,8 +31,8 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
                     let _ = ui.selectable_label(true, egui::RichText::new(format!("@{name}")).monospace());
                     if ui.small_button("✕").on_hover_text("release this being (go bodiless)").clicked() {
                         p.active_being = None;
-                        let nm = p.vault.active_name().map(|n| n.label.clone()).unwrap_or_default();
-                        p.st.left_stance = format!("@{nm}#{}", p.history);
+                        p.st.target_being = None;
+                        p.rebuild_left();
                     }
                 }
                 None => {
@@ -34,6 +43,22 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("sign out").on_hover_text("sign out of your Name").clicked() {
                     p.sign_out();
+                }
+                // the display language (the projection). en is the canonical Word; others go through the
+                // derived translate() seam (LLM-activated) — no hand-maintained map.
+                let mut changed = false;
+                egui::ComboBox::from_id_source("lang")
+                    .selected_text(lang_label(&p.st.lang))
+                    .width(96.0)
+                    .show_ui(ui, |ui| {
+                        for (code, label) in [("en", "English"), ("es", "Spanish"), ("zh", "Chinese"), ("fr", "French")] {
+                            if ui.selectable_value(&mut p.st.lang, code.to_string(), label).clicked() {
+                                changed = true;
+                            }
+                        }
+                    });
+                if changed {
+                    p.reperceive_current();
                 }
             });
         });

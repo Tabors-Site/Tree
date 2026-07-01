@@ -409,6 +409,31 @@ pub fn apply_move(state: &Json, fact: &Json) -> Json {
         return state.clone();
     }
     let kind = of_kind(fact);
+    // A BEING moves itself by STEP: a do:move carrying params.direction
+    // (north/south/east/west). Nothing is computed at act time — the being's
+    // coord is the FOLD of its steps, each shifting the prior coord by one cell
+    // (north = y-1, south = y+1, east = x+1, west = x-1, the move.word law). A
+    // re-fold on the being's next moment lands it in the new spot purely from the
+    // reel. No prior coord seeds the origin { 0, 0 }.
+    if kind == "being" {
+        let p = params(fact);
+        let dir = match v::get(&p, "direction") {
+            Some(Json::Str(d)) => d.as_str(),
+            _ => return state.clone(),
+        };
+        let (dx, dy) = match direction_offset(dir) {
+            Some(o) => o,
+            None => return state.clone(),
+        };
+        let prior = v::get(state, "coord");
+        let base_x = prior.and_then(|c| finite(v::get(c, "x"))).unwrap_or(0.0);
+        let base_y = prior.and_then(|c| finite(v::get(c, "y"))).unwrap_or(0.0);
+        let mut nc = v::set(&v::set(&v::empty_obj(), "x", Json::Num(base_x + dx)), "y", Json::Num(base_y + dy));
+        if let Some(z) = prior.and_then(|c| finite(v::get(c, "z"))) {
+            nc = v::set(&nc, "z", Json::Num(z));
+        }
+        return v::set(state, "coord", nc);
+    }
     if kind != "space" && kind != "matter" {
         return state.clone();
     }
@@ -657,6 +682,10 @@ pub fn reduce_being(state: &Json, fact: &Json) -> Json {
     next = apply_set_field(&next, fact);
     next = apply_set_qualities(&next, fact);
     next = apply_able_grants(&next, fact);
+    // a being moves ITSELF by STEP: a do:move carrying params.direction shifts state.coord by the
+    // direction's cell offset (accumulating). This is the being's own walk (the WASD step); the
+    // space/matter move arms of apply_move are inert for a being target.
+    next = apply_move(&next, fact);
     let p = params(fact);
     if let Some(tp) = v::get(&p, "toPosition") {
         next = v::set(&next, "position", tp.clone());
@@ -769,6 +798,19 @@ fn obj_from(pairs: &[(&str, Json)]) -> Json {
 fn finite(v: Option<&Json>) -> Option<f64> {
     match v {
         Some(Json::Num(n)) if n.is_finite() => Some(*n),
+        _ => None,
+    }
+}
+
+/// A compass direction's cell OFFSET (dx, dy) — the move.word law: north = y
+/// falls by one, south = y rises, east = x rises, west = x falls. `None` for an
+/// unknown direction (the being-move arm then leaves the coord unchanged).
+fn direction_offset(dir: &str) -> Option<(f64, f64)> {
+    match dir {
+        "north" => Some((0.0, -1.0)),
+        "south" => Some((0.0, 1.0)),
+        "east" => Some((1.0, 0.0)),
+        "west" => Some((-1.0, 0.0)),
         _ => None,
     }
 }

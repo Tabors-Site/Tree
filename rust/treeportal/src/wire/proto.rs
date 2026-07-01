@@ -66,7 +66,7 @@ pub fn moment_reel(kind: &str, id: &str, history: &str, actor: &Json) -> String 
 /// Take a STORY moment of a name — the kernel's special render that gets the Words for that name. The
 /// `render:"story"` hint asks the kernel for the woven narrative face (it returns the plain being face
 /// until that render is wired).
-pub fn moment_story(kind: &str, id: &str, history: &str, actor: &Json) -> String {
+pub fn moment_story(kind: &str, id: &str, history: &str, lang: &str, actor: &Json) -> String {
     treehash::stringify(&jobj(vec![
         ("verb", jstr("moment")),
         ("kind", jstr(kind)),
@@ -74,12 +74,64 @@ pub fn moment_story(kind: &str, id: &str, history: &str, actor: &Json) -> String
         ("history", jstr(history)),
         ("actor", actor.clone()),
         ("render", jstr("story")),
+        ("lang", jstr(lang)),
     ]))
 }
 
 /// Take a moment of the LIBRARY reel (the history bar IS this) — it folds to the histories/branches.
 pub fn moment_library(domain: &str, history: &str, actor: &Json) -> String {
     moment_reel("library", domain, history, actor)
+}
+
+/// Fetch a Name's ENCRYPTED key blob for name+password sign-in (Model B). The server returns the
+/// `pw:…` blob unredacted (it is password-locked, useless without the password); the portal decrypts it
+/// CLIENT-SIDE — the password never touches the wire.
+pub fn moment_name_key(name: &str) -> String {
+    treehash::stringify(&jobj(vec![
+        ("verb", jstr("moment")),
+        ("op", jstr("name-key")),
+        ("args", jobj(vec![("name", jstr(name))])),
+    ]))
+}
+
+/// Fetch the branch tree — main + every live history — for the history bar's switcher.
+pub fn moment_branches() -> String {
+    treehash::stringify(&jobj(vec![("verb", jstr("moment")), ("op", jstr("branches"))]))
+}
+
+/// Fork a new history off main at `at` (None = now), labelled `label`. An I act.
+pub fn act_create_branch(label: &str, at: Option<f64>, actor: &Json) -> String {
+    let mut f = vec![("verb", jstr("act")), ("op", jstr("create-branch")), ("label", jstr(label)), ("actor", actor.clone())];
+    if let Some(a) = at {
+        f.push(("at", Json::Num(a)));
+    }
+    treehash::stringify(&jobj(f))
+}
+
+/// Fetch the history's TIMELINE — one moment (dot) per act — for the history bar's scrubber.
+pub fn moment_timeline(history: &str) -> String {
+    treehash::stringify(&jobj(vec![
+        ("verb", jstr("moment")),
+        ("op", jstr("timeline")),
+        ("history", jstr(history)),
+    ]))
+}
+
+/// Register a Name (declare) or set/change its password — writes `{ nameId, name, privateKeyEnc }` to
+/// the library reel. Sent AS the I (name creation is an I act); `op` = "name-declare" | "name-set-password".
+pub fn act_name_declare(op: &str, name_id: &str, name: &str, private_key_enc: &str, actor: &Json) -> String {
+    treehash::stringify(&jobj(vec![
+        ("verb", jstr("act")),
+        ("op", jstr(op)),
+        ("nameId", jstr(name_id)),
+        ("name", jstr(name)),
+        ("spec", jobj(vec![
+            ("nameId", jstr(name_id)),
+            ("name", jstr(name)),
+            ("privateKeyEnc", jstr(private_key_enc)),
+        ])),
+        ("actor", actor.clone()),
+    ]))
 }
 
 /// Speak one Word (act). P0: unsigned (read/explore + I-Am acts); client-signing lands in P4.

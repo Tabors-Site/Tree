@@ -13,7 +13,7 @@
 use std::path::Path;
 
 use treehash::{parse as pj, Json};
-use treeibp::{act_with_ops, ran_as_moments, run_op_word, Outcome};
+use treeibp::{act_via_fold, ran_as_moments, run_op_word, Outcome};
 use treestore::{read_reel_head, seal_moment, write_fact_doc, FactSpec};
 
 fn get<'a>(v: &'a Json, k: &str) -> Option<&'a Json> {
@@ -82,6 +82,34 @@ fn plant_being(dir: &Path, id: &str, name: &str, home: &str, position: Option<&s
     ]);
     stamp(dir, "being", id, &birth, ord);
     treeproj::refold(dir, "0", "being", id).expect("refold being");
+}
+
+/// COIN one op-word on the being Am's reel - a `do:coin` with `binding:{ kind:"op", word:{ noun } }`, the
+/// declare-word shape `treewordfold::fold_word_set` folds. The name-being split (project_name_being_
+/// refactor): the vocabulary reel is the being "Am" (signed by the Name "I", through the being "Am"), so
+/// the fold reads Am's reel. This is how an op enters the fold so `act_via_fold` resolves it
+/// (`op_word_via_fold` = `resolve_word(...).is_op()` && `file_of(op)`). The body itself is supplied to
+/// `act_via_fold` by the `file_of` closure keyed on the op name.
+fn coin_op(dir: &Path, op: &str, noun: &str, ord: f64) {
+    let coin = obj(vec![
+        ("through", jstr("Am")), // acted through the being Am (the vocabulary vehicle)
+        ("by", jstr("I")),       // the Name I signs
+        ("verb", jstr("do")),
+        ("act", jstr("coin")),
+        ("of", obj(vec![("kind", jstr("being")), ("id", jstr("Am"))])),
+        (
+            "params",
+            obj(vec![
+                ("word", jstr(op)),
+                ("ownerExtension", jstr("seed")),
+                (
+                    "binding",
+                    obj(vec![("kind", jstr("op")), ("word", obj(vec![("noun", jstr(noun))]))]),
+                ),
+            ]),
+        ),
+    ]);
+    stamp(dir, "being", "Am", &coin, ord); // the vocabulary reel is the being Am
 }
 
 /// Plant a space (create-space: name + parent + optional size) then refold.
@@ -255,8 +283,9 @@ fn host_seam_create_space_end_to_end_and_size_gate() {
 // own chain link. A deed that NAMES another op-word re-reads that word's `.word` and re-facts it,
 // RECURSIVELY — set-owner.word's `do set-space` is the canonical nest. This drives a 2-deed composite
 // whose body is two `do set-space` deeds on DIFFERENT space reels, plus a deeper nest (a composite that
-// calls a composite), via `act_with_ops` with the op-word bodies injected (the fold's job, mocked here
-// to the real set-space.word). The proof: N SEPARATE facts land (one per deed, each on its own reel,
+// calls a composite), via `act_via_fold` with the ops DECLARED on the chain (do:coin, kind:"op") and
+// their bodies loaded through the `file_of` seam (the real fold-backed op resolution - set-space is the
+// genuine seed .word). The proof: N SEPARATE facts land (one per deed, each on its own reel,
 // chain-verified), NOT one fused fact — and the top-level word lays NO fact of its own (`ran_as_moments`).
 #[test]
 fn composite_runs_as_n_separate_moments() {
@@ -279,7 +308,13 @@ fn composite_runs_as_n_separate_moments() {
     )
     .to_string();
     let set_space = materials_word("space/set-space.word");
-    let op_word_of = move |op: &str| -> Option<String> {
+    // DECLARE the ops on the chain (do:coin, kind:"op") so the fold resolves them, then supply their
+    // bodies via `file_of` - the REAL `act_via_fold` seam (`op_word_via_fold` = fold says "op" && the
+    // host loads the body). `set-two`'s noun is irrelevant (it synthesizes no fact of its own); set-space
+    // targets a space.
+    coin_op(&dir, "set-two", "space", 10.0);
+    coin_op(&dir, "set-space", "space", 11.0);
+    let file_of = move |op: &str, _noun: Option<&str>| -> Option<String> {
         match op {
             "set-two" => Some(set_two.clone()),
             "set-space" => Some(set_space.clone()),
@@ -291,7 +326,7 @@ fn composite_runs_as_n_separate_moments() {
     let i = pj(r#"{"beingId":"I","nameId":"I"}"#).unwrap();
     let word = "do set-two on the space root with {}.";
     let no_spec = |_: &str| None;
-    let out = act_with_ops(word, &i, &dir, "0", no_spec, &op_word_of, None, None);
+    let out = act_via_fold(word, &i, &dir, "0", no_spec, &file_of, None, None);
 
     // N = 2 outcomes, both authorized, the word itself lays no fact of its own.
     assert!(ran_as_moments(&out), "the composite ran as N moments (no auto-stamp of the word itself)");
@@ -343,7 +378,11 @@ fn composite_runs_as_n_separate_moments() {
     .to_string();
     let set_deep = "When a being marks deeply:\n  do set-two on the space root with {}.\n".to_string();
     let set_space2 = materials_word("space/set-space.word");
-    let deep_resolver = move |op: &str| -> Option<String> {
+    // declare the three ops on dir2's chain, then supply their bodies via `file_of` (the real seam).
+    coin_op(&dir2, "set-deep", "space", 10.0);
+    coin_op(&dir2, "set-two", "space", 11.0);
+    coin_op(&dir2, "set-space", "space", 12.0);
+    let deep_file_of = move |op: &str, _noun: Option<&str>| -> Option<String> {
         match op {
             "set-deep" => Some(set_deep.clone()),
             "set-two" => Some(set_two2.clone()),
@@ -351,13 +390,13 @@ fn composite_runs_as_n_separate_moments() {
             _ => None,
         }
     };
-    let deep_out = act_with_ops(
+    let deep_out = act_via_fold(
         "do set-deep on the space root with {}.",
         &i,
         &dir2,
         "0",
         |_: &str| None,
-        &deep_resolver,
+        &deep_file_of,
         None,
         None,
     );

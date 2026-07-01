@@ -71,12 +71,17 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
             }
         }
         painter.text(pos + egui::vec2(0.0, r + 11.0), egui::Align2::CENTER_CENTER, &n.label, egui::FontId::monospace(11.0), egui::Color32::from_gray(205));
+        // a fresh utterance (folded from the being's chain) floats above it as a speech bubble
+        if let Some(said) = n.fresh_said(p.st.now_ord) {
+            bubble(&painter, pos - egui::vec2(0.0, r + 6.0), said);
+        }
     }
 
-    // click a SPACE -> walk into it (append its name to the path); a BEING -> DRIVE it (pull it).
+    // click a SPACE -> walk into it (append its name to the path); a BEING -> ADDRESS it (set the RIGHT
+    // @being, so a Word you say calls it). Driving a being is a separate act (its tab / the Rain panel).
     if let Some((kind, id, label)) = clicked {
         match kind.as_str() {
-            "being" => p.drive_being(&id, label.trim_start_matches('@')),
+            "being" => p.select_being(&id, label.trim_start_matches('@')),
             _ => {
                 let target = child_address(&p.st.address, &label);
                 p.navigate(&target, true);
@@ -89,6 +94,22 @@ pub fn show(ui: &mut egui::Ui, p: &mut Portal) {
 fn child_address(current: &str, name: &str) -> String {
     let base = current.split('@').next().unwrap_or(current).trim_end_matches('/');
     format!("{base}/{name}")
+}
+
+/// A speech bubble above a being (the fresh utterance folded from its chain).
+fn bubble(painter: &egui::Painter, anchor: egui::Pos2, text: &str) {
+    let text = if text.len() > 60 { format!("{}…", &text[..57]) } else { text.to_string() };
+    let galley = painter.layout_no_wrap(text, egui::FontId::proportional(12.0), egui::Color32::from_gray(20));
+    let pad = egui::vec2(8.0, 5.0);
+    let center = anchor - egui::vec2(0.0, galley.size().y * 0.5 + pad.y);
+    let rect = egui::Rect::from_center_size(center, galley.size() + pad * 2.0);
+    painter.rect_filled(rect, 7.0, egui::Color32::from_rgba_unmultiplied(238, 240, 245, 240));
+    painter.add(egui::Shape::convex_polygon(
+        vec![egui::pos2(center.x - 5.0, rect.bottom()), egui::pos2(center.x + 5.0, rect.bottom()), egui::pos2(center.x, rect.bottom() + 6.0)],
+        egui::Color32::from_rgba_unmultiplied(238, 240, 245, 240),
+        egui::Stroke::NONE,
+    ));
+    painter.galley(rect.min + pad, galley, egui::Color32::from_gray(20));
 }
 
 fn draw_grid(painter: &egui::Painter, rect: egui::Rect) {

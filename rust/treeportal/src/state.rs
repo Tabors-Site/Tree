@@ -11,6 +11,7 @@ pub enum View {
     Story,
     World3d,
     Rain,
+    Explorer,
 }
 
 impl View {
@@ -20,6 +21,7 @@ impl View {
             View::Story => "Story",
             View::World3d => "3D",
             View::Rain => "Rain",
+            View::Explorer => "Files",
         }
     }
 }
@@ -28,6 +30,16 @@ impl View {
 pub enum Mode {
     Stamp,
     Manual,
+}
+
+/// A history/branch as the portal knows it: its canonical path (`0`, `1`, `1a2`…), a display label, its
+/// parent path, and the ord it forked at (None for the root `0`).
+#[derive(Clone)]
+pub struct Branch {
+    pub path: String,
+    pub label: String,
+    pub parent: Option<String>,
+    pub fork_ord: Option<f64>,
 }
 
 pub struct PortalState {
@@ -48,6 +60,9 @@ pub struct PortalState {
     pub now_ord: f64,
     /// the being whose Rain column is selected (beingId, name) — opens the side panel.
     pub side_being: Option<(String, String)>,
+    /// the active display language (the projection). "en" is the canonical Word's own form; other langs
+    /// go through the derived translate() seam (LLM-activated) — never a hand-maintained map.
+    pub lang: String,
     /// the MANUAL-mode composer (the keyboard ACT/FACT model — words matter most).
     pub composer: Composer,
     /// word-at-a-time sending (the user's preference): each sealed word is its own act. False batches
@@ -64,6 +79,20 @@ pub struct PortalState {
     pub add_name: String,
     pub add_import: String,
     pub add_msg: String,
+    // login form (transient): the name+password fields, a set/change password field, and the password
+    // held while a name-key moment is in flight (decrypted on arrival — never persisted).
+    pub login_name: String,
+    pub login_password: String,
+    pub set_password: String,
+    pub pending_password: Option<String>,
+    /// the RIGHT-stance TARGET being (beingId, name): what a Word typed in the word bar CALLS. Set by
+    /// clicking a being (in 3D/2D) or typing `@being`. None = you address the place, not a being.
+    pub target_being: Option<(String, String)>,
+    /// the history's MOMENTS (ord, phrase) — one per act, folded from the chains — drawn as dots on the
+    /// history bar; clicking a dot scrubs the world to that ord.
+    pub timeline: Vec<(f64, String)>,
+    /// the known branches/histories (path, label, parentPath, forkOrd) for the history tree + switcher.
+    pub branches: Vec<crate::state::Branch>,
 }
 
 impl Default for PortalState {
@@ -78,6 +107,7 @@ impl Default for PortalState {
             at_ord: None,
             now_ord: 1.0,
             side_being: None,
+            lang: "en".to_string(),
             composer: Composer::default(),
             per_word: true,
             moment: None,
@@ -88,6 +118,13 @@ impl Default for PortalState {
             add_name: String::new(),
             add_import: String::new(),
             add_msg: String::new(),
+            login_name: String::new(),
+            login_password: String::new(),
+            set_password: String::new(),
+            pending_password: None,
+            target_being: None,
+            timeline: Vec::new(),
+            branches: Vec::new(),
         }
     }
 }

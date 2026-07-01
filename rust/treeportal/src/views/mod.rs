@@ -1,3 +1,4 @@
+pub mod explorer;
 pub mod map2d;
 pub mod rain;
 pub mod scene;

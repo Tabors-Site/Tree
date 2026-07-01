@@ -30,3 +30,6 @@ treesign = { path = "../treesign" }
 # the collision gate reads), so the host see-op's substrate reads see the genuine on-disk store.
 treeproj = { path = "../treeproj" }
 treehost = { path = "../treehost" }
+# the MOVE test folds do:move steps through the position projection too (the (beingId,spaceId) coord
+# index the portal scene reads), the parallel of treefold's authoritative state.coord.
+treesecondary = { path = "../treesecondary" }

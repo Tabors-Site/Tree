@@ -29,7 +29,7 @@ mod threads;
 mod value;
 
 pub use inbox::{inbox_evict, inbox_open, inbox_open_quoted_word, is_call, priority_rank_of};
-pub use position::{position_fold_coord, position_row_id, PositionOp};
+pub use position::{direction_offset, position_fold_coord, position_fold_move, position_row_id, PositionOp};
 pub use threads::{thread_root, threads_fold_call, threads_note_act_seal};
 pub use value::Json;
 

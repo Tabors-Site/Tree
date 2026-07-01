@@ -8,5 +8,6 @@ license = "AGPL-3.0"
 [dependencies]
 treehash = { path = "../treehash" }
 treeword = { path = "../treeword" }
+treesymbol = { path = "../treesymbol" }
 treeval = { path = "../treeval" }
 treeaddress = { path = "../treeaddress" }

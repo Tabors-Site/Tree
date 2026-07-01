@@ -16,19 +16,19 @@
 // parseAbleWord → the engine; treeibp takes a resolver so it stays decoupled from that work. The able
 // SPEC SHAPE { canSee, canDo, canCall, canBe, reach } is the stable contract.
 //
-// ── THE ONE PATH (Tabor: "the I reads the .word through the stamper as an act") ───────────────────────
+// == THE ONE PATH (Tabor: "the I reads the .word through the stamper as an act") ==
 //
-//   parse → act_inner → run_body_expand → seal_specs → moments
+//   parse -> act_inner -> run_body_expand -> seal_specs -> moments
 //
 // EVERY act entry converges here. `act_inner` is the single private pipeline: parse the Word, run its
-// body through the ONE real body loop (`run_body_expand` — acts, flows, control flow, threading
+// body through the ONE real body loop (`run_body_expand` - acts, flows, control flow, threading
 // bindings + state, and the composite-by-reference expansion), then AUTHORIZE + SEAL each produced spec
-// as a moment (`seal_specs` → `seal_one` → treestore's `commit_moment`). The public entries `act`,
+// as a moment (`seal_specs` -> `seal_one` -> treestore's `commit_moment`). The public entries `act`,
 // `act_via_fold`, `act_via_fold_bound` are thin wrappers that differ ONLY in the two injected closures
-// they hand `act_inner` — the op-word resolver (`op_word_of`: inline / fold-backed) and the initial ctx
+// they hand `act_inner` - the op-word resolver (`op_word_of`: inline / fold-backed) and the initial ctx
 // binds (empty / caller-supplied anchors). There is no second runner: `run_body` / `run_body_host` are
 // no-expand wrappers over `run_body_expand`, so ONE body loop is the whole vocabulary. The I reads the
-// .word through the stamper as an act: same words → same specs → same sealed facts → same ids.
+// .word through the stamper as an act: same words -> same specs -> same sealed facts -> same ids.
 
 use std::path::Path;
 use std::sync::Mutex;
@@ -40,7 +40,12 @@ use treestore::{
 use treeval::able::{able_walk, Grant, PermitReq, WalkArgs};
 use treeval::auth::{authorize_decide, DecideArgs};
 
-const I_AM: &str = "I"; // the bootstrap Name IS the sign "I"; `am` is its second word/act (i-am/I_AM were drift)
+// The bootstrap NAME is "I" - the signer + the source of all authority (I signs, I has authority). The
+// name-being split (project_name_being_refactor): "I" is the NAME here (the authority axis in
+// `has_authority_over` + the authorize bypass), DISTINCT from the first BEING "Am" (the be:birth target +
+// the public vocabulary reel, treewordfold::AM_BEING). This const is the NAME; the being id "Am" lives in
+// treegenesis::AM_BEING / treewordfold::AM_BEING. (`am` is the being's birth word; i-am/I_AM were drift.)
+const I_AM: &str = "I";
 
 /// The story = the substrate domain (crossOrigin.js: "story — the substrate domain, e.g. tabors.site").
 /// The on-disk store keys act-chains under it AND the act-sig commits to it, so it must be stable. A
@@ -433,21 +438,21 @@ pub enum Outcome {
 /// family NEVER auto-stamps — it ONLY seals the specs the body produced (`seal_specs` opens one moment
 /// per spec). So this is structural here, and the marker is a TRUE assertion over the outcome list: an
 /// outcome list IS the N moments (one Outcome per deed-fact / refusal), never a single fused composite
-/// fact. Holds for every `act` entry by construction — they all converge on `act_inner`, whose runner
+/// fact. Holds for every `act` entry by construction - they all converge on `act_inner`, whose runner
 /// has no composite-fact path to skip. (Surfaced as a predicate so a caller / test can
 /// name the invariant.)
 pub fn ran_as_moments(_outcomes: &[Outcome]) -> bool {
     true // the act family always runs as N moments; there is no auto-stamp of the composite word
 }
 
-/// The ACT primitive — a being speaks a Word: parse → run its body (`run_body_expand`: acts, flows, and
+/// The ACT primitive - a being speaks a Word: parse -> run its body (`run_body_expand`: acts, flows, and
 /// control flow, threading bindings + state) → AUTHORIZE + SEAL each act that targets a reel (the
 /// moment-seal, `seal_one`). ONE entry; declarations are skipped, and a state-only act threads its
 /// `sets` without sealing. `sign` is the optional injected signer (treeibp stays crypto-free; the edge
 /// binary supplies the story/Name key) — present = the acts land ed25519-signed, `None` = unsigned.
 /// (Paired with `moment`, the read primitive — the two-primitive surface.)
 ///
-/// A thin wrapper over `act_inner` (THE ONE PATH) with INLINE ops (an empty `op_word_of` — every node
+/// A thin wrapper over `act_inner` (THE ONE PATH) with INLINE ops (an empty `op_word_of` - every node
 /// rasterizes inline, no composite-by-reference expansion) and NO initial binds. Byte-identical to the
 /// old `act_with_ops(..., |_| None, ...)`.
 pub fn act(
@@ -462,16 +467,16 @@ pub fn act(
     act_inner(word, actor, dir, history, able_spec_of, |_| None, &obj(vec![]), basis, sign)
 }
 
-/// THE ONE PATH — the single act pipeline every public entry converges on: parse → run the body via the
-/// EXPANDING runner (`run_body_expand`, the one real body loop) → AUTHORIZE + SEAL each produced spec as
+/// THE ONE PATH - the single act pipeline every public entry converges on: parse -> run the body via the
+/// EXPANDING runner (`run_body_expand`, the one real body loop) -> AUTHORIZE + SEAL each produced spec as
 /// a moment (`seal_specs`). PRIVATE: the public entries (`act`, `act_via_fold`, `act_via_fold_bound`) are
-/// thin wrappers differing ONLY in the two injected closures — `op_word_of` (the COMPOSITE-by-reference
-/// resolver: a WORD-SOLE materials op — set-being / set-space / create-space / end-space / set-matter /
-/// create-matter — carries NO inline body; `op_word_of(op)` returns its co-located `.word` and the deed
+/// thin wrappers differing ONLY in the two injected closures - `op_word_of` (the COMPOSITE-by-reference
+/// resolver: a WORD-SOLE materials op - set-being / set-space / create-space / end-space / set-matter /
+/// create-matter - carries NO inline body; `op_word_of(op)` returns its co-located `.word` and the deed
 /// naming it is EXPANDED, its trigger derived from the act's OWN fields, its `Return` do-fact sealed as
 /// the moment) and `binds` (the WORLD-ANCHOR seam: a `{ <anchor>: <id>, ... }` object the genesis reader
 /// seeds into ctx.bindings so a creation Word's `of`/`params` refs resolve to already-created ids). A
-/// node with no materials body runs the inline path. There is NO external trigger channel — the trigger
+/// node with no materials body runs the inline path. There is NO external trigger channel - the trigger
 /// is INTERNAL, derived from the act.
 #[allow(clippy::too_many_arguments)]
 fn act_inner(
@@ -712,7 +717,7 @@ pub fn act_via_fold(
     )
 }
 
-/// `act_via_fold` with INITIAL ctx bindings — the genesis world-anchor seam. A thin wrapper over
+/// `act_via_fold` with INITIAL ctx bindings - the genesis world-anchor seam. A thin wrapper over
 /// `act_inner` (THE ONE PATH) with the fold-backed `op_word_of` AND the caller's `binds`: the genesis
 /// reader threads the `$root` / `$heaven` / `$cherub` … anchors it has already created so a creation
 /// Word's parent/target/grant refs resolve to the live ids. The empty-binds case IS `act_via_fold`
@@ -817,7 +822,7 @@ pub fn run_op_word(
     seal_specs(&specs, actor, dir, history, &able_spec_of, basis, sign)
 }
 
-/// The SHARED op-`.word` runner (the trigger->specs core both `run_op_word` and `act_with_ops` call).
+/// The SHARED op-`.word` runner (the trigger->specs core both `run_op_word` and `act_inner` call).
 /// Seed the trigger as ctx.bindings (so the body's `see resolve-X($target, ...)` resolves them), plus
 /// the extracted `caller` (the actor's beingId) + `branch` + `targetId` the standard trigger carries,
 /// then parse + run the op's `.word` body through the host see-op seam. Returns the produced fact specs
@@ -882,7 +887,7 @@ fn run_op_body_expand(
 /// (resolved by `op_word_of`), run that word's `.word` body with the deed-derived trigger and return
 /// its produced fact specs — recursively, so a nested op-deed expands the same way (the `expand_op`
 /// closure it threads calls back into THIS function). `None` when the deed is not an op-word (it
-/// rasterizes inline). This is the SAME expansion the top-level `act_with_ops` loop does, now reachable
+/// rasterizes inline). This is the SAME expansion the top-level `act_inner` loop does, now reachable
 /// from inside any body (a flow-wrapped deed, a deed inside another op's `.word`).
 fn expand_one(
     node: &Json,
@@ -967,18 +972,24 @@ fn apply_sets(ctx: &mut Json, node: &Json) {
 /// materials `.word` that reaches a host see-op needs `run_body_host`, which threads the resolver
 /// seam). Existing callers keep this exact signature; `act` calls the threaded form below.
 ///
+/// ONE LOOP: there is a SINGLE real body loop, `run_body_expand`. This `run_body` is a thin NO-EXPAND,
+/// NO-RESOLVER wrapper over it (a see-floor that refuses + a no-op `expand_op`), so its behavior is
+/// byte-identical to the JS host-less default while sharing the one loop.
+///
 /// (NOTE per the act/fact doctrine: stamping these specs is fact-only today - the act-log/moment-seal
 /// is the doctrine-correct write, tracked separately.)
 pub fn run_body(body: &[Json], ctx: &mut Json, host: &dyn Fn(&str, &[Json]) -> bool) -> Vec<Json> {
     // No resolver wired - the `see resolve-X` floor fails CLOSED (the JS host-less default). A pure
     // control-flow Word never reaches a `see` node, so this only refuses an actual host see-op, which
-    // surfaces as the SAME empty-effects no-op the unwired floor always produced.
+    // surfaces as the SAME empty-effects no-op the unwired floor always produced. No composite expansion
+    // (a no-op `expand_op`): the pure-word floor rasterizes every deed inline.
     let see_floor = |op: &str, _args: &[Json]| {
         Err(HostError::invalid(format!(
             "host see-op \"{op}\" reached run_body with no resolver wired (use act / run_body_host)"
         )))
     };
-    run_body_host(body, ctx, host, &see_floor).unwrap_or_default()
+    let no_expand = |_: &Json, _: &mut Json| None;
+    run_body_expand(body, ctx, host, &see_floor, &no_expand).unwrap_or_default()
 }
 
 /// The FLOW eval driver WITH the host see-op seam threaded - the materials-`.word` end-to-end form.
@@ -1151,7 +1162,10 @@ fn fact_binding_of(see_op: &str) -> Option<(&'static str, &'static str)> {
         "resolve-birth-space" => Some(("create-space", "space")),
         "resolve-birth-spec" => Some(("create-matter", "matter")),
         "resolve-end-space-spec" => Some(("end-space", "space")),
-        // LLM connection update/delete: the `.word` has NO explicit `do` deed — its `Return beingId:...,
+        // move (being step): the do:move on the walker's being reel (move.word direction mode). The
+        // Return names an explicit factTarget { kind:"being", id }, so the noun here is advisory.
+        "resolve-move-being" => Some(("move", "being")),
+        // LLM connection update/delete: the `.word` has NO explicit `do` deed - its `Return beingId:...,
         // factParams: $patch.setBeingParams` IS the fact terminator (the dispatcher lays the one
         // do:set-being on the caller's being from the returned block). add-llm-connection / assign-llm-
         // slot / set-*-llm carry explicit `do` deeds instead, so they need no entry here.

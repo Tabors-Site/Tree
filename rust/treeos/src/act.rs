@@ -125,6 +125,47 @@ pub fn run_op(op: &str, trigger: &Json, actor: &Json, root: &Path, history: &str
     outcomes
 }
 
+/// Register a Name (name:declare) or set/change its password (name:set-password) — seal a `name`
+/// fact onto the LIBRARY reel via the general moment seal (the same path genesis uses; NO exemption).
+/// Name creation is an I act, signed by the custodial story key. `spec` carries `{ name, privateKeyEnc,
+/// parentNameId?, soulType? }`; `privateKeyEnc` is the `pw:` blob (the key, password-encrypted — the
+/// portal made it locally; the plaintext key + password never reached the server).
+pub fn declare_name(op: &str, nid: &str, _name: &str, spec: &Json, root: &Path, story_domain: &str) -> Vec<treeibp::Outcome> {
+    if nid.is_empty() {
+        return vec![treeibp::Outcome::Denied("name:declare needs a nameId".into())];
+    }
+    let act_kind = if op == "name-set-password" { "set-password" } else { "declare" };
+    // the lone fact (one act -> one word -> one fact -> one reel), of:{kind:library, id:storyDomain}.
+    let fact = Json::Obj(vec![
+        ("verb".into(), Json::Str("name".into())),
+        ("act".into(), Json::Str(act_kind.into())),
+        ("through".into(), Json::Str("I".into())),
+        ("of".into(), Json::Obj(vec![("kind".into(), Json::Str("library".into())), ("id".into(), Json::Str(story_domain.into()))])),
+        ("params".into(), Json::Obj(vec![("nameId".into(), Json::Str(nid.into())), ("spec".into(), spec.clone())])),
+        ("history".into(), Json::Str("0".into())),
+    ]);
+    // the act opening (I signs; the act-chain keys by "I"), carrying the fact in deltaF.
+    let act = Json::Obj(vec![
+        ("by".into(), Json::Str("I".into())),
+        ("through".into(), Json::Str("I".into())),
+        ("to".into(), Json::Str(nid.into())),
+        ("story".into(), Json::Str(story_domain.into())),
+        ("history".into(), Json::Str("0".into())),
+        ("deltaF".into(), Json::Arr(vec![fact.clone()])),
+    ]);
+    let i_actor = Json::Obj(vec![("nameId".into(), Json::Str("I".into())), ("name".into(), Json::Str("I".into()))]);
+    let signer = match story_signer(&i_actor) {
+        Some(s) => s,
+        None => return vec![treeibp::Outcome::Denied("no story key to sign the name declare".into())],
+    };
+    let sign_ref: &dyn Fn(&Json, &[String]) -> Json = &signer;
+    let ord = treestore::next_ord(root);
+    match treestore::commit_moment_signed(root, &act, ord, sign_ref) {
+        Ok(_committed) => vec![treeibp::Outcome::Authorized(fact)],
+        Err(e) => vec![treeibp::Outcome::Denied(format!("name:{act_kind} seal failed: {e:?}"))],
+    }
+}
+
 /// One act outcome as a wire row (the stamped fact, or a denial reason).
 pub fn outcome_json(o: &treeibp::Outcome) -> Json {
     match o {

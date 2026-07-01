@@ -53,6 +53,24 @@ impl Vault {
         self.active = Some(self.names.len() - 1);
     }
 
+    /// Unlock a Name from its ENCRYPTED key blob (fetched from the story via a name-key moment) using the
+    /// password — decrypted CLIENT-SIDE (the password never touched the wire). Wrong password → decrypt
+    /// fails → "wrong password".
+    pub fn unlock_with_password(&mut self, label: &str, blob: &str, password: &str) -> Result<(), String> {
+        let pem = treesign::decrypt_with_password(blob, password).ok_or_else(|| "wrong password".to_string())?;
+        let seed = treesign::seed_from_pkcs8_pem(&pem).map_err(|_| "the stored key is malformed".to_string())?;
+        self.push(label, seed, None);
+        Ok(())
+    }
+
+    /// The active Name's key, ENCRYPTED with a password — the `pw:` blob to store in the story
+    /// (name:declare / set-password). Used to register a Name or set/change its password.
+    pub fn encrypted_blob(&self, password: &str) -> Option<String> {
+        let n = self.active_name()?;
+        let pem = treesign::seed_to_pkcs8_pem(&n.seed);
+        treesign::encrypt_with_password(&pem, password).ok()
+    }
+
     /// Sign the moment proof for the active Name (the key-proof the server checks at the moment).
     pub fn sign_moment(&self, name_id: &str, req: &treehash::Json) -> Option<String> {
         let n = self.active_name()?;

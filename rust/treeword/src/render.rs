@@ -667,10 +667,13 @@ fn render_act(node: &Json) -> Option<String> {
     let verb = s(node, "verb");
     let act = s(node, "act");
     let has_id = !of_id(node).is_empty();
+    // THE GENESIS VERSE (the name-being split): the be:birth of the being "Am" carried as the verse
+    // (`verse:true`) re-utters the full "I am ..." line. Checked BEFORE the plain be:birth arm so a verse
+    // node speaks the verse, while a plain `I make Am.` (no `verse` marker) speaks "I make Am.".
+    if matches!(get(node, "verse"), Some(Json::Bool(true))) {
+        return Some("I am \"what?\" I am.".to_string());
+    }
     match (verb, act) {
-        // TODO genesis verse: restructure as Am (be:birth, the first being) wrapped by I (the
-        // name/signer) -- part of the name-being refactor; kept as "i-am" until that lands.
-        ("name", "i-am") => Some("I am \"what?\" I am.".to_string()),
         ("be", "birth") if has_id => {
             // "I make <Capitalized>[, <description>]." — of.id carries the case the parser keys on.
             let id = of_id(node);

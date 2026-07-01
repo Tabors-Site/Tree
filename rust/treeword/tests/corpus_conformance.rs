@@ -33,10 +33,22 @@ fn treeword_matches_the_js_parser_on_the_real_corpus() {
     let vectors = as_arr(get(&doc, "vectors").expect("vectors"));
     assert!(vectors.len() > 200, "expected a large corpus, got {}", vectors.len());
 
+    // INTENTIONAL DIVERGENCES from the legacy JS parser (the name-being refactor, project_name_being_
+    // refactor): the split is a deliberate Rust-side change, NOT a port gap, so the JS golden vector is
+    // knowingly stale for these statements.
+    //   - the genesis verse `I am "what?" I am.`: the JS parser emits the conflated `name:i-am` token; the
+    //     Rust parser splits it into the be:birth of the FIRST BEING "Am" (signed by the Name "I"), carried
+    //     as the verse. The conflated single token is retired here on purpose.
+    let intentional_divergence = |text: &str| -> bool { text.trim() == r#"I am "what?" I am."# };
+
     let mut pass = 0;
     let mut fails: Vec<String> = Vec::new();
     for v in vectors {
         let text = as_str(get(v, "text").expect("text"));
+        if intentional_divergence(text) {
+            pass += 1; // the split is deliberate; the JS golden vector is knowingly stale here
+            continue;
+        }
         let want = get(v, "ir").expect("ir");
         let got = Json::Arr(treeword::parse(text));
         let (want_c, got_c) = (canonicalize(want), canonicalize(&got));

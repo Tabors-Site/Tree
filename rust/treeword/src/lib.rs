@@ -209,12 +209,23 @@ fn rules() -> &'static [(Regex, Builder)] {
             Regex::new(r"(?i)^It (accepts|carries|claims) (.+)\.$").unwrap(),
             |m| obj(vec![("kind", jstr(&m[1].to_lowercase())), ("subject", Json::Null), ("items", items(&m[2]))]),
         ),
-        // I am "what?" I am.   (the genesis verse)
-        // TODO genesis verse: restructure as Am (be:birth, the first being) wrapped by I (the
-        // name/signer) -- part of the name-being refactor; kept as "i-am" until that lands.
+        // I am "what?" I am.   (the genesis verse) - THE NAME-BEING SPLIT (project_name_being_refactor).
+        // The verse is the Name "I" birthing the first being "Am": "(I) am" [be:birth Am] / "(I) what?"
+        // [the recall] / "(I) am" [the answer], all SIGNED by the Name I. The conflated single "i-am" name
+        // token is REPLACED by the be:birth of the being "Am" (the moment genesis actually plants), carried
+        // as the verse with `by:"I"` (the signer) and `verse:true` (so render re-utters the full line and
+        // it does NOT collide with a plain `I make Am.` be:birth). This is the parser twin of treegenesis's
+        // MOMENT 2 (be:birth id:"Am"); the recall/answer are the verse's spoken frame around that one birth.
         (
             Regex::new(r#"(?i)^I am "what\?" I am\.$"#).unwrap(),
-            |_m| obj(vec![("kind", jstr("act")), ("verb", jstr("name")), ("act", jstr("i-am")), ("by", jstr("I"))]),
+            |_m| obj(vec![
+                ("kind", jstr("act")),
+                ("verb", jstr("be")),
+                ("act", jstr("birth")),
+                ("by", jstr("I")),
+                ("of", obj(vec![("kind", jstr("being")), ("id", jstr("Am"))])),
+                ("verse", Json::Bool(true)),
+            ]),
         ),
         // I make <Capitalized>[, <description>].   -> birth a being
         (
@@ -410,6 +421,17 @@ type EffBuilder = fn(&Captures, &Ctx) -> Json;
 /// EFFECT_RULES (this slice: the two state-act forms — parser.js `stateAct`).
 fn effect_rules() -> &'static [(Regex, EffBuilder)] {
     static TABLE: LazyLock<Vec<(Regex, EffBuilder)>> = LazyLock::new(|| vec![
+        // move <direction>.   (a being walks itself: the compass step W/A/S/D expand to). It lowers to a
+        // `do move` deed carrying params.direction — NO `of`, because the SUBJECT is the actor's own
+        // being: move.word (a kind:op composite) reads `$caller` and authors the do:move on that being's
+        // reel. The EXISTING move verb (no new parser verb); the four compass words are the vocabulary.
+        (
+            Regex::new(r"(?i)^move (north|south|east|west)\.$").unwrap(),
+            |m, _ctx| obj(vec![
+                ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("move")),
+                ("params", obj(vec![("direction", jstr(&m[1].to_lowercase()))])),
+            ]),
+        ),
         // the <able> <verb>, and it becomes <X>.   (a state-wheel act: no `of`, sets the next state)
         (
             Regex::new(r"(?i)^the (\w+) (\w+), and it becomes (\w+)\.$").unwrap(),

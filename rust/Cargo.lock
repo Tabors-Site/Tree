@@ -3520,6 +3520,7 @@ version = "0.1.0"
 dependencies = [
  "treeaddress",
  "treehash",
+ "treesymbol",
  "treeval",
  "treeword",
 ]
@@ -3569,6 +3570,7 @@ dependencies = [
  "treehash",
  "treehost",
  "treeproj",
+ "treesecondary",
  "treesign",
  "treestore",
  "treeval",

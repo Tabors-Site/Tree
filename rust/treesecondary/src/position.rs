@@ -38,6 +38,19 @@
 use crate::value as v;
 use crate::value::{Json, RowBuilder};
 
+/// A compass direction's cell OFFSET (dx, dy) — the move.word law: north = y
+/// falls by one, south = y rises, east = x rises, west = x falls. `None` for an
+/// unknown/absent direction (the fold NoOps rather than guess a step).
+pub fn direction_offset(dir: &str) -> Option<(f64, f64)> {
+    match dir {
+        "north" => Some((0.0, -1.0)),
+        "south" => Some((0.0, 1.0)),
+        "east" => Some((1.0, 0.0)),
+        "west" => Some((-1.0, 0.0)),
+        _ => None,
+    }
+}
+
 /// The PositionProjection write a coord fact resolves to. (Json carries no
 /// PartialEq; tests compare the Upsert row via canonicalize/stringify.)
 #[derive(Debug)]
@@ -146,6 +159,82 @@ pub fn position_fold_coord(prior: Option<&Json>, fact: &Json, space_id: &str) ->
         .put("spaceId", Json::Str(space_id.to_string()))
         .put("x", x)
         .put("y", y)
+        .put("lastMoveSeq", Json::Num(seq))
+        .put("updatedAt", updated)
+        .put_opt("z", z)
+        .build();
+    PositionOp::Upsert(row)
+}
+
+/// position_fold_move: a `do:move` (a being STEP) as a PURE
+/// (prior_row, fact, space_id) -> PositionOp — the ACCUMULATING arm.
+///
+/// A being walks by LAYING a `do:move` fact carrying a `params.direction`
+/// (north/south/east/west); nothing is computed at act time. The being's coord
+/// is the FOLD of those steps: each fold reads the prior row's { x, y } and
+/// SHIFTS it by the direction's cell offset (direction_offset). So a chain of
+/// do:move facts accumulates into the running position, and a re-fold on the
+/// being's next moment lands it in the new spot purely from the reel.
+///
+/// `prior` is the existing PositionProjection row at (beingId, spaceId), or None.
+/// `space_id` is the resolved space (the caller resolves it, as for the coord fold).
+///
+/// Gates (in order):
+///   - verb === "do" && act === "move"            else NoOp
+///   - of.kind === "being" && of.id present       else NoOp
+///   - typeof fact.seq === "number"               else NoOp
+///   - params.direction resolves to an offset     else NoOp
+///   - spaceId resolved (non-empty)               else NoOp
+///   - SEQ-GUARD: fact.seq > prior.lastMoveSeq (or no prior)  else NoOp
+///
+/// The prior { x, y } seed the step; with no prior row the being starts at the
+/// origin { 0, 0 } and the step applies from there (the first move places it).
+pub fn position_fold_move(prior: Option<&Json>, fact: &Json, space_id: &str) -> PositionOp {
+    if v::str_of(fact, "verb") != Some("do") || v::str_of(fact, "act") != Some("move") {
+        return PositionOp::NoOp;
+    }
+    let being_id = match v::of_ref(fact) {
+        Some((kind, id)) if kind == "being" => id,
+        _ => return PositionOp::NoOp,
+    };
+    let seq = match v::num_of(fact, "seq") {
+        Some(n) => n,
+        None => return PositionOp::NoOp,
+    };
+    let params = v::params(fact);
+    let dir = match v::str_of(&params, "direction") {
+        Some(d) => d,
+        None => return PositionOp::NoOp,
+    };
+    let (dx, dy) = match direction_offset(dir) {
+        Some(o) => o,
+        None => return PositionOp::NoOp,
+    };
+    if space_id.is_empty() {
+        return PositionOp::NoOp;
+    }
+    // SEQ-GUARD: only a fact newer than the prior row's lastMoveSeq advances the
+    // fold (a stale re-fold NoOps, matching the coord arm).
+    if let Some(prior) = prior {
+        if let Some(last) = v::num_of(prior, "lastMoveSeq") {
+            if !(seq > last) {
+                return PositionOp::NoOp;
+            }
+        }
+    }
+    // ACCUMULATE onto the prior { x, y } (origin when there is no prior row).
+    let base_x = prior.and_then(|p| v::num_of(p, "x")).unwrap_or(0.0);
+    let base_y = prior.and_then(|p| v::num_of(p, "y")).unwrap_or(0.0);
+    let z = prior.and_then(|p| v::get(p, "z")).filter(|j| v::is_finite_num(j)).cloned();
+
+    let id = position_row_id(&being_id, space_id);
+    let updated = v::nullish(v::get(fact, "date"), Json::Null);
+    let row = RowBuilder::new()
+        .put("_id", Json::Str(id))
+        .put("beingId", Json::Str(being_id))
+        .put("spaceId", Json::Str(space_id.to_string()))
+        .put("x", Json::Num(base_x + dx))
+        .put("y", Json::Num(base_y + dy))
         .put("lastMoveSeq", Json::Num(seq))
         .put("updatedAt", updated)
         .put_opt("z", z)

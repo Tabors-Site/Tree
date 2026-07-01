@@ -239,6 +239,26 @@ fn handle_wire_inner(msg: &str, root: &Path) -> String {
 /// (treeibp::moment — the see-gate, then read+verify+fold, with the world's ord as the act's basis);
 /// otherwise the reel index.
 fn moment(req: &Json, root: &Path) -> Json {
+    // NAME LOGIN: return a Name's ENCRYPTED key blob for client-side password decrypt (Model B). NOT
+    // redacted — the blob is password-locked (scrypt+AES-GCM), safe to return; the password never comes
+    // to the server. This is the one deliberate exception to secret redaction.
+    if get_str(req, "op").as_deref() == Some("name-key") {
+        let args = get(req, "args").cloned().unwrap_or(Json::Null);
+        let who = get_str(&args, "name").unwrap_or_default();
+        let view = crate::resolve::name_key(&who, root).unwrap_or_else(|e| IbpError::new(code::NAME_NOT_FOUND, e).envelope());
+        return obj(vec![("verb", jstr("moment")), ("op", jstr("name-key")), ("view", view)]);
+    }
+    // TIMELINE: the history's moments (one dot per act) for the history bar's scrubber.
+    if get_str(req, "op").as_deref() == Some("timeline") {
+        let history = get_str(req, "history").unwrap_or_else(|| "0".to_string());
+        let at = num_field(req, "at");
+        let view = crate::resolve::timeline(&history, at, root);
+        return obj(vec![("verb", jstr("moment")), ("op", jstr("timeline")), ("view", view)]);
+    }
+    // BRANCHES: the history tree/switcher (main + every live branch).
+    if get_str(req, "op").as_deref() == Some("branches") {
+        return obj(vec![("verb", jstr("moment")), ("op", jstr("branches")), ("view", crate::resolve::branches(root))]);
+    }
     if let Some(op) = get_str(req, "op") {
         let args = get(req, "args").cloned().unwrap_or(Json::Null);
         let view = match crate::seeops::see_op(&op, &args, root) {
@@ -267,6 +287,17 @@ fn moment(req: &Json, root: &Path) -> Json {
         };
         return obj(vec![("verb", jstr("moment")), ("view", treeprotocol::redact::redact_secrets(&view))]);
     }
+    // a STORY render (the past as Word) of a being/name — render:"story" over a kind/id target.
+    if get_str(req, "render").as_deref() == Some("story") {
+        if let Some(id) = get_str(req, "id") {
+            let k = get_str(req, "kind").unwrap_or_else(|| "being".to_string());
+            let h = get_str(req, "history").unwrap_or_else(|| "0".to_string());
+            let at = num_field(req, "at");
+            let lang = get_str(req, "lang").unwrap_or_else(|| "en".to_string());
+            let view = crate::resolve::story(&k, &id, &h, at, &lang, root).unwrap_or_else(|e| IbpError::new(code::INVALID_INPUT, e).envelope());
+            return obj(vec![("verb", jstr("moment")), ("view", treeprotocol::redact::redact_secrets(&view))]);
+        }
+    }
     let view = match get_str(req, "id") {
         Some(id) => {
             // the REAL perceive primitive: authorize(see) -> read -> verify -> fold. The reader (left
@@ -291,8 +322,26 @@ fn act(req: &Json, root: &Path) -> Json {
     let history = get_str(req, "history").unwrap_or_else(|| "0".to_string());
     let basis = num_field(req, "basis");
     let outcomes = if let Some(op) = get_str(req, "op") {
-        // a materials op: the request itself is the trigger (target/field/value/merge/branch).
-        crate::act::run_op(&op, req, &actor, root, &history, basis)
+        // CREATE-BRANCH (an I act): fork a new history off main at an optional past ord.
+        if op == "create-branch" {
+            let label = get_str(req, "label").unwrap_or_else(|| "branch".to_string());
+            let at = num_field(req, "at");
+            return match crate::resolve::create_branch(&label, at, root) {
+                Ok(row) => obj(vec![("verb", jstr("act")), ("ok", Json::Bool(true)), ("op", jstr("create-branch")), ("history", row)]),
+                Err(e) => IbpError::new(code::INVALID_INPUT, e).envelope(),
+            };
+        }
+        // NAME REGISTRATION (an I act): declare a Name or set/change its password on the library reel.
+        if op == "name-declare" || op == "name-set-password" {
+            let nid = get_str(req, "nameId").unwrap_or_default();
+            let name = get_str(req, "name").unwrap_or_default();
+            let spec = get(req, "spec").cloned().unwrap_or(Json::Null);
+            let domain = crate::config::story_host(root).unwrap_or_else(|| "localhost".to_string());
+            crate::act::declare_name(&op, &nid, &name, &spec, root, &domain)
+        } else {
+            // a materials op: the request itself is the trigger (target/field/value/merge/branch).
+            crate::act::run_op(&op, req, &actor, root, &history, basis)
+        }
     } else if let Some(word) = get_str(req, "word") {
         crate::act::run_word(&word, &actor, root, &history, basis)
     } else {

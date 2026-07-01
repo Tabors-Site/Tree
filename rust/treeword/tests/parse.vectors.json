@@ -126,9 +126,11 @@
       "ir": [
         {
           "kind": "act",
-          "verb": "name",
-          "act": "i-am",
-          "by": "I"
+          "verb": "be",
+          "act": "birth",
+          "by": "I",
+          "of": { "kind": "being", "id": "Am" },
+          "verse": true
         }
       ]
     },

@@ -134,6 +134,39 @@ pub fn legend(vocab: &[String]) -> Vec<(char, String)> {
     vocab.iter().enumerate().filter_map(|(i, w)| ALPHABET.get(i).map(|&c| (c, w.clone()))).collect()
 }
 
+/// The legend as compact prompt text: `α=am β=the …` — prepend to an LLM prompt so the model knows every
+/// symbol's meaning (Set-of-Marks), then instruct it to emit symbols (one token per Word).
+pub fn legend_text(vocab: &[String]) -> String {
+    legend(vocab).iter().map(|(c, w)| format!("{c}={w}")).collect::<Vec<_>>().join(" ")
+}
+
+/// Decode ONLY if the reply is actually symbols (a majority of its non-space chars are alphabet glyphs);
+/// otherwise return it untouched. Safe to apply to any LLM reply — a plain-Word reply passes through, a
+/// symbol reply is decoded. This is the backward-compatible seam for the LLM membrane.
+pub fn decode_if_symbols(reply: &str, vocab: &[String]) -> String {
+    let non_ws: Vec<char> = reply.chars().filter(|c| !c.is_whitespace()).collect();
+    let glyphs = non_ws.iter().filter(|&&c| word_of(c, vocab).is_some()).count();
+    if !non_ws.is_empty() && glyphs * 2 >= non_ws.len() {
+        decode_reply(reply, vocab)
+    } else {
+        reply.to_string()
+    }
+}
+
+/// Decode an LLM reply of SYMBOLS back into a Word statement: each alphabet glyph → its Word; content
+/// marks (names/ids the model echoed) pass through. This is the one-token-per-Word membrane's output side.
+pub fn decode_reply(reply: &str, vocab: &[String]) -> String {
+    reply
+        .chars()
+        .filter(|c| !c.is_whitespace() || *c == ' ')
+        .map(|c| word_of(c, vocab).unwrap_or_else(|| c.to_string()))
+        .collect::<Vec<_>>()
+        .join(" ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,6 +212,19 @@ mod tests {
         assert!(syms[0].chars().count() == 1 && syms[0] != "am");
         let back = project_chain(&syms, &vocab, "en", &none_translate);
         assert_eq!(back, words, "en projection restores the statement");
+    }
+
+    #[test]
+    fn legend_and_decode_round_trip() {
+        let vocab = vocabulary(&[]);
+        // the model "emits" a symbol reply; decode restores the Words
+        let words: Vec<String> = ["am", "the", "being"].iter().map(|s| s.to_string()).collect();
+        let syms = encode_chain(&words, &vocab).join(""); // one glyph per word, no spaces
+        let decoded = decode_reply(&syms, &vocab);
+        assert_eq!(decoded, "am the being");
+        // the legend names every symbol
+        let lt = legend_text(&vocab);
+        assert!(lt.contains("=am") && lt.contains("=being"));
     }
 
     #[test]

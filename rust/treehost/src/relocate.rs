@@ -23,8 +23,54 @@ use std::path::Path;
 use treehash::Json;
 
 use crate::being::{branch_or, target_id_of};
-use crate::toolkit::{assert_coord_within_size_pub, get, get_str, is_deleted, jstr, load_row};
+use crate::toolkit::{assert_coord_within_size_pub, get, get_str, is_deleted, jstr, load_row, obj};
 use crate::{arg, AuthCtx, HostError};
+
+/// The four compass words a being step is spoken in (move.word: north/south/east/west). The direction
+/// mode carries ONLY the word — the being's coord is the FOLD of its steps (the position reducer shifts
+/// the running coord by the direction's cell offset), so nothing is computed here.
+const DIRECTIONS: &[&str] = &["north", "south", "east", "west"];
+
+/// resolve-move-being(caller, direction, branch) -> { beingId, factParams:{ direction } }.
+///
+/// The BEING-STEP see-op for move.word's direction mode (the WASD walk). A being moves ITSELF by
+/// laying ONE do:move carrying the direction; NOTHING is computed at act time. This op only:
+///   - VALIDATES the direction word (one of the four compass words) — an unknown word is the .word's
+///     refusal, so a garbage step never seals.
+///   - names the fact TARGET being (`caller`, the actor's own being) — a moment always proved the
+///     Name's key, so the caller IS the walker.
+/// It reads NO current coord and computes NO new coord: the position fold accumulates the step (a
+/// re-fold on the being's next moment lands it in the new spot, purely from the reel). It lays NO
+/// fact; a HostError is the .word's refusal. Returns the block move.word promotes into its do:move.
+pub fn resolve_move_being(
+    _root: &Path,
+    history: &str,
+    args: &[Json],
+    _ctx: &AuthCtx,
+) -> Result<Json, HostError> {
+    let caller = arg(args, 0);
+    let direction = arg(args, 1);
+    let branch = arg(args, 2);
+    let _history = branch_or(branch, history);
+
+    let being_id = match caller {
+        Json::Str(s) if !s.is_empty() => s.as_str(),
+        _ => return Err(HostError::invalid("move: a being step requires an identified actor (caller)")),
+    };
+    let dir = match direction {
+        Json::Str(s) if DIRECTIONS.contains(&s.as_str()) => s.as_str(),
+        _ => {
+            return Err(HostError::invalid(
+                "move: `direction` must be one of north / south / east / west",
+            ))
+        }
+    };
+
+    Ok(obj(vec![
+        ("beingId", jstr(being_id)),
+        ("factParams", obj(vec![("direction", jstr(dir))])),
+    ]))
+}
 
 /// resolve-source(subject, coord, to, branch) -> fromSpaceId (a space-id string or Json::Null).
 /// The bridge binds an absent coord/to to Json::Null, so the `to` / `coord` presence reads are direct.

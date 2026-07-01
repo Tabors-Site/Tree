@@ -1,11 +1,11 @@
 // THE GUARDED BOOK-READER, END TO END, NODE-FREE, on a FRESH SCRATCH store (never the repo's store/past):
-//   1. the razor-thin host turtle plants genesis under "I" (NOT the legacy "i-am" artifact) - the two
-//      I-Am moments, the minimal ignition seed.
+//   1. the razor-thin host turtle plants genesis: the Name "I" + the being "Am" (NOT the legacy
+//      "i-am" artifact) - the two genesis moments, the minimal ignition seed.
 //   2. I READS word.word through the guarded reader: each statement one act, the foundation declare-word
-//      (do:coin concept) facts land on I's "I" reel.
-//   3. the foundation FOLDS back from the chain (treewordfold reads I's reel and resolves the declared
+//      (do:coin concept) facts land on the being Am's reel (signed by I, through Am).
+//   3. the foundation FOLDS back from the chain (treewordfold reads Am's reel and resolves the declared
 //      words) - the vocabulary is the FOLD of chain facts, not a code table.
-//   4. the chains VERIFY (treeverify walks the p-links on I's reel from GENESIS_PREV).
+//   4. the chains VERIFY (treeverify walks the p-links on Am's reel from GENESIS_PREV).
 //   5. BOTH guards demonstrably THROW on crafted bad words: GUARD 1 on a run-on (a word laying 2 facts),
 //      GUARD 2 on a word naming an unregistered see-op.
 //
@@ -59,14 +59,14 @@ fn i_reads_word_word_and_the_foundation_folds() {
     let dir = fresh_store("foundation");
     let story_domain = "localhost";
 
-    // 1. the razor-thin turtle: mint I + plant the two I-Am moments under "I".
+    // 1. the razor-thin turtle: mint the Name I + plant the two genesis moments (Name "I" + being "Am").
     let (planted, key) = plant_and_ignite(&dir, story_domain).expect("ignite genesis");
-    assert_eq!(planted.i_name, "I", "genesis plants the I-being as \"I\", never the legacy \"i-am\"");
-    assert_eq!(planted.being_id, "I");
+    assert_eq!(planted.i_name, "I", "the Name is \"I\" (the signer), never the legacy \"i-am\"");
+    assert_eq!(planted.being_id, "Am", "the first being is \"Am\" (the name-being split)");
 
-    // the I being reel currently holds ONLY the genesis be:birth (one fact) before reading the book.
-    let before = read_reel_file(&dir, "0", "being", "I", None, None);
-    assert_eq!(before.len(), 1, "only the genesis be:birth on I's reel before reading the book");
+    // the being Am's reel currently holds ONLY the genesis be:birth (one fact) before reading the book.
+    let before = read_reel_file(&dir, "0", "being", "Am", None, None);
+    assert_eq!(before.len(), 1, "only the genesis be:birth on Am's reel before reading the book");
     assert_eq!(
         (get_str(&before[0], "verb"), get_str(&before[0], "act")),
         (Some("be"), Some("birth")),
@@ -97,15 +97,15 @@ fn i_reads_word_word_and_the_foundation_folds() {
         "each foundation statement laid its one declare-word fact"
     );
 
-    // the I reel now carries the genesis be:birth + one coin per statement read.
-    let after = read_reel_file(&dir, "0", "being", "I", None, None);
+    // Am's reel now carries the genesis be:birth + one coin per statement read.
+    let after = read_reel_file(&dir, "0", "being", "Am", None, None);
     assert_eq!(
         after.len(),
         before.len() + read.facts_laid,
         "the reel grew by exactly one fact per read word (one word = one act)"
     );
 
-    // 3. THE FOUNDATION FOLDS from the chain: treewordfold reads I's "I" reel and resolves the declared
+    // 3. THE FOUNDATION FOLDS from the chain: treewordfold reads the being Am's reel and resolves the declared
     //    foundation words (the vocabulary is the FOLD of the coin facts, not a code table).
     let set = fold_word_set(&dir, "0");
     assert_eq!(
@@ -124,9 +124,9 @@ fn i_reads_word_word_and_the_foundation_folds() {
     // an undeclared word resolves to None (no code default - purely the fold).
     assert!(resolve_word(&dir, "0", "no-such-foundation-word").is_none());
 
-    // 4. THE CHAIN VERIFIES: I's reel walks whole from GENESIS_PREV (the genesis fact + every coin).
+    // 4. THE CHAIN VERIFIES: Am's reel walks whole from GENESIS_PREV (the genesis fact + every coin).
     let v = verify_fact_chain(&after);
-    assert!(verdict_ok(&v), "I's reel verifies after reading the book: {}", treestore::canonicalize(&v));
+    assert!(verdict_ok(&v), "Am's reel verifies after reading the book: {}", treestore::canonicalize(&v));
 
     // NODE-FREE: nothing in this test shelled out; the whole pipeline is Rust over the spine.
     let _ = std::fs::remove_dir_all(&dir);
@@ -147,21 +147,23 @@ fn guard_1_refuses_a_run_on_word() {
     let story_domain = "localhost";
     let (_planted, _key) = plant_and_ignite(&dir, story_domain).expect("ignite");
 
-    let i_being = treebook::I_BEING;
-    let before = read_reel_file(&dir, "0", "being", i_being, None, None).len();
+    // the vocabulary reel is the being "Am"; the coins are signed by the Name "I", through the being "Am".
+    let am_being = treebook::AM_BEING;
+    let i_name = treebook::I_NAME;
+    let before = read_reel_file(&dir, "0", "being", am_being, None, None).len();
 
     // ONE Word that crams TWO acting deeds (two coin facts) - the run-on the Spacebar Law refuses.
     let coin = |w: &str| -> Json {
         Json::Obj(vec![
             ("verb".to_string(), Json::Str("do".to_string())),
             ("act".to_string(), Json::Str("coin".to_string())),
-            ("by".to_string(), Json::Str(i_being.to_string())),
-            ("through".to_string(), Json::Str(i_being.to_string())),
+            ("by".to_string(), Json::Str(i_name.to_string())),
+            ("through".to_string(), Json::Str(am_being.to_string())),
             (
                 "of".to_string(),
                 Json::Obj(vec![
                     ("kind".to_string(), Json::Str("being".to_string())),
-                    ("id".to_string(), Json::Str(i_being.to_string())),
+                    ("id".to_string(), Json::Str(am_being.to_string())),
                 ]),
             ),
             (
@@ -182,7 +184,7 @@ fn guard_1_refuses_a_run_on_word() {
         other => panic!("GUARD 1 must refuse the run-on, got {other:?}"),
     }
     // the refusal precedes any write - the reel is unchanged (no half-applied run-on).
-    let after = read_reel_file(&dir, "0", "being", i_being, None, None).len();
+    let after = read_reel_file(&dir, "0", "being", am_being, None, None).len();
     assert_eq!(after, before, "a refused run-on lays NO fact (the guard precedes the write)");
 
     // a SINGLE coin word (one deed) is NOT a run-on - it lays its one fact.
@@ -190,7 +192,7 @@ fn guard_1_refuses_a_run_on_word() {
     let ok = treebook::lay_word_specs("a single coin word", &one, &dir, "0", None).expect("one word lays one fact");
     assert!(ok.fact_id.is_some(), "the single word laid exactly one fact");
     assert_eq!(
-        read_reel_file(&dir, "0", "being", i_being, None, None).len(),
+        read_reel_file(&dir, "0", "being", am_being, None, None).len(),
         before + 1,
         "exactly one fact landed for the single word"
     );

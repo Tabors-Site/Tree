@@ -1,8 +1,8 @@
 // TreeOS Seed (Rust) . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // treebook - THE GUARDED BOOK-READER. The FIRST rung of "I reads the book word by word" (20.md: a
-// one-time bootstrap seed in the host; after ignition, Word runs Word). After genesis plants "I" (the
-// razor-thin host turtle), I reads a BOOK - a sequence of .word STATEMENTS - SEQUENTIALLY, each
+// one-time bootstrap seed in the host; after ignition, Word runs Word). After genesis plants the Name
+// "I" + the being "Am" (the razor-thin host turtle), I reads a BOOK - a sequence of .word STATEMENTS - SEQUENTIALLY, each
 // statement ONE act on chain. A statement is one Word; reading it lays its fact(s) through the RUNNER
 // (treeibp), the SAME act path every later Word takes. The root book is word.word; later increments add
 // the rest of the seed (verbs.word, the concepts, the ops). This crate reads ONE book; word.word is the
@@ -12,10 +12,19 @@
 // stamp."): prose the parser reads as `kind:"is"` concept-declarations (and prose it reads as nothing).
 // Mirroring the JS reference (wordFold.js declareConcepts -> wordStore.js bindWord, which lays one
 // `do:coin` carrying `{kind:"concept", says, axiom}`), the reader turns EACH non-empty, non-comment
-// statement into ONE declare-word act: a `do:coin` on I's being reel, `params:{ word, ownerExtension,
-// binding:{ kind:"concept", says } }`. That coin fact IS the foundation landing on I's reel, foldable
-// back by treewordfold (a word resolves because its coin fact exists - the vocabulary is the FOLD, not a
-// code table). The reader is GENERIC over the statements: it never assumes a fixed genesis set.
+// statement into ONE declare-word act: a `do:coin` on the being Am's reel, by/through the Name "I",
+// `params:{ word, ownerExtension, binding:{ kind:"concept", says } }`. That coin fact IS the foundation
+// landing on Am's PUBLIC reel, foldable back by treewordfold (a word resolves because its coin fact
+// exists - the vocabulary is the FOLD, not a code table). The reader is GENERIC over the statements: it
+// never assumes a fixed genesis set.
+//
+// THE NAME-BEING SPLIT (project_name_being_refactor). The vocabulary lives on the being "Am"'s public
+// fact reel (the chain every being can see and fold), NOT on the Name "I" (whose act chain is private).
+// The Name I is the SIGNER (I signs, I has authority over Am); the being Am is the reel the coins land
+// on AND the vehicle they act THROUGH - "the I doing it AS Am". So every vocabulary coin is
+// `of:{kind:"being", id:"Am"}, by:"I" (the signature), through:"Am" (the being it acts through)`. The ONE
+// exception is the genesis be:birth that CREATES Am (the bootstrap): Am does not exist yet, so that act
+// stays `through:"I"` (treegenesis's genesis-bootstrap attribution). Everything POST-Am is through Am.
 //
 // TWO GUARDS - the "system" that lets us find and fix broken words as we read, so we can build the book
 // out one .word at a time and have it all flow:
@@ -63,10 +72,14 @@ fn obj(pairs: Vec<(&str, Json)>) -> Json {
     Json::Obj(pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
 }
 
-/// The Named being I - the reel every declare-word fact lands on (the I being id, == the I-name "I").
-/// A fresh Rust-planted Story keys this reel by "I" (treewordfold::I_BEING). Kept here so the reader
-/// lays the coin `of:{kind:"being", id:I_BEING}` and the fold (treewordfold) reads the SAME reel.
-pub const I_BEING: &str = "I";
+/// The being "Am" - the reel every declare-word fact lands on (the first being's id). The name-being
+/// split: the vocabulary reel is the being "Am" (treewordfold::AM_BEING), NOT the Name. A fresh
+/// Rust-planted Story keys this reel by "Am". Kept here so the reader lays the coin
+/// `of:{kind:"being", id:AM_BEING}` and the fold (treewordfold) reads the SAME reel.
+pub const AM_BEING: &str = "Am";
+/// The SIGNER of every coin - the Name "I" (I signs, I has authority over Am). The reader's actor +
+/// the coin's `by`/`through`. Distinct from `AM_BEING` (the reel the coin lands on).
+pub const I_NAME: &str = "I";
 
 /// The provenance every genesis declare-word carries (wordStore.js bindWord's default ownerExtension).
 const SEED_OWNER: &str = "seed";
@@ -121,7 +134,7 @@ impl std::error::Error for BookError {}
 pub struct WordRead {
     /// The statement text I read (one Word).
     pub statement: String,
-    /// The fact id the word laid on I's reel, or None for an inert `see` (a read makes no fact).
+    /// The fact id the word laid on Am's reel, or None for an inert `see` (a read makes no fact).
     pub fact_id: Option<String>,
 }
 
@@ -129,7 +142,7 @@ pub struct WordRead {
 #[derive(Debug, Clone)]
 pub struct BookRead {
     pub words: Vec<WordRead>,
-    /// How many declare-word (coin) facts landed on I's reel (the foundation that folds).
+    /// How many declare-word (coin) facts landed on Am's reel (the foundation that folds).
     pub facts_laid: usize,
 }
 
@@ -244,19 +257,27 @@ fn word_name_of(statement: &str) -> String {
     statement.trim_end_matches('.').trim().to_string()
 }
 
-/// Lower a statement to ONE declare-word FACT SPEC: a `do:coin` on I's being reel, carrying
-/// `by/through` = I and `params:{ word, ownerExtension:"seed", binding:{ kind:"concept", says } }`. This
-/// is the Rust twin of wordStore.js bindWord - one coin fact, the foundation landing on I's reel. The
-/// `says` IS the statement text (the concept's body), so the chain carries what the Word said of itself.
-/// A fact SPEC (not an act node) so the reader seals it through the SAME moment path the runner uses.
+/// Lower a statement to ONE declare-word FACT SPEC: a `do:coin` on the being Am's reel, signed by the
+/// Name "I" and acted THROUGH the being "Am" ("the I doing it as Am"), with `params:{ word,
+/// ownerExtension:"seed", binding:{ kind:"concept", says } }`. This is the Rust twin of wordStore.js
+/// bindWord - one coin fact, the foundation landing on Am's PUBLIC reel. The `says` IS the statement text
+/// (the concept's body), so the chain carries what the Word said of itself. A fact SPEC (not an act node)
+/// so the reader seals it through the SAME moment path the runner uses.
+///
+/// THE COIN-FACT SHAPE (the viz coupling): every coin is `{ verb:"do", act:"coin", of:{kind:"being",
+/// id:"Am"}, by:"I" (the signer), through:"Am" (the being it acts through), params:{ word,
+/// ownerExtension, binding } }` on the being Am's reel. Coins are SEQ-ORDERED (chain order), APPEND-ONLY
+/// (never mutated; a `do:retire` layers a disable, a re-coin re-enables), LAST-COIN-WINS. So a word's
+/// FIRST-coin ordinal is fixed the moment it lands, and `symbol(word) = ALPHABET[coin_index]` stays
+/// stable for the viz (see treewordfold::fold_word_set). Coining ONLY appends here - order preserved.
 fn coin_spec(statement: &str) -> Json {
     let name = word_name_of(statement);
     obj(vec![
         ("verb", jstr("do")),
         ("act", jstr("coin")),
-        ("by", jstr(I_BEING)),
-        ("through", jstr(I_BEING)),
-        ("of", obj(vec![("kind", jstr("being")), ("id", jstr(I_BEING))])),
+        ("by", jstr(I_NAME)),      // the Name I signs
+        ("through", jstr(AM_BEING)), // acted through the being Am (the vehicle) - "the I doing it as Am"
+        ("of", obj(vec![("kind", jstr("being")), ("id", jstr(AM_BEING))])),
         (
             "params",
             obj(vec![
@@ -322,10 +343,12 @@ fn spec_verb_act(spec: &Json) -> String {
 
 // ── reading one word (one act), guarded ──────────────────────────────────────────────────────────────
 
-/// The actor for the read: I (beingId + nameId "I"). I authored the genesis vocabulary on its own reel;
-/// authorize bypasses for I (the bootstrap axiom), so the coin always lands.
+/// The actor for the read: the Name "I" (beingId + nameId "I"). I is the SIGNER; it authors the genesis
+/// vocabulary onto the being Am's reel. authorize bypasses for I (the bootstrap axiom: beingId "I" hits
+/// the I-Am bypass, and I hasAuthorityOver "Am"), so the coin always lands. The TARGET is Am (the reel),
+/// the ACTOR is I (the Name) - the name-being split.
 fn i_actor() -> Json {
-    obj(vec![("beingId", jstr(I_BEING)), ("nameId", jstr(I_BEING))])
+    obj(vec![("beingId", jstr(I_NAME)), ("nameId", jstr(I_NAME))])
 }
 
 /// Seal ONE acting word's fact spec as a MOMENT on its reel (act-first, via treestore's doctrine-correct
@@ -350,7 +373,7 @@ fn seal_word(
         }
         _ => spec.clone(),
     };
-    let by = get_str(spec, "by").unwrap_or(I_BEING);
+    let by = get_str(spec, "by").unwrap_or(I_NAME);
     let through = get(spec, "through").cloned().unwrap_or_else(|| jstr(by));
     let act_doc = obj(vec![
         ("by", jstr(by)),
@@ -378,7 +401,7 @@ fn seal_word(
 /// store, the same constant treeibp uses. The library reel id genesis planted under.
 const STORY: &str = "localhost";
 
-/// Read ONE word (one statement) onto I's reel, with BOTH guards. `sign` is the optional story-key signer.
+/// Read ONE word (one statement) onto Am's reel, with BOTH guards. `sign` is the optional story-key signer.
 ///
 /// GUARD 2 fires FIRST (before any write): if the statement reaches an unregistered host see-op, refuse
 /// - the word's logic is missing, so it must not lay a fact. Then lower the statement to its acting fact
@@ -502,7 +525,7 @@ pub fn lay_word_specs(
 /// I READS A BOOK - the guarded, sequential read. Split the book into statements (one Word each), then
 /// read each in order through `read_one_word` (both guards). The read is STRICTLY sequential, so a
 /// guard's refusal is the FIRST offending word in book order (the reader stops there - we fix that word,
-/// then read on). On success the foundation declare-word facts have landed on I's reel and fold back via
+/// then read on). On success the foundation declare-word facts have landed on Am's reel and fold back via
 /// treewordfold. `sign` is the optional story-key signer (the I key, threaded into each word's seal).
 pub fn read_book(
     book: &str,
@@ -531,7 +554,7 @@ pub fn read_book_plain(book: &str, dir: &Path, history: &str) -> Result<BookRead
 
 // ── THE FULL GENESIS: I plant, I read the whole book, the world is born ──────────────────────────────
 //
-// plant_and_ignite("I") lays the two razor-thin I-Am moments; then I reads the WHOLE book strict:
+// plant_and_ignite lays the two razor-thin genesis moments (the Name "I" + the being "Am"); then I reads the WHOLE book strict:
 //   1. the VOCABULARY (word.word -> the foundation -> the op/able bundles): each statement a concept
 //      DECLARATION the reader coins (one do:coin per word). DECLARING a word lays its one coin WITHOUT
 //      running its body — so the not-yet-handled words (federation/llm) coin fine; the runtime GUARD 2
@@ -633,11 +656,11 @@ fn is_op_word_file(text: &str) -> bool {
     has_run(&treeword::parse(&prose))
 }
 
-/// COIN one word by NAME — `bindWord` faithful: lay exactly one `do:coin` on I's reel carrying the
-/// word + its binding (`{kind, says}`), WITHOUT running any body. This is how an OP-WORD enters the fold
-/// (its name resolves) while its body stays unrun until invoked — so the not-yet-handled words
-/// (federation / llm) coin fine; the runtime guard only fires when a word is actually RUN. Returns the
-/// coin fact id.
+/// COIN one word by NAME - `bindWord` faithful: lay exactly one `do:coin` on the being Am's reel carrying
+/// the word + its binding (`{kind, says}`), WITHOUT running any body. Signed by the Name "I", acted
+/// through the being "Am" (the vocabulary vehicle). This is how an OP-WORD enters the fold (its name
+/// resolves) while its body stays unrun until invoked — so the not-yet-handled words (federation / llm)
+/// coin fine; the runtime guard only fires when a word is actually RUN. Returns the coin fact id.
 pub fn coin_word(
     word: &str,
     binding_kind: &str,
@@ -649,9 +672,9 @@ pub fn coin_word(
     let spec = obj(vec![
         ("verb", jstr("do")),
         ("act", jstr("coin")),
-        ("by", jstr(I_BEING)),
-        ("through", jstr(I_BEING)),
-        ("of", obj(vec![("kind", jstr("being")), ("id", jstr(I_BEING))])),
+        ("by", jstr(I_NAME)),        // the Name I signs
+        ("through", jstr(AM_BEING)), // acted through the being Am (the vehicle)
+        ("of", obj(vec![("kind", jstr("being")), ("id", jstr(AM_BEING))])),
         (
             "params",
             obj(vec![
@@ -661,7 +684,7 @@ pub fn coin_word(
             ]),
         ),
     ]);
-    match seal_word(&spec, "being", I_BEING, dir, history, sign) {
+    match seal_word(&spec, "being", AM_BEING, dir, history, sign) {
         Ok(fid) => Ok(fid),
         Err(reason) => Err(BookError::Denied {
             word: word.to_string(),
@@ -699,18 +722,19 @@ pub fn full_genesis(
     dir: &Path,
     vocabulary: &[String],
 ) -> Result<BornWorld, GenesisBookError> {
-    // 1. IGNITE — the two razor-thin I-Am moments under "I".
+    // 1. IGNITE - the two razor-thin genesis moments: the Name "I" + the being "Am".
     let (planted, key) = treegenesis::plant_and_ignite(dir, STORY)
         .map_err(|e| GenesisBookError::Message(format!("ignite: {e}")))?;
 
-    // the story-key signer (I authoring its own world), threaded into every coin + creation act + grant.
+    // the story-key signer — the sig is ALWAYS `by` the Name "I" (I signs everything, whatever being it
+    // acts through). Threaded into every coin + creation act + grant.
     let seed = key.seed;
     let sign = move |opening: &Json, fids: &[String]| -> Json {
         let payload = treesign::build_act_sig_payload(opening, fids);
         let value = treesign::sign_value(&seed, &payload);
         obj(vec![
             ("alg", jstr("ed25519")),
-            ("by", jstr(I_BEING)),
+            ("by", jstr(I_NAME)),
             ("value", jstr(&value)),
         ])
     };
@@ -839,17 +863,20 @@ fn run_grants(
     let actor = i_actor();
     // genesis.word's grants are INLINE deeds (do:grant-able lays its one fact directly — the JS
     // grant-able op's world effect is the one do:grant-able fact on the grantee's reel). Run with NO
-    // op-word EXPANSION (`op_word_of = None`) so each grant rasterizes inline and seals as its moment;
-    // the grant target/anchor refs resolve against the anchor `binds`. (grant-able folds as an op word,
-    // but its `.word` body is a predicate guard + an inline-fact terminator, not a materials see-op that
-    // synthesizes a fact, so the inline path is the one that lays the grant — matching the JS.)
-    let outcomes = treeibp::act_with_ops_bound(
+    // op-word EXPANSION so each grant rasterizes inline and seals as its moment; the grant target/anchor
+    // refs resolve against the anchor `binds`. (grant-able folds as an op word, but its `.word` body is a
+    // predicate guard + an inline-fact terminator, not a materials see-op that synthesizes a fact, so the
+    // inline path is the one that lays the grant - matching the JS.) We reach THE ONE PATH via
+    // `act_via_fold_bound` with a `file_of` that resolves NOTHING (`|_,_| None`): `op_word_via_fold`
+    // returns None for every op regardless of the fold, so no deed expands - byte-identical to the old
+    // `act_with_ops_bound(..., op_word_of = |_| None, ...)` this replaced.
+    let outcomes = treeibp::act_via_fold_bound(
         &text,
         &actor,
         dir,
         "0",
         |name| treeibp::fold_word_able(name, &ables_dir),
-        |_op| None,
+        |_op, _noun| None,
         binds,
         None,
         Some(sign),

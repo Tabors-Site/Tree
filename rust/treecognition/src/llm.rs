@@ -21,10 +21,13 @@ pub type Transport<'a> = dyn Fn(&str) -> Result<String, (FailShape, String)> + '
 /// (non-empty text that is not Word), make ONE repair attempt, then fail closed — never run a
 /// half-parsed Word.
 pub fn decide_llm(prompt: &str, transport: &Transport) -> Cognition {
-    let text = match transport(prompt) {
+    let raw = match transport(prompt) {
         Ok(t) => t,
         Err((shape, reason)) => return Cognition::Failure { shape, reason },
     };
+    // the one-token-per-Word membrane: if the model replied in SYMBOLS, decode them back to Word; a
+    // plain-Word reply passes through untouched (decode_if_symbols is a no-op on non-symbol text).
+    let text = treesymbol::decode_if_symbols(&raw, &treesymbol::vocabulary(&[]));
     match classify(&text) {
         Outcome::Act(content) => Cognition::Act { content },
         Outcome::See => Cognition::See,

@@ -39,7 +39,7 @@ pub fn show(ctx: &egui::Context, p: &mut Portal) {
             }
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                for v in [View::Rain, View::World3d, View::Story, View::Map2d] {
+                for v in [View::Rain, View::World3d, View::Story, View::Explorer, View::Map2d] {
                     if ui.selectable_label(p.st.view == v, v.label()).clicked() {
                         p.st.view = v;
                     }

@@ -81,8 +81,8 @@ fn plants_folds_verifies_and_signs_genesis() {
     let story_domain = "localhost";
     let (dir, planted, story_pub) = plant("full", story_domain);
 
-    assert_eq!(planted.i_name, "I", "default I-name is I");
-    assert_eq!(planted.being_id, "I", "the I-Am's id IS the I-name");
+    assert_eq!(planted.i_name, "I", "the Name is I (the signer)");
+    assert_eq!(planted.being_id, "Am", "the first being's id IS \"Am\" (the name-being split)");
     assert_eq!(planted.story_domain, story_domain);
     assert_ne!(planted.name_act_id, planted.being_act_id, "two distinct genesis acts");
 
@@ -116,8 +116,8 @@ fn plants_folds_verifies_and_signs_genesis() {
         "the root Name stores no private key (story-key signer)"
     );
 
-    // ── FOLD: the being reel folds to the parentless root being ──
-    let be_facts = read_reel_file(&dir, "0", "being", "I", None, None);
+    // ── FOLD: the being reel (the being "Am") folds to the parentless root being ──
+    let be_facts = read_reel_file(&dir, "0", "being", "Am", None, None);
     assert_eq!(be_facts.len(), 1, "exactly fact #0 on the being reel");
     // MOMENT 2's Word: the being fact records be:birth ("am").
     assert_eq!(
@@ -252,7 +252,7 @@ fn re_plant_is_refused_and_genesis_is_immutable() {
 
     // capture the committed bytes of fact #0 on both reels + BOTH acts.
     let lib0 = canon(&read_reel_file(&dir, "0", "library", story_domain, None, None)[0]);
-    let be0 = canon(&read_reel_file(&dir, "0", "being", "I", None, None)[0]);
+    let be0 = canon(&read_reel_file(&dir, "0", "being", "Am", None, None)[0]);
     let acts0: Vec<String> = read_act_chain_file(&dir, story_domain, "0", "I").iter().map(canon).collect();
     assert_eq!(acts0.len(), 2, "two genesis acts committed");
 
@@ -267,9 +267,9 @@ fn re_plant_is_refused_and_genesis_is_immutable() {
 
     // and the committed genesis is byte-for-byte unchanged (never overwritten).
     assert_eq!(read_reel_file(&dir, "0", "library", story_domain, None, None).len(), 1, "still one library fact");
-    assert_eq!(read_reel_file(&dir, "0", "being", "I", None, None).len(), 1, "still one being fact");
+    assert_eq!(read_reel_file(&dir, "0", "being", "Am", None, None).len(), 1, "still one being fact");
     assert_eq!(canon(&read_reel_file(&dir, "0", "library", story_domain, None, None)[0]), lib0, "library fact #0 unchanged");
-    assert_eq!(canon(&read_reel_file(&dir, "0", "being", "I", None, None)[0]), be0, "being fact #0 unchanged");
+    assert_eq!(canon(&read_reel_file(&dir, "0", "being", "Am", None, None)[0]), be0, "being fact #0 unchanged");
     let acts_now: Vec<String> = read_act_chain_file(&dir, story_domain, "0", "I").iter().map(canon).collect();
     assert_eq!(acts_now, acts0, "both genesis acts unchanged");
     // the planted ids are stable (the first plant's truth stands).

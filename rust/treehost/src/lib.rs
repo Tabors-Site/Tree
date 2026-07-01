@@ -96,7 +96,7 @@ pub use model::{may_set_model, resolve_model_block};
 pub use owner::resolve_owner;
 pub use portal::resolve_containing_space;
 pub use purge::resolve_purge;
-pub use relocate::resolve_move;
+pub use relocate::{resolve_move, resolve_move_being};
 pub use rename::resolve_rename_matter;
 pub use render::validate_render_block;
 pub use space::{resolve_create_space, resolve_end_space_spec, resolve_set_space_spec};
@@ -415,6 +415,8 @@ impl HostResolver for Resolvers {
             "resolve-birth-being" => resolve_birth_being(root, history, args, ctx),
             // move: the source-space READ (moveHost.js resolve-source).
             "resolve-source" => resolve_move(root, history, args, ctx),
+            // move (being step): validate the compass direction + name the walker (the WASD walk).
+            "resolve-move-being" => resolve_move_being(root, history, args, ctx),
             // rename-matter: the per-folder uniqueness READ (renameMatterHost.js resolve-rename-spec).
             "resolve-rename-spec" => resolve_rename_matter(root, history, args, ctx),
             // purge-content: load + hash + auth + shared-fate refcount (purgeContentHost.js resolve-purge).

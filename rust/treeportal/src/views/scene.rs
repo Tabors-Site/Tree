@@ -11,6 +11,24 @@ pub struct Node {
     pub id: String,
     pub label: String,
     pub coord: Option<(f64, f64)>,
+    /// the being's freshest utterance/deed (folded from its chain) + the ord it landed at — rendered as
+    /// a speech bubble, shown only while recent relative to the world's now. None for spaces/matter.
+    pub said: Option<String>,
+    pub said_ord: Option<f64>,
+}
+
+/// How many ords a said-bubble stays visible — the clock-free stand-in for "spoken within the last
+/// minute": a being's bubble shows only while its utterance is within this window of the world's now.
+pub const BUBBLE_WINDOW: f64 = 12.0;
+
+impl Node {
+    /// The utterance to float as a speech bubble, iff it's still fresh relative to the world's now.
+    pub fn fresh_said(&self, now_ord: f64) -> Option<&str> {
+        match (&self.said, self.said_ord) {
+            (Some(s), Some(o)) if now_ord - o < BUBBLE_WINDOW => Some(s.as_str()),
+            _ => None,
+        }
+    }
 }
 
 /// Collect the placeable entities from a face.
@@ -53,7 +71,7 @@ fn infer_kind(key: &str) -> String {
 
 fn node_from(it: &Json, default_kind: &str) -> Option<Node> {
     match it {
-        Json::Str(s) => Some(Node { kind: default_kind.to_string(), id: s.clone(), label: short(s), coord: None }),
+        Json::Str(s) => Some(Node { kind: default_kind.to_string(), id: s.clone(), label: short(s), coord: None, said: None, said_ord: None }),
         Json::Obj(_) => {
             let kind = sget(it, "kind").unwrap_or_else(|| default_kind.to_string());
             let id = sget(it, "id")
@@ -67,7 +85,12 @@ fn node_from(it: &Json, default_kind: &str) -> Option<Node> {
                 .or_else(|| sget(it, "label"))
                 .unwrap_or_else(|| short(&id));
             let coord = get(it, "coord").and_then(coord_xy);
-            Some(Node { kind, id, label, coord })
+            let said = sget(it, "said").filter(|s| !s.is_empty());
+            let said_ord = match get(it, "saidOrd") {
+                Some(Json::Num(n)) => Some(*n),
+                _ => None,
+            };
+            Some(Node { kind, id, label, coord, said, said_ord })
         }
         _ => None,
     }

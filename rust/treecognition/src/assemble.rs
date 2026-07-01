@@ -60,6 +60,12 @@ pub fn build_prompt(identity: &Json, able_spec: &Json, face: &Json) -> String {
     out.push_str("\nWhat I perceive now:\n");
     out.push_str(&render_face(face));
 
+    // 4. the SYMBOL legend (one token per Word). The model MAY reply in symbols, one per Word; the
+    // membrane decodes them back (a plain-Word reply still works — decode_if_symbols passes it through).
+    let vocab = treesymbol::vocabulary(&[]);
+    out.push_str("\nYou may speak in SYMBOLS — each below is one Word; reply using only these symbols, one per Word:\n");
+    out.push_str(&treesymbol::legend_text(&vocab));
+
     out
 }
 
