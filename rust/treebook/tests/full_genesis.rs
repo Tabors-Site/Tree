@@ -34,50 +34,9 @@ fn seed_dir() -> PathBuf {
     }
 }
 
-/// The vocabulary in dependency order (the foundation flats, then every remaining op/able `.word`).
+/// The vocabulary in dependency order — THE ONE derivation (treebook::seed_vocabulary).
 fn vocabulary() -> Vec<String> {
-    let mut out = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-    let mut push = |out: &mut Vec<String>, rel: &str| {
-        if seen.insert(rel.to_string()) {
-            out.push(rel.to_string());
-        }
-    };
-    for rel in [
-        "store/words/word.word", "store/words/iam.word", "store/words/base.word",
-        "store/words/in.word", "store/words/out.word", "store/words/chain.word",
-        "store/words/history.word", "store/words/story.word", "store/words/fold.word",
-        "store/words/see.word", "store/words/do.word", "store/words/name.word",
-        "store/words/being.word", "store/words/space.word", "store/words/matter.word",
-        "store/words/weave.word", "store/words/be.word", "store/words/call.word",
-        "store/words/can.word", "store/words/recall.word", "store/words/able.word",
-        "store/words/flow.word", "store/words/verbs.word", "store/words/if.word",
-        "store/words/while.word", "store/words/for.word",
-    ] {
-        push(&mut out, rel);
-    }
-    let words_root = seed_dir().join("store/words");
-    let mut rest = Vec::new();
-    let mut stack = vec![words_root];
-    while let Some(d) = stack.pop() {
-        if let Ok(rd) = std::fs::read_dir(&d) {
-            for ent in rd.flatten() {
-                let p = ent.path();
-                if p.is_dir() {
-                    stack.push(p);
-                } else if p.extension().and_then(|e| e.to_str()) == Some("word") {
-                    if let Ok(rel) = p.strip_prefix(seed_dir()) {
-                        rest.push(rel.to_string_lossy().to_string());
-                    }
-                }
-            }
-        }
-    }
-    rest.sort();
-    for rel in rest {
-        push(&mut out, &rel);
-    }
-    out
+    treebook::seed_vocabulary(&seed_dir())
 }
 
 /// The faithful delegate roster (seedDelegates.js SEED_DELEGATES), able-name -> born proper Name.

@@ -195,7 +195,7 @@ fn plant_world(store: &Path, seed: &Path) -> i32 {
         eprintln!("treeos genesis: {} already exists — remove it first to replant", store.display());
         return 1;
     }
-    let vocab = genesis_vocabulary(seed);
+    let vocab = treebook::seed_vocabulary(seed);
     match treebook::full_genesis(seed, store, &vocab) {
         Ok(b) => {
             println!(
@@ -213,46 +213,6 @@ fn plant_world(store: &Path, seed: &Path) -> i32 {
             1
         }
     }
-}
-
-/// The vocabulary the I reads, in dependency order: the foundation flats first (word→iam→…→for), then
-/// every remaining `.word` under `store/words`, sorted. Mirrors treebook's full_genesis test harness.
-fn genesis_vocabulary(seed: &Path) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-    let mut push = |out: &mut Vec<String>, rel: String| {
-        if seen.insert(rel.clone()) {
-            out.push(rel);
-        }
-    };
-    for f in [
-        "word", "iam", "base", "in", "out", "chain", "history", "story", "fold", "see", "do", "name",
-        "being", "space", "matter", "weave", "be", "call", "can", "recall", "able", "flow", "verbs",
-        "if", "while", "for",
-    ] {
-        push(&mut out, format!("store/words/{f}.word"));
-    }
-    let mut rest = Vec::new();
-    let mut stack = vec![seed.join("store/words")];
-    while let Some(d) = stack.pop() {
-        if let Ok(rd) = std::fs::read_dir(&d) {
-            for ent in rd.flatten() {
-                let p = ent.path();
-                if p.is_dir() {
-                    stack.push(p);
-                } else if p.extension().and_then(|e| e.to_str()) == Some("word") {
-                    if let Ok(rel) = p.strip_prefix(seed) {
-                        rest.push(rel.to_string_lossy().to_string());
-                    }
-                }
-            }
-        }
-    }
-    rest.sort();
-    for rel in rest {
-        push(&mut out, rel);
-    }
-    out
 }
 
 // ── one-shot boot: read + verify + fold + match the JS .proj snapshots ───────

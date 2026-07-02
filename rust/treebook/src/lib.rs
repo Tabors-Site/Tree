@@ -739,6 +739,48 @@ fn op_word_name(rel: &str) -> String {
     stem
 }
 
+/// The vocabulary the I reads, in dependency order: the foundation flats first (word→iam→…→for), then
+/// every remaining `.word` under `store/words`, sorted. THE ONE derivation (treeos genesis, the tests,
+/// the examples all call this) — until the order is declared in word (`book/index.word`, the plan's
+/// M1B), this fn is its single Rust stand-in; do not copy the list anywhere else.
+pub fn seed_vocabulary(seed: &Path) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut push = |out: &mut Vec<String>, rel: String| {
+        if seen.insert(rel.clone()) {
+            out.push(rel);
+        }
+    };
+    for f in [
+        "word", "iam", "base", "in", "out", "chain", "history", "story", "fold", "see", "do", "name",
+        "being", "space", "matter", "weave", "be", "call", "can", "recall", "able", "flow", "verbs",
+        "if", "while", "for",
+    ] {
+        push(&mut out, format!("store/words/{f}.word"));
+    }
+    let mut rest = Vec::new();
+    let mut stack = vec![seed.join("store/words")];
+    while let Some(d) = stack.pop() {
+        if let Ok(rd) = std::fs::read_dir(&d) {
+            for ent in rd.flatten() {
+                let p = ent.path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else if p.extension().and_then(|e| e.to_str()) == Some("word") {
+                    if let Ok(rel) = p.strip_prefix(seed) {
+                        rest.push(rel.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+    rest.sort();
+    for rel in rest {
+        push(&mut out, rel);
+    }
+    out
+}
+
 /// THE FULL GENESIS, NODE-FREE. Plant "I" on a fresh store, then I reads the whole book and the world
 /// is born. `seed_dir` is the seed root (its `store/` holds the vocabulary + the creation `.word` +
 /// genesis.word; its `store/words/ables` holds the able words the grant runner folds). `dir` is the

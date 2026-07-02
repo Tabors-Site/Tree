@@ -1,8 +1,11 @@
-// CORPUS CONFORMANCE: the Rust `treeword` parser must reproduce the REAL JS parser's IR byte-for-byte
-// over every parseable statement in the live `.word` vocabulary. The golden vectors come from the real
-// seed/present/word/parser.js (see gen_corpus_vectors.mjs) — not a transcription — so a match proves the
-// port is faithful on real grammar, and a mismatch is a concrete gap to close. Order-independent compare
-// via treehash::canonicalize (the same canonical form the hash is defined over).
+// CORPUS CONFORMANCE — RUST IS THE GOLDEN. The JS parser is dead (reference corpus only); these vectors
+// were regenerated FROM this parser (examples/regen_corpus.rs) over every statement in the live `.word`
+// vocabulary, and this test now guards IR STABILITY: a change to the parser must reproduce the exact same
+// IR over the whole real corpus, or the divergence is INTENTIONAL and the vectors are regenerated in the
+// same change — where the diff of corpus.vectors.json is the review surface (every changed `ir` must be
+// explainable as the intended migration). Regenerating to silence an accidental divergence is drift.
+//
+// Order-independent compare via treehash::canonicalize (the same canonical form the hash is defined over).
 
 use treehash::{canonicalize, parse as pj, Json};
 
@@ -26,39 +29,17 @@ fn as_str(v: &Json) -> &str {
 }
 
 #[test]
-fn treeword_matches_the_js_parser_on_the_real_corpus() {
+fn treeword_reproduces_the_golden_ir_on_the_real_corpus() {
     let raw = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/corpus.vectors.json"))
-        .expect("read corpus.vectors.json (run `node tests/gen_corpus_vectors.mjs` to regenerate)");
+        .expect("read corpus.vectors.json (regenerate: cargo run -p treeword --example regen_corpus)");
     let doc = pj(&raw).expect("parse corpus.vectors.json");
     let vectors = as_arr(get(&doc, "vectors").expect("vectors"));
     assert!(vectors.len() > 200, "expected a large corpus, got {}", vectors.len());
-
-    // INTENTIONAL DIVERGENCES from the legacy JS parser — deliberate RUST-SIDE changes (the word-driven
-    // migration, WORD-DRIVEN-PARSER.md), NOT port gaps, so the JS golden vector is knowingly stale:
-    //   - `I am "what?" I am.` — the genesis verse (name-being split): the be:birth of the being "Am".
-    //   - `I make <Capitalized>.` — make-a-BEING is RETIRED -> `I am <Name>` (the word-driven reader).
-    //     `make` is now a Do-verb that makes a SPACE (do.word), so a Capitalized object no longer births.
-    //   - `I make <space>, <gloss>.` — the gloss form is retired (unused in the live .word).
-    //   - `I stand in <space>.` — RETIRED -> `I move to <space>` (there is no `stand`; move is the word).
-    // JS-parity is being DROPPED for the Word layer as forms migrate (JS is dead — Tabor). This list grows
-    // until the JS-parity conformance is replaced by a Word-driven one (does the declared grammar parse the
-    // real .word). The 316 UN-migrated forms still parse byte-identical, which is what this now guards.
-    let intentional_divergence = |text: &str| -> bool {
-        let t = text.trim();
-        t == r#"I am "what?" I am."#
-            || (t.starts_with("I make ") && t[7..].chars().next().map_or(false, |c| c.is_uppercase()))
-            || (t.starts_with("I make ") && t.contains(", "))
-            || t.starts_with("I stand in ")
-    };
 
     let mut pass = 0;
     let mut fails: Vec<String> = Vec::new();
     for v in vectors {
         let text = as_str(get(v, "text").expect("text"));
-        if intentional_divergence(text) {
-            pass += 1; // the split is deliberate; the JS golden vector is knowingly stale here
-            continue;
-        }
         let want = get(v, "ir").expect("ir");
         let got = Json::Arr(treeword::parse(text));
         let (want_c, got_c) = (canonicalize(want), canonicalize(&got));
@@ -75,19 +56,13 @@ fn treeword_matches_the_js_parser_on_the_real_corpus() {
             println!("{f}");
         }
     }
-    // FULL PARITY: every parseable statement in the live `.word` vocabulary now parses byte-identical to
-    // the real JS parser. A divergence here is a genuine gap to close (or a new grammar form — regenerate
-    // the vectors with `node tests/gen_corpus_vectors.mjs`, then port the missing rule). `DUMP=1` lists any.
-    println!(
-        "  treeword CORPUS CONFORMANCE vs the real JS parser:  {}/{} byte-identical",
-        pass,
-        vectors.len()
-    );
+    println!("  treeword CORPUS IR-STABILITY (Rust golden):  {}/{} identical", pass, vectors.len());
     assert!(
         fails.is_empty(),
-        "{} of {} statements diverge from the JS parser:\n{}",
+        "{} of {} statements diverge from the golden IR (intentional? regenerate the vectors in this \
+         change and review the corpus.vectors.json diff):\n{}",
         vectors.len() - pass,
-        vectors.len(),
+        pass + fails.len(),
         fails.join("\n")
     );
 }
