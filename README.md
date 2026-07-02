@@ -68,8 +68,6 @@ Everything else (`JWT_SECRET`, display bits, runtime knobs) is a **live config w
 - [`seed/FACTORY.md`](seed/FACTORY.md): the seed in its own words (the JS reference implementation).
 - [`philosophy/`](philosophy/): the doctrine. [`I.md`](philosophy/I_AM.md) is the cryptographic root, and [`theorems.md`](philosophy/theorems.md) has the formal results.
 
-The `seed/` tree is the original JS, kept as the reference the Rust port is proven against.
-
 ## License
 
 Dual licensed: AGPL-3.0 (free and open) or commercial (paid, friendly to closed source). See [`LICENSING.md`](LICENSING.md).
