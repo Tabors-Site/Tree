@@ -71,7 +71,7 @@ see · do · name · being · space · matter · weave · be · call · can · r
 `axioms.js` reads each word's `#` header — "bottoms out in the host" marks an axiom, "Descends
 from …" names its grounding — and asserts the descent closes: every concept is in the fold, every
 descent term is a declared word, every host pointer resolves. A clean run is "kernel == word.word."
-The implementation ops (create-matter, portal, credential, cherub, llm-connection, …) are theorems
+The implementation ops (makematter, portal, credential, cherub, llm-connection, …) are theorems
 composed on this floor, in the `.word` subdirs.
 
 Verified: `verify-descent` (14 axioms / 8 theorems, all 22 folded, 0 issues) · `verify-word-fold` ·

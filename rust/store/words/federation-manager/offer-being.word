@@ -1,5 +1,0 @@
-When the operator offers a being to a peer:
-  If no caller, refuse with "offer-being requires an authenticated being." as unauthorized.
-  see resolve-federation-spec(params, caller) as spec.
-  see dispatch-federation-intent($spec.dispatch.peer, $spec.dispatch.intent, $spec.dispatch.payload) as sent.
-  Return negotiationId: $spec.negotiationId, peer: $spec.peer, beingId: $spec.beingId, status: "delivered", counts: $spec.counts.

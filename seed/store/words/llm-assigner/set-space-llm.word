@@ -1,6 +1,0 @@
-When a being sets the llm configuration on a space:
-  If no caller, refuse with "set-space-llm requires an authenticated being." as unauthorized.
-  see resolve-llm-config(params, caller) as cfg.
-  For each w in cfg's writes:
-    do set-space on the space $cfg.targetId with { field: $w.field, value: $w.value, merge: false } as wrote.
-  Return spaceId: $cfg.targetId.

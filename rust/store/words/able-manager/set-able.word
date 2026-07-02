@@ -1,5 +1,0 @@
-When a being authors a live able:
-  If not valid-able-name(name), refuse with "set-able: name must be kebab-case, e.g. judge or ext:able" as invalid-input.
-  If not valid-able-cognition(requiredCognition), refuse with "set-able: requiredCognition must be one of llm/human/scripted or empty" as invalid-input.
-  see author-able(params) as result.
-  Return written: $result.written, name: $result.name, origin: $result.origin, hotRegistered: $result.hotRegistered, spaceId: $result.name.

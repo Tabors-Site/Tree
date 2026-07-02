@@ -15,15 +15,17 @@
 # localStore: CAS bytes for matter content + resource files.
 /store
 
+legacySeed
+
 
 
 .shared
 
 # Rust port: ignore only build output + tooling noise, NOT the source.
 # Keep Cargo.toml / Cargo.lock / src/ (the actual port); drop target/ and backups.
-/rust/target/
-/rust/**/target/
-/rust/**/*.rs.bk
+/seed/target/
+/seed/**/target/
+/seed/**/*.rs.bk
 
 # Old experiments kept for reference, not for shipping.
 .oldExtensions
@@ -32,5 +34,5 @@ site/
 cli/
 
 # Rust napi addon build artifact (platform-specific; rebuild via cargo)
-rust/treehash-node/*.node
-rust/treehash-node/target/
+seed/treehash-node/*.node
+seed/treehash-node/target/

@@ -1,7 +1,0 @@
-When a being deletes a live able:
-  If no name, refuse with "delete-able: `name` is required" as invalid-input.
-  If not able-registered(name), refuse with "delete-able: able is not registered" as invalid-input.
-  If not able-deletable(name), refuse with "delete-able: only live-authored ables can be deleted at runtime" as invalid-input.
-  If able-blocks-delete(name, force), refuse with "delete-able: this able is referenced by a being's flow or defaultAble — update those beings first, or pass force:true" as invalid-input.
-  see remove-able(name) as result.
-  Return deleted: $result.deleted, name: $result.name, spaceId: $result.name.

@@ -1,3 +1,0 @@
-When a being sets the render of a target:
-  see validate-render-block(params, targetKind) as renderParams.
-  Return rendered: true, factParams: $renderParams.

@@ -1,5 +1,0 @@
-When the operator accepts an incoming template offer:
-  If no caller, refuse with "accept-template requires an authenticated being." as unauthorized.
-  see resolve-federation-spec(params, caller) as spec.
-  see dispatch-federation-intent($spec.dispatch.peer, $spec.dispatch.intent, $spec.dispatch.payload) as sent.
-  Return negotiationId: $spec.negotiationId, status: "accepted", sender: $spec.sender.

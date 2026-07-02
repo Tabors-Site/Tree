@@ -1,4 +1,0 @@
-When a being sets a flow on a being:
-  If no flow, refuse with "set-being-flow: `flow` is required".
-  see resolve-set-being-flow-spec(target, params) as spec.
-  Return beingId: $spec.beingId, factParams: $spec.factParams.

@@ -1,8 +1,0 @@
-# give.word — handing a thing over to a receiver (rule 17 + rule 2).
-# The receiver (the being it goes to) is a property on the DO act; possession
-# follows the receiver. A gift is one act; a trade would hold it open on assent
-# (a `when`, engine-blocked for now).
-
-A music-room contains a drum.
-I own the music-room.
-I give the drum to Claude.

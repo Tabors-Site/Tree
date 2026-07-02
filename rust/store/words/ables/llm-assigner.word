@@ -1,5 +1,0 @@
-# llm-assigner.word — LLM-configuration delegate. The substrate LLM ops (add-llm, delete-llm, assign-slot, set-being-llm, set-space-llm, set-story-llm) are seed-owned, callable by any being with the right canDo, so this able grants nothing of its own. Descends from able.word.
-
-A llm-assigner is an able.
-A llm-assigner needs scripted cognition.
-A llm-assigner never wakes.

@@ -1,9 +1,0 @@
-# flow-composer.word — composes a being's flow: which ables it plays, with what capabilities.
-# Descends from able.word.
-
-A flow-composer is an able.
-A flow-composer can see ables.
-A flow-composer can see tools.
-A flow-composer can see operations.
-A flow-composer can do set-being-flow.
-A flow-composer needs llm cognition.

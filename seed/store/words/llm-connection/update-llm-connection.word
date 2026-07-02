@@ -1,4 +1,0 @@
-When a being updates an llm connection:
-  If no caller, refuse with "update-llm-connection requires an identified actor".
-  see resolve-connection-update(target, params, caller, branch) as patch.
-  Return beingId: $patch.beingId, connectionId: $patch.connectionId, wasAssigned: $patch.wasAssigned, factParams: $patch.setBeingParams.

@@ -1,9 +1,0 @@
-# http-server.word — the HTTP listener as a being; stamps the request stream onto the request-log
-# matter. Descends from able.word.
-
-A http-server is an able.
-A http-server can see http-stats.
-A http-server can see connections.
-A http-server can do create-matter.
-A http-server can do set-matter.
-A http-server needs scripted cognition.

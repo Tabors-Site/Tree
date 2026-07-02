@@ -1,0 +1,903 @@
+{
+  "format": "treeos-fold-vectors",
+  "version": 2,
+  "reels": [
+    {
+      "kind": "being",
+      "name": "being-full",
+      "facts": [
+        {
+          "verb": "be",
+          "act": "birth",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "name": "Alice",
+            "password": "h",
+            "defaultAble": "gardener",
+            "parentBeingId": "be0",
+            "homeSpace": "sp1",
+            "qualities": {
+              "cognition": {
+                "defaultKind": "llm"
+              }
+            },
+            "position": "sp1",
+            "coord": {
+              "x": 1,
+              "y": 2
+            }
+          },
+          "seq": 1,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 1
+        },
+        {
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "qualities.mood",
+            "value": {
+              "happy": true
+            }
+          },
+          "seq": 2,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be1",
+          "ord": 2
+        },
+        {
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "qualities.mood.level",
+            "value": 5
+          },
+          "seq": 3,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be1",
+          "ord": 3
+        },
+        {
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "coord",
+            "value": {
+              "x": 9,
+              "y": 9,
+              "z": 1
+            }
+          },
+          "seq": 4,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be1",
+          "ord": 4
+        },
+        {
+          "verb": "be",
+          "act": "connect",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "inhabitedBy": "beHuman"
+          },
+          "seq": 5,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 5
+        },
+        {
+          "verb": "do",
+          "act": "grant-able",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "able": "editor",
+            "anchorSpaceId": "sp1",
+            "grantedBy": "be0"
+          },
+          "seq": 6,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 6
+        },
+        {
+          "verb": "do",
+          "act": "grant-able",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "able": "viewer",
+            "anchorBeingId": "be9",
+            "grantedBy": "be0"
+          },
+          "seq": 7,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 7
+        },
+        {
+          "verb": "do",
+          "act": "grant-able",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "able": "editor",
+            "anchorSpaceId": "sp1",
+            "grantedBy": "be0"
+          },
+          "seq": 8,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 8
+        },
+        {
+          "verb": "do",
+          "act": "revoke-able",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "able": "editor",
+            "anchorSpaceId": "sp1",
+            "grantedBy": "be0"
+          },
+          "seq": 9,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 9
+        },
+        {
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "qualities.flow",
+            "value": [
+              "a",
+              "b"
+            ],
+            "merge": false
+          },
+          "seq": 10,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be1",
+          "ord": 10
+        },
+        {
+          "verb": "be",
+          "act": "release",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {},
+          "seq": 11,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 11
+        },
+        {
+          "verb": "be",
+          "act": "truename",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "trueName": "name123"
+          },
+          "seq": 12,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 12
+        },
+        {
+          "verb": "do",
+          "act": "set-being",
+          "of": {
+            "kind": "being",
+            "id": "be1"
+          },
+          "params": {
+            "field": "position",
+            "value": "sp2"
+          },
+          "seq": 13,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be1",
+          "ord": 13
+        }
+      ],
+      "canonical": "{\"bornOrd\":1,\"coord\":{\"x\":9,\"y\":9,\"z\":1},\"defaultAble\":\"gardener\",\"homeHistory\":null,\"homeSpace\":\"sp1\",\"homeStory\":null,\"isRemote\":false,\"name\":\"Alice\",\"parentBeingId\":\"be0\",\"password\":\"h\",\"position\":\"sp2\",\"qualities\":{\"ablesGranted\":[{\"able\":\"viewer\",\"anchorBeingId\":\"be9\",\"anchorSpaceId\":null,\"grantedBy\":\"be0\"}],\"cognition\":{\"defaultKind\":\"llm\"},\"connection\":{\"inhabitedBy\":null,\"since\":null},\"flow\":[\"a\",\"b\"],\"mood\":{\"happy\":true,\"level\":5}},\"trueName\":\"name123\"}"
+    },
+    {
+      "kind": "being",
+      "name": "being-kill",
+      "facts": [
+        {
+          "verb": "be",
+          "act": "birth",
+          "of": {
+            "kind": "being",
+            "id": "beD"
+          },
+          "params": {
+            "name": "Dead",
+            "position": "sp1",
+            "coord": {
+              "x": 1,
+              "y": 1
+            }
+          },
+          "seq": 1,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 14
+        },
+        {
+          "verb": "be",
+          "act": "connect",
+          "of": {
+            "kind": "being",
+            "id": "beD"
+          },
+          "params": {
+            "inhabitedBy": "beH"
+          },
+          "seq": 2,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 15
+        },
+        {
+          "verb": "be",
+          "act": "kill",
+          "of": {
+            "kind": "being",
+            "id": "beD"
+          },
+          "params": {
+            "byActor": "be0"
+          },
+          "seq": 3,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 16
+        },
+        {
+          "verb": "be",
+          "act": "kill",
+          "of": {
+            "kind": "being",
+            "id": "beD"
+          },
+          "params": {
+            "byActor": "beX"
+          },
+          "seq": 4,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 17
+        }
+      ],
+      "canonical": "{\"bornOrd\":14,\"coord\":null,\"defaultAble\":null,\"homeHistory\":null,\"homeSpace\":null,\"homeStory\":null,\"isRemote\":false,\"name\":\"Dead\",\"parentBeingId\":null,\"position\":null,\"qualities\":{\"connection\":{\"inhabitedBy\":null,\"since\":null},\"dead\":{\"byActor\":\"be0\"}},\"trueName\":null}"
+    },
+    {
+      "kind": "being",
+      "name": "being-toposition",
+      "facts": [
+        {
+          "verb": "be",
+          "act": "birth",
+          "of": {
+            "kind": "being",
+            "id": "beP"
+          },
+          "params": {
+            "name": "P",
+            "position": "sp1"
+          },
+          "seq": 1,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 18
+        },
+        {
+          "verb": "be",
+          "act": "occupy",
+          "of": {
+            "kind": "being",
+            "id": "beP"
+          },
+          "params": {
+            "toPosition": "spX"
+          },
+          "seq": 2,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 19
+        }
+      ],
+      "canonical": "{\"bornOrd\":18,\"coord\":null,\"defaultAble\":null,\"homeHistory\":null,\"homeSpace\":null,\"homeStory\":null,\"isRemote\":false,\"name\":\"P\",\"parentBeingId\":null,\"position\":\"spX\",\"trueName\":null}"
+    },
+    {
+      "kind": "space",
+      "name": "space-full",
+      "facts": [
+        {
+          "verb": "do",
+          "act": "makespace",
+          "of": {
+            "kind": "space",
+            "id": "sp1"
+          },
+          "params": {
+            "name": "Garden",
+            "type": "room",
+            "parent": "root",
+            "owner": "be0",
+            "size": {
+              "x": 10,
+              "y": 10
+            },
+            "coord": {
+              "x": 0,
+              "y": 0
+            }
+          },
+          "seq": 1,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 20
+        },
+        {
+          "verb": "do",
+          "act": "make-heaven",
+          "of": {
+            "kind": "space",
+            "id": "sp1"
+          },
+          "params": {
+            "heavenSpace": "histories"
+          },
+          "seq": 2,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 21
+        },
+        {
+          "verb": "do",
+          "act": "set-space",
+          "of": {
+            "kind": "space",
+            "id": "sp1"
+          },
+          "params": {
+            "field": "name",
+            "value": "Garden2"
+          },
+          "seq": 3,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 22
+        },
+        {
+          "verb": "do",
+          "act": "set-space",
+          "of": {
+            "kind": "space",
+            "id": "sp1"
+          },
+          "params": {
+            "field": "parent",
+            "value": "root2"
+          },
+          "seq": 4,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 23
+        },
+        {
+          "verb": "do",
+          "act": "move",
+          "of": {
+            "kind": "space",
+            "id": "sp1"
+          },
+          "params": {
+            "coord": {
+              "x": 3,
+              "y": 4
+            }
+          },
+          "seq": 5,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 24
+        },
+        {
+          "verb": "do",
+          "act": "move",
+          "of": {
+            "kind": "space",
+            "id": "sp1"
+          },
+          "params": {
+            "to": "root3"
+          },
+          "seq": 6,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 25
+        },
+        {
+          "verb": "do",
+          "act": "set-space",
+          "of": {
+            "kind": "space",
+            "id": "sp1"
+          },
+          "params": {
+            "field": "qualities.tag",
+            "value": {
+              "x": 1
+            }
+          },
+          "seq": 7,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 26
+        }
+      ],
+      "canonical": "{\"bornOrd\":20,\"coord\":{\"x\":3,\"y\":4},\"heavenSpace\":\"histories\",\"name\":\"Garden2\",\"owner\":\"be0\",\"parent\":\"root3\",\"position\":\"root3\",\"qualities\":{\"tag\":{\"x\":1}},\"size\":{\"x\":10,\"y\":10},\"type\":\"room\"}"
+    },
+    {
+      "kind": "space",
+      "name": "space-ended",
+      "facts": [
+        {
+          "verb": "do",
+          "act": "makespace",
+          "of": {
+            "kind": "space",
+            "id": "sp2"
+          },
+          "params": {
+            "name": "Doomed",
+            "parent": "root",
+            "owner": "be0"
+          },
+          "seq": 1,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 27
+        },
+        {
+          "verb": "do",
+          "act": "delete",
+          "of": {
+            "kind": "space",
+            "id": "sp2"
+          },
+          "params": {},
+          "seq": 2,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "beDeleter",
+          "ord": 28
+        }
+      ],
+      "canonical": "{\"bornOrd\":27,\"coord\":null,\"heavenSpace\":null,\"name\":\"Doomed\",\"owner\":\"beDeleter\",\"parent\":\"deleted\",\"position\":\"deleted\",\"qualities\":{\"dead\":{\"byActor\":\"beDeleter\"}},\"size\":null,\"type\":null}"
+    },
+    {
+      "kind": "matter",
+      "name": "matter-full",
+      "facts": [
+        {
+          "verb": "do",
+          "act": "makematter",
+          "of": {
+            "kind": "matter",
+            "id": "m1"
+          },
+          "params": {
+            "spaceId": "sp1",
+            "beingId": "be1",
+            "name": "Note",
+            "content": {
+              "kind": "cas",
+              "hash": "abc",
+              "preview": "hi"
+            },
+            "type": "doc",
+            "coord": {
+              "x": 1,
+              "y": 1
+            }
+          },
+          "seq": 1,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 29
+        },
+        {
+          "verb": "do",
+          "act": "set-matter",
+          "of": {
+            "kind": "matter",
+            "id": "m1"
+          },
+          "params": {
+            "field": "content",
+            "value": {
+              "kind": "cas",
+              "hash": "def",
+              "preview": "yo"
+            }
+          },
+          "seq": 2,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 30
+        },
+        {
+          "verb": "do",
+          "act": "purge-content",
+          "of": {
+            "kind": "matter",
+            "id": "m1"
+          },
+          "params": {
+            "hash": "def"
+          },
+          "seq": 3,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 31
+        },
+        {
+          "verb": "do",
+          "act": "purge-content",
+          "of": {
+            "kind": "matter",
+            "id": "m1"
+          },
+          "params": {
+            "hash": "old"
+          },
+          "seq": 4,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 32
+        },
+        {
+          "verb": "do",
+          "act": "move",
+          "of": {
+            "kind": "matter",
+            "id": "m1"
+          },
+          "params": {
+            "to": "sp2"
+          },
+          "seq": 5,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 33
+        },
+        {
+          "verb": "do",
+          "act": "set-matter",
+          "of": {
+            "kind": "matter",
+            "id": "m1"
+          },
+          "params": {
+            "field": "qualities.x",
+            "value": 1
+          },
+          "seq": 6,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 34
+        }
+      ],
+      "canonical": "{\"beingId\":\"be1\",\"bornOrd\":29,\"children\":[],\"content\":{\"hash\":\"def\",\"kind\":\"cas\",\"preview\":null,\"purged\":true},\"coord\":{\"x\":1,\"y\":1},\"name\":\"Note\",\"parentMatterId\":null,\"position\":\"sp2\",\"spaceId\":\"sp2\",\"type\":\"doc\"}",
+      "isGone": false
+    },
+    {
+      "kind": "matter",
+      "name": "matter-ended",
+      "facts": [
+        {
+          "verb": "do",
+          "act": "makematter",
+          "of": {
+            "kind": "matter",
+            "id": "m2"
+          },
+          "params": {
+            "spaceId": "sp1",
+            "name": "Bye",
+            "content": {
+              "kind": "cas",
+              "hash": "z"
+            }
+          },
+          "seq": 1,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 35
+        },
+        {
+          "verb": "do",
+          "act": "delete",
+          "of": {
+            "kind": "matter",
+            "id": "m2"
+          },
+          "params": {},
+          "seq": 2,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 36
+        }
+      ],
+      "canonical": "{\"beingId\":\"deleted\",\"bornOrd\":35,\"children\":[],\"content\":{\"hash\":\"z\",\"kind\":\"cas\"},\"coord\":null,\"name\":\"Bye\",\"parentMatterId\":null,\"position\":\"sp1\",\"qualities\":{\"dead\":{\"byActor\":\"be0\"}},\"spaceId\":\"deleted\",\"type\":\"generic\"}",
+      "isGone": true
+    },
+    {
+      "kind": "library",
+      "name": "library-full",
+      "facts": [
+        {
+          "verb": "name",
+          "act": "declare",
+          "of": {
+            "kind": "library",
+            "id": "localhost"
+          },
+          "params": {
+            "nameId": "nmA",
+            "spec": {
+              "parentNameId": "nm0",
+              "privateKeyEnc": "enc",
+              "identity": {
+                "domain": "x"
+              },
+              "soulType": "llm",
+              "name": "alice"
+            }
+          },
+          "seq": 1,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 37
+        },
+        {
+          "verb": "name",
+          "act": "connect",
+          "of": {
+            "kind": "library",
+            "id": "localhost"
+          },
+          "params": {
+            "nameId": "nmA"
+          },
+          "seq": 2,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 38
+        },
+        {
+          "verb": "name",
+          "act": "set-password",
+          "of": {
+            "kind": "library",
+            "id": "localhost"
+          },
+          "params": {
+            "nameId": "nmA",
+            "spec": {
+              "privateKeyEnc": "enc2"
+            }
+          },
+          "seq": 3,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 39
+        },
+        {
+          "verb": "name",
+          "act": "release",
+          "of": {
+            "kind": "library",
+            "id": "localhost"
+          },
+          "params": {
+            "nameId": "nmA"
+          },
+          "seq": 4,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 40
+        },
+        {
+          "verb": "name",
+          "act": "declare",
+          "of": {
+            "kind": "library",
+            "id": "localhost"
+          },
+          "params": {
+            "nameId": "nmB",
+            "spec": {
+              "soulType": "scripted"
+            }
+          },
+          "seq": 5,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 41
+        },
+        {
+          "verb": "name",
+          "act": "banish",
+          "of": {
+            "kind": "library",
+            "id": "localhost"
+          },
+          "params": {
+            "nameId": "nmA"
+          },
+          "seq": 6,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 42
+        },
+        {
+          "verb": "name",
+          "act": "banish",
+          "of": {
+            "kind": "library",
+            "id": "localhost"
+          },
+          "params": {
+            "nameId": "nmA"
+          },
+          "seq": 7,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 43
+        },
+        {
+          "verb": "name",
+          "act": "share-book",
+          "of": {
+            "kind": "library",
+            "id": "localhost"
+          },
+          "params": {
+            "root": "r1",
+            "title": "T",
+            "author": "A",
+            "sharedBy": "be1",
+            "kind": "doc",
+            "bodyRef": "ref1"
+          },
+          "seq": 8,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 44
+        },
+        {
+          "verb": "name",
+          "act": "peer-add",
+          "of": {
+            "kind": "library",
+            "id": "localhost"
+          },
+          "params": {
+            "domain": "peer.example",
+            "addedBy": "be1"
+          },
+          "seq": 9,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 45
+        },
+        {
+          "verb": "name",
+          "act": "config-set",
+          "of": {
+            "kind": "library",
+            "id": "localhost"
+          },
+          "params": {
+            "key": "STORY_NAME",
+            "value": "My Story"
+          },
+          "seq": 10,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 46
+        },
+        {
+          "verb": "name",
+          "act": "config-set",
+          "of": {
+            "kind": "library",
+            "id": "localhost"
+          },
+          "params": {
+            "key": "tz",
+            "value": "UTC"
+          },
+          "seq": 11,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 47
+        },
+        {
+          "verb": "name",
+          "act": "config-delete",
+          "of": {
+            "kind": "library",
+            "id": "localhost"
+          },
+          "params": {
+            "key": "tz"
+          },
+          "seq": 12,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 48
+        },
+        {
+          "verb": "name",
+          "act": "peer-remove",
+          "of": {
+            "kind": "library",
+            "id": "localhost"
+          },
+          "params": {
+            "domain": "peer.example"
+          },
+          "seq": 13,
+          "date": "2026-06-25T00:00:00.000Z",
+          "through": "be0",
+          "ord": 49
+        }
+      ],
+      "canonical": "{\"books\":{\"r1\":{\"at\":\"2026-06-25T00:00:00.000Z\",\"author\":\"A\",\"bodyRef\":\"ref1\",\"kind\":\"doc\",\"root\":\"r1\",\"sharedBy\":\"be1\",\"title\":\"T\"}},\"config\":{\"STORY_NAME\":\"My Story\"},\"names\":{\"nmA\":{\"closed\":true,\"connected\":false,\"createdAt\":\"2026-06-25T00:00:00.000Z\",\"identity\":{\"domain\":\"x\"},\"name\":\"alice\",\"parentNameId\":\"nm0\",\"privateKeyEnc\":\"enc2\",\"soulType\":\"llm\"},\"nmB\":{\"createdAt\":\"2026-06-25T00:00:00.000Z\",\"identity\":null,\"name\":null,\"parentNameId\":null,\"privateKeyEnc\":null,\"soulType\":\"scripted\"}}}"
+    }
+  ]
+}

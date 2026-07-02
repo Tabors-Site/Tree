@@ -1,9 +1,0 @@
-When the operator fulfills an incoming pull request:
-  If no caller, refuse with "fulfill-request requires an authenticated being." as unauthorized.
-  see resolve-federation-spec(params, caller) as spec.
-  For each w in spec's writes:
-    do set-being on the being $spec.managerId with { field: $w.field, value: $w.value, merge: false } as cached.
-  see dispatch-federation-intent($spec.dispatch.peer, $spec.dispatch.intent, $spec.dispatch.payload) as sent.
-  For each w in spec's postWrites:
-    do set-being on the being $spec.managerId with { field: $w.field, value: $w.value, merge: false } as wrote.
-  Return negotiationId: $spec.negotiationId, pushNegotiationId: $spec.pushNegotiationId, status: "pushing", peer: $spec.peer.

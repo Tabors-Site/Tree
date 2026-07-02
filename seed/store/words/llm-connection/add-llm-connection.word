@@ -1,6 +1,0 @@
-When a being adds an llm connection:
-  If no caller, refuse with "add-llm-connection requires an identified actor".
-  see resolve-connection(target, params, caller, branch) as conn.
-  do set-being on the being $conn.beingId with { field: $conn.field, value: $conn.value } as added.
-  If $conn.isFirst, do assign-llm-slot on the being $conn.beingId with { slot: "main", connectionId: $conn.connectionId } as assigned.
-  Return connectionId: $conn.connectionId.

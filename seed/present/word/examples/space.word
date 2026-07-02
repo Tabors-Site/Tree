@@ -1,8 +1,0 @@
-# space.word — what a space IS (the structure every space carries).
-# The world strand of seed/materials/space; the host fold + schema stay.
-
-A space has an owner, a being.
-A space may have a size, a bounding box.
-A space may have children, the spaces nested inside it.
-A space has qualities, the properties it carries.
-A space has a position in its parent space.

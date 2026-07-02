@@ -1,9 +1,0 @@
-When a caller sets a model on a target:
-  If no caller, refuse with "set-model: identity required" as unauthorized.
-  If not may-set-model(targetKind, target, caller), refuse with "set-model: only the target's owner / author / self (or the tree owner) may set its model" as forbidden.
-  If clear:
-    see resolve-model-block(targetKind, modelMatterId, scale, rotation, forMatterType, clear) as block.
-    Return cleared: true, factParams: $block, factTarget: { kind: $targetKind, id: $targetId }.
-  If no modelMatterId, refuse with "set-model: `modelMatterId` required (upload first via create-matter type=model, or pass clear=true)" as invalid-input.
-  see resolve-model-block(targetKind, modelMatterId, scale, rotation, forMatterType, clear) as block.
-  Return set: true, factParams: $block, factTarget: { kind: $targetKind, id: $targetId }.

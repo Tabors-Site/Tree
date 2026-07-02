@@ -1,7 +1,0 @@
-When a being switches their session to another history:
-  If no caller, refuse with "be:switch requires an authenticated caller" as unauthorized.
-  If no history, refuse with "be:switch requires a history" as invalid-input.
-  If destination-missing(history), refuse with "be:switch: destination history not found or deleted" as invalid-input.
-  If destination-paused(history), refuse with "be:switch: destination history is paused" as story-paused.
-  If not being-lives-on(caller, history), refuse with "be:switch: you have no living birth on that history (born after the fork, or dead there) - a session may only seat where your reel folds to a living being" as forbidden.
-  Return switched: true, fromHistory: $fromHistory, toHistory: $history, seatHistory: $history, factTarget: $caller, factParams: { fromHistory: $fromHistory, toHistory: $history }.

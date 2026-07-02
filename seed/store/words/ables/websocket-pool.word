@@ -4,7 +4,7 @@
 A websocket-pool is an able.
 A websocket-pool can see connections.
 A websocket-pool can see http-stats.
-A websocket-pool can do create-matter.
+A websocket-pool can do makematter.
 A websocket-pool can do set-matter.
 A websocket-pool can do end-matter.
 A websocket-pool needs scripted cognition.
