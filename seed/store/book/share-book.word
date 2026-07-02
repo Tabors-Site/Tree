@@ -1,0 +1,24 @@
+# share-book.word — share-book: lay a sealed Book on the Library reel as a 5D NAME-ACT.
+#
+# Sharing a book is a NAME acting in the library (5d.md: only names act there; the being stays home)
+# — a bodiless verb:"name" fact on the library reel (kind="library"), the catalog entry. NOT a
+# do-fact. The book BODY is CAS (the store is symbols); the fact carries only its address (bodyRef).
+#
+# WORD-SOLE (Tabor's no-mirror law): NO JS handler. A name-act signs on the acting Name's own reel,
+# out of any history, which a world `.word` cannot reach — so this word only VALIDATES + authors the
+# fact's `factParams`; do.js's runOpNameAct (op.word.factVerb="name") lays the library name-act.
+#
+# resolve-share-book-spec is the floor read (shareBookHostEnv): it verifies the colophon (refuse-
+# before-share, mirroring receive's seal-check) and CAS-stores the book body via storeBookBody
+# (putContent — CONTENT-ADDRESSED, idempotent: the address IS the hash of the bytes, so the store is
+# SEE-shaped, like the floor's mint-credential / set-pointer-map — a host write that rides a read).
+# The bytes are stored when this read runs, BEFORE the name-act seals, so a reader's resolveBook
+# fetches them back — IDENTICAL ordering to the old handler (storeBookBody then emitFact). It builds
+# the catalog factParams (bookFactParams, referencing bodyRef) and throws the SAME IbpErrors.
+#
+# The STANDARD trigger binds the dispatch `target`, the op `params` (params.book = the sealed book),
+# the `caller`, and `branch`.
+
+When a being shares a book:
+  see resolve-share-book-spec(target, params, caller) as spec.
+  Return root: $spec.root, bodyRef: $spec.bodyRef, signers: $spec.signers, unsigned: $spec.unsigned, factParams: $spec.factParams.

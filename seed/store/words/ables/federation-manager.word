@@ -1,0 +1,14 @@
+# federation-manager.word — negotiates subtree exchange with peer realities. The operator triggers offer-template / request-template; the handler-floor routes incoming peer SUMMONs (offer/accept/reject/fulfill). Descends from able.word.
+
+A federation-manager is an able.
+A federation-manager can see identity.
+A federation-manager can see peers.
+A federation-manager can do offer-template.
+A federation-manager can do offer-being.
+A federation-manager can do request-template.
+A federation-manager can do accept-template.
+A federation-manager can do reject-template.
+A federation-manager can do fulfill-request.
+A federation-manager can do refuse-request.
+A federation-manager can call (asker).
+A federation-manager needs scripted cognition.

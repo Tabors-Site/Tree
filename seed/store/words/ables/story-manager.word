@@ -1,0 +1,20 @@
+# story-manager.word — manages the story: config, peers, extensions, and the source tree.
+# Descends from able.word.
+
+A story-manager is an able.
+A story-manager can see identity.
+A story-manager can see config.
+A story-manager can see peers.
+A story-manager can see extensions.
+A story-manager can see tools.
+A story-manager can see ables.
+A story-manager can see operations.
+A story-manager can see ./source.
+A story-manager can do set-config.
+A story-manager can do delete-config.
+A story-manager can do install-extension.
+A story-manager can do uninstall-extension.
+A story-manager can do enable-extension.
+A story-manager can do disable-extension.
+A story-manager can call (asker).
+A story-manager can call (self).
