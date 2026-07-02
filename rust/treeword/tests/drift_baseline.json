@@ -1,0 +1,11 @@
+{
+  "regex_lines_per_file": {
+    "src/lib.rs": 126,
+    "src/reader.rs": 0,
+    "src/render.rs": 0,
+    "src/vocab.rs": 0
+  },
+  "string_literal_arms": {
+    "src/reader.rs": 8
+  }
+}
