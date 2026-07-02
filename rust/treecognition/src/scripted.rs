@@ -151,8 +151,9 @@ mod tests {
 
     #[test]
     fn scripted_takes_the_first_match_in_order() {
-        let a = treeword::parse("I make a.").remove(0);
-        let b = treeword::parse("I make b.").remove(0);
+        // ids that are not articles: a bare `a` reads as the article, leaving no object -> no parse.
+        let a = treeword::parse("I make x.").remove(0);
+        let b = treeword::parse("I make y.").remove(0);
         let flow = |x: &str, eff: &Json| {
             obj(vec![
                 ("kind", jstr("flow")),
@@ -163,7 +164,7 @@ mod tests {
         let flows = vec![flow("noon", &a), flow("dawn", &b), flow("dawn", &a)];
         let face = obj(vec![("state", obj(vec![("sky", jstr("dawn"))]))]);
         match decide_scripted(&flows, &face, &no_host) {
-            Cognition::Act { content } => assert_eq!(content, "I make b."), // first dawn flow wins
+            Cognition::Act { content } => assert_eq!(content, "I make y."), // first dawn flow wins
             other => panic!("expected Act, got {other:?}"),
         }
     }
