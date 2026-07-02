@@ -1,0 +1,6 @@
+When a being assigns a connection to a slot:
+  If no caller, refuse with "assign-llm-slot requires an identified actor".
+  see resolve-slot-assignment(target, params, caller, branch) as a.
+  If $a.isBeing, do set-being on the being $a.id with { field: $a.field, value: $a.value } as assigned.
+  If $a.isSpace, do set-space on the space $a.id with { field: $a.field, value: $a.value } as assigned.
+  Return slot: $a.slot, connectionId: $a.connectionId.

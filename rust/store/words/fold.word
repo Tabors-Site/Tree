@@ -1,0 +1,9 @@
+# fold.word — what a fold IS: one chain read into the present.
+# Axiom: it bottoms out in the host (the projection/reducer, loadOrFold + foldEngine). The
+# place is folded from facts, never stored. Descends from word.word, base.word, chain.word;
+# every word grounded (fold, chain, fact, order, head). `present` is the chain's head
+# (now=head, per word.word), not the clock: the chain orders, time never does.
+
+A fold is a chain made present, its facts in order from first to head, each makes what is.
+A fold is the present of one chain.
+A fold is a cache, never the truth. The facts are the truth. A fold is kept, so a being sees from the head, not the first.

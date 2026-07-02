@@ -4,8 +4,6 @@
 // the faithful delegate roster is birthed, the grants land, every reel chain-verifies, and the creation
 // acts render back to the prose I spoke (the inverse parser round-trips the chain).
 
-use std::path::PathBuf;
-
 use treebook::full_genesis;
 use treehash::Json;
 use treestore::{read_reel_file, verify_fact_chain};
@@ -25,18 +23,6 @@ fn gs<'a>(v: &'a Json, k: &str) -> Option<&'a str> {
 }
 fn ok(v: &Json) -> bool {
     matches!(get(v, "ok"), Some(Json::Bool(true)))
-}
-
-fn seed_dir() -> PathBuf {
-    match std::env::var("TREE_SEED_DIR") {
-        Ok(d) if !d.is_empty() => PathBuf::from(d),
-        _ => PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../seed")),
-    }
-}
-
-/// The vocabulary in dependency order — THE ONE derivation (treebook::seed_vocabulary).
-fn vocabulary() -> Vec<String> {
-    treebook::seed_vocabulary(&seed_dir())
 }
 
 /// The faithful delegate roster (seedDelegates.js SEED_DELEGATES), able-name -> born proper Name.
@@ -64,7 +50,7 @@ fn i_reads_the_whole_book_and_the_world_is_born() {
     assert!(dir.starts_with(std::env::temp_dir()), "the scratch store lives under temp");
 
     // PLANT "I" + READ THE WHOLE BOOK (vocabulary coined, creation sealed, grants run) — Node-free.
-    let born = full_genesis(&seed_dir(), &dir, &vocabulary()).expect("the world is born");
+    let born = full_genesis(&dir).expect("the world is born");
     assert_eq!(born.i_name, "I", "genesis plants the I-being as \"I\"");
     assert!(born.vocabulary_coined > 400, "the vocabulary coined ({})", born.vocabulary_coined);
 

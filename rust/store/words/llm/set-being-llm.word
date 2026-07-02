@@ -1,0 +1,6 @@
+When a being sets its own llm configuration:
+  If no caller, refuse with "set-being-llm requires an authenticated being." as unauthorized.
+  see resolve-llm-config(params, caller) as cfg.
+  For each w in cfg's writes:
+    do set-being on the being $cfg.targetId with { field: $w.field, value: $w.value, merge: false } as wrote.
+  Return beingId: $cfg.targetId.

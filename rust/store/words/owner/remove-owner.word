@@ -1,0 +1,6 @@
+When a being removes the owner of a space:
+  If no caller, refuse with "remove-owner: identity required" as unauthorized.
+  see space-id-of(target) as spaceId.
+  If not may-remove-owner(spaceId, caller), refuse with "remove-owner: only the owner of the space's parent may clear its owner, and the space must have a removable owner" as forbidden.
+  do set-space on the space $spaceId with { field: "owner", value: null } as cleared.
+  Return ownerRemoved: true, spaceId: $spaceId.

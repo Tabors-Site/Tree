@@ -1,0 +1,7 @@
+When a being sets the owner of a space:
+  If no caller, refuse with "set-owner: identity required" as unauthorized.
+  If no newOwnerId, refuse with "set-owner: newOwnerId is required" as invalid-input.
+  see space-id-of(target) as spaceId.
+  If not may-set-owner(spaceId, newOwnerId, caller), refuse with "set-owner: only the space's current owner, or the owner of its parent, may set its owner" as forbidden.
+  do set-space on the space $spaceId with { field: "owner", value: $newOwnerId } as set.
+  Return ownerSet: true, spaceId: $spaceId, newOwnerId: $newOwnerId.

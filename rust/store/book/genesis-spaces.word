@@ -1,0 +1,31 @@
+# genesis-spaces.word — the making of the place, told in I's own words. Faithful to sprout.js
+# ensureSpaceRoot: first the place root, then heaven, then heaven's nine rooms (my working memory
+# surfaced as spaces), then the host's two rooms and the factory's two. Each sentence is ONE word =
+# ONE moment = ONE fact (the Spacebar Law); each lays a do:create-space fact on the new space's reel,
+# the space's name standing as its id.
+#
+# Each room is spoken WITH its parent: `I make X in Y.` — the parent nests (parent -> position). The
+# COORD is NOT spoken here: an un-placed creation gets a derived spot automatically (with_default_
+# placement), so spaces are never hardcoded and every future space gets a position for free. Speak
+# `... at x, y.` only to pin a specific spot.
+#
+# The place root — the story's outermost space, off which every being and tree hangs.
+I make the root.
+# Heaven — my home room, the dot, where the runtime stands.
+I make heaven in root.
+# The nine rooms of heaven, in order: my working memory, each surfaced as a space.
+I make extensions in heaven.
+I make tools in heaven.
+I make ables in heaven.
+I make operations in heaven.
+I make source in heaven.
+I make threads in heaven.
+I make histories in heaven.
+I make host in heaven.
+I make factory in heaven.
+# The host's two rooms — the HTTP listener and the WebSocket pool.
+I make http in host.
+I make websocket in host.
+# The factory's two rooms — the live stamper lanes and the reel projections.
+I make present in factory.
+I make past in factory.

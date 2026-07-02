@@ -1,0 +1,7 @@
+When a being takes a able at a space:
+  see able-spec-for-grant(able, targetId) as found.
+  If no found, refuse with "able is not installed on this space or any ancestor".
+  If not is-grabbable(found), refuse with "able is not take-acquirable; try ask-able".
+  If already-holds(caller, able, found), Return able, anchorSpaceId: $found.anchor, already: true, granteeBeingId: $caller, factParams: { able: $able, anchorSpaceId: $found.anchor, outcome: "already" }.
+  see grant-internal(caller, able, found) as granted.
+  Return able, anchorSpaceId: $found.anchor, granted: true, granteeBeingId: $caller, factParams: { able: $granted.able, anchorSpaceId: $granted.anchorSpaceId, anchorBeingId: $granted.anchorBeingId, grantedBy: $granted.grantedBy }.

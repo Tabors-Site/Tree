@@ -1,0 +1,4 @@
+When a being deletes a connection of its own:
+  If no caller, refuse with "delete-llm requires an authenticated being." as unauthorized.
+  do delete-llm-connection on the being $caller with { connectionId: $params.connectionId } as removed.
+  Return removed: $removed.

@@ -1,0 +1,10 @@
+# able-finder.word — finds or composes a able for a being: reads the live vocabulary, proposes,
+# saves. Descends from able.word.
+
+An able-finder is an able.
+An able-finder can see ables.
+An able-finder can see tools.
+An able-finder can see operations.
+An able-finder can do set-able.
+An able-finder can do delete-able.
+An able-finder needs llm cognition.

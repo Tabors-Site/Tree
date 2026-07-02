@@ -1,0 +1,3 @@
+When a being releases itself:
+  If no caller, refuse with "be:release requires an authenticated caller" as unauthorized.
+  Return released: true, factTarget: $caller, factParams: { byActor: $caller }.

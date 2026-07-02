@@ -16,8 +16,6 @@
 // The fingerprint deliberately EXCLUDES signatures, pubkeys, hashes-of-signed-content, and ords — those
 // vary per plant (fresh story key) or are covered by treeverify's chain checks, not conformance.
 
-use std::path::PathBuf;
-
 use treehash::{canonicalize, Json};
 
 fn get<'a>(v: &'a Json, k: &str) -> Option<&'a Json> {
@@ -36,20 +34,11 @@ fn jstr(s: &str) -> Json {
     Json::Str(s.to_string())
 }
 
-fn seed_dir() -> PathBuf {
-    match std::env::var("TREE_SEED_DIR") {
-        Ok(d) if !d.is_empty() => PathBuf::from(d),
-        _ => PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../seed")),
-    }
-}
-
 /// Plant a fresh world and project its key-independent fingerprint.
 fn plant_fingerprint(scratch: &str) -> String {
     let dir = std::env::temp_dir().join(scratch);
     let _ = std::fs::remove_dir_all(&dir);
-    let seed = seed_dir();
-    let born = treebook::full_genesis(&seed, &dir, &treebook::seed_vocabulary(&seed))
-        .expect("the world is born");
+    let born = treebook::full_genesis(&dir).expect("the world is born");
 
     // the coined vocabulary IN FIRST-COIN CHAIN ORDER off the being Am's reel (the fold order itself),
     // each with its binding kind — the word-set the whole system resolves against.

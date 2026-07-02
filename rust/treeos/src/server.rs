@@ -125,13 +125,12 @@ pub fn run() {
             }
         }
     } else if args.get(1).map(String::as_str) == Some("genesis") {
-        // (RE)PLANT A FRESH WORLD from the seed:  treeos genesis [store-dir] [seed-dir]
+        // (RE)PLANT A FRESH WORLD from the embedded store:  treeos genesis [store-dir]
         // The store is gitignored, so a delete is recovered here — the I reads the whole book (vocabulary
         // coined, spaces + delegates born, grants run) via treebook::full_genesis. This is pure EDGE: the
         // CLI wiring the genesis WORDS (genesis-spaces/-delegates/-home.word) to disk; it decides nothing.
         let store = args.get(2).cloned().unwrap_or_else(default_store);
-        let seed = args.get(3).cloned().unwrap_or_else(|| "seed".to_string());
-        std::process::exit(plant_world(Path::new(&store), Path::new(&seed)));
+        std::process::exit(plant_world(Path::new(&store)));
     } else if args.get(1).map(String::as_str) == Some("peer-fact") {
         // emit THIS reality's signed address-fact for a peer to pin in its Peering cache:
         //   treeos peer-fact <reality-domain> <host> <port> [transport]
@@ -190,13 +189,12 @@ fn default_store() -> String {
 }
 
 // ── genesis: (re)plant a fresh world from the seed's genesis book ─────────────
-fn plant_world(store: &Path, seed: &Path) -> i32 {
+fn plant_world(store: &Path) -> i32 {
     if store.exists() {
         eprintln!("treeos genesis: {} already exists — remove it first to replant", store.display());
         return 1;
     }
-    let vocab = treebook::seed_vocabulary(seed);
-    match treebook::full_genesis(seed, store, &vocab) {
+    match treebook::full_genesis(store) {
         Ok(b) => {
             println!(
                 "world born at {}: I={} vocabulary={} spaces={} delegates={}",

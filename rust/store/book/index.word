@@ -1,0 +1,98 @@
+# index.word — the genesis book's reading order. The boot reads this file first; each line is one
+# word I take up, in dependency order (the foundation flats descend from word.word; the rest follow).
+# THE ONE declaration of the order: a word is in the store iff it is in this book (the drift gate
+# holds the two equal). `I read <word>.` takes up an op/concept word; `I read the able <name>.`
+# takes up an able-spec (the able namespace — words/ables/).
+
+I read word.
+I read iam.
+I read base.
+I read in.
+I read out.
+I read chain.
+I read history.
+I read story.
+I read fold.
+I read see.
+I read do.
+I read name.
+I read being.
+I read space.
+I read matter.
+I read weave.
+I read be.
+I read call.
+I read can.
+I read recall.
+I read able.
+I read flow.
+I read verbs.
+I read if.
+I read while.
+I read for.
+I read delete-able.
+I read set-able.
+I read set-being-flow.
+I read the able able-finder.
+I read the able able-manager.
+I read the able angel.
+I read the able arrival.
+I read the able birther.
+I read the able cherub.
+I read the able federation-manager.
+I read the able flow-composer.
+I read the able global.
+I read the able history-manager.
+I read the able http-server.
+I read the able human.
+I read the able llm-assigner.
+I read the able merge-mediator.
+I read the able public.
+I read the able scribe.
+I read the able story-manager.
+I read the able websocket-pool.
+I read ask-able.
+I read take-able.
+I read cherub-connect.
+I read cherub.
+I read kill.
+I read release.
+I read switch.
+I read truename.
+I read close-story.
+I read delete-config.
+I read set-config.
+I read create-matter.
+I read create-space.
+I read credential-attach.
+I read credential-detach.
+I read credential-read.
+I read credential-reset.
+I read accept-template.
+I read fulfill-request.
+I read offer-being.
+I read offer-template.
+I read refuse-request.
+I read reject-template.
+I read request-template.
+I read grant-able.
+I read delete-pointer.
+I read history-manager.
+I read key.
+I read add-llm.
+I read assign-slot.
+I read delete-llm.
+I read set-being-llm.
+I read set-space-llm.
+I read set-story-llm.
+I read add-llm-connection.
+I read assign-llm-slot.
+I read delete-llm-connection.
+I read update-llm-connection.
+I read model.
+I read move.
+I read remove-owner.
+I read set-owner.
+I read portal.
+I read set-render.
+I read set-world-signal.

@@ -1,0 +1,4 @@
+When a being adds an llm connection of its own:
+  If no caller, refuse with "add-llm requires an authenticated being. Claim or register through @cherub first." as unauthorized.
+  do add-llm-connection on the being $caller with { name: $params.name, baseUrl: $params.baseUrl, model: $params.model, apiKey: $params.apiKey } as added.
+  Return added: $added.

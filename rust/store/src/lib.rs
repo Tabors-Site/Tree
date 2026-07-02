@@ -547,3 +547,143 @@ impl HostResolver for Resolvers {
 pub(crate) fn arg(args: &[Json], i: usize) -> &Json {
     args.get(i).unwrap_or(&Json::Null)
 }
+
+// ── THE STORE API — the embedded words + the book (the engine boots from THESE, never from seed/) ──
+include!(concat!(env!("OUT_DIR"), "/words_gen.rs"));
+
+/// The `.word` body at a store-relative path (`words/iam.word`, `words/cherub/kill.word`). Embedded at
+/// build time; `TREE_STORE_DIR` overrides to a live disk tree (iterate on words without recompiling —
+/// the override is the WHOLE store root, i.e. a dir holding `words/` + `book/`).
+pub fn word(rel: &str) -> Option<String> {
+    if let Ok(root) = std::env::var("TREE_STORE_DIR") {
+        if !root.is_empty() {
+            return std::fs::read_to_string(std::path::Path::new(&root).join(rel)).ok();
+        }
+    }
+    WORDS.iter().find(|(r, _)| *r == rel).map(|(_, t)| t.to_string())
+}
+
+/// A book text by name (`index.word`, `genesis.word`, `genesis-spaces.word`, …).
+pub fn book(rel: &str) -> Option<String> {
+    let rel = format!("book/{rel}");
+    if let Ok(root) = std::env::var("TREE_STORE_DIR") {
+        if !root.is_empty() {
+            return std::fs::read_to_string(std::path::Path::new(&root).join(&rel)).ok();
+        }
+    }
+    BOOK.iter().find(|(r, _)| *r == rel.as_str()).map(|(_, t)| t.to_string())
+}
+
+/// An able-spec's `.word` (the `words/ables/` namespace — `the able <name>`).
+pub fn able_word(name: &str) -> Option<String> {
+    word(&format!("words/ables/{name}.word"))
+}
+
+/// The name a store file coins as (treebook::op_word_name's rule): the stem, except `create`/`index`
+/// files coin as their bundle dir's name (transitional until the M1C rename).
+fn coined_name(rel: &str) -> String {
+    let p = std::path::Path::new(rel);
+    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+    if stem == "create" || stem == "index" {
+        if let Some(parent) = p.parent().and_then(|d| d.file_name()).and_then(|s| s.to_str()) {
+            return parent.to_string();
+        }
+    }
+    stem
+}
+
+/// Resolve a coined word NAME (outside the able namespace) to its store-relative path.
+pub fn word_path(name: &str) -> Option<String> {
+    WORDS
+        .iter()
+        .map(|(r, _)| *r)
+        .find(|r| !r.starts_with("words/ables/") && coined_name(r) == name)
+        .map(|r| r.to_string())
+}
+
+/// An OP word's body: `words/<noun>/<op>.word` when the noun bundle carries it, else the unique
+/// bundle claiming the coined name. This replaces treeibp::op_word_file's two-root disk search.
+pub fn op_word(op: &str, noun: Option<&str>) -> Option<String> {
+    if let Some(n) = noun {
+        if let Some(t) = word(&format!("words/{n}/{op}.word")) {
+            return Some(t);
+        }
+    }
+    word_path(op).and_then(|rel| word(&rel))
+}
+
+/// THE READING ORDER — parse `book/index.word` (`I read <word>.` / `I read the able <name>.`) into
+/// store-relative paths, in book order. The ONE declaration of the genesis vocabulary; the Rust
+/// string arrays it replaced are dead. A malformed line is a hard error: the book must read.
+///
+/// FLOOR NOTE (WORD-DRIVEN-PARSER.md): this two-shape reader is the book's bootstrap floor — the
+/// index must be readable BEFORE any vocabulary folds. No regex, no third shape; when the generic
+/// frame reader (M3) can read `I read X.` off the declared verb `Read`, this collapses into it.
+pub fn vocabulary() -> Vec<String> {
+    let text = book("index.word").expect("book/index.word is the reading order — the store must carry it");
+    let mut out = Vec::new();
+    for (i, line) in text.lines().enumerate() {
+        let t = line.trim();
+        if t.is_empty() || t.starts_with('#') {
+            continue;
+        }
+        let body = t
+            .strip_prefix("I read ")
+            .and_then(|s| s.strip_suffix('.'))
+            .unwrap_or_else(|| panic!("book/index.word:{}: not an `I read <word>.` line: {t}", i + 1));
+        let rel = if let Some(able) = body.strip_prefix("the able ") {
+            let rel = format!("words/ables/{able}.word");
+            assert!(word(&rel).is_some(), "book/index.word:{}: no able-spec {rel}", i + 1);
+            rel
+        } else {
+            word_path(body).unwrap_or_else(|| {
+                panic!("book/index.word:{}: `{body}` names no word in the store", i + 1)
+            })
+        };
+        out.push(rel);
+    }
+    out
+}
+
+/// THE STORE DRIFT GATE (boot + test): the book index is TOTAL and EXACT over the coined vocabulary —
+/// every indexed name resolves (vocabulary() panics otherwise), every `.word` under `words/` is either
+/// indexed or explicitly PENDING (a word in the store but not yet coined at genesis). A word cannot
+/// enter the store without entering the book, and vice versa.
+pub fn assert_no_drift() -> Result<(), String> {
+    // words present in the store but NOT read by the genesis book — each with the reason. Shrink-only.
+    const UNINDEXED_PENDING: &[(&str, &str)] = &[
+        // the materials op-words: resolved on demand by op_word (the runtime fold's file_of), never
+        // coined by genesis today. Indexing them = a coined-vocabulary change (a fingerprint change),
+        // parked for Tabor with the M1C op renames.
+        ("words/being/grant-inheritation.word", "materials op — not coined at genesis (yet)"),
+        ("words/being/revoke-able.word", "materials op — not coined at genesis (yet)"),
+        ("words/being/revoke-inheritation.word", "materials op — not coined at genesis (yet)"),
+        ("words/being/set-being.word", "materials op — not coined at genesis (yet)"),
+        ("words/matter/end-matter.word", "materials op — not coined at genesis (yet)"),
+        ("words/matter/purge-content.word", "materials op — not coined at genesis (yet)"),
+        ("words/matter/rename-matter.word", "materials op — not coined at genesis (yet)"),
+        ("words/matter/set-matter.word", "materials op — not coined at genesis (yet)"),
+        ("words/space/end-space.word", "materials op — not coined at genesis (yet)"),
+        ("words/space/make-heaven.word", "materials op — not coined at genesis (yet)"),
+        ("words/space/set-space.word", "materials op — not coined at genesis (yet)"),
+    ];
+    let indexed: std::collections::HashSet<String> = vocabulary().into_iter().collect();
+    let mut missing = Vec::new();
+    for (rel, _) in WORDS {
+        if indexed.contains(*rel) {
+            continue;
+        }
+        if UNINDEXED_PENDING.iter().any(|(p, _)| p == rel) {
+            continue;
+        }
+        missing.push(*rel);
+    }
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "STORE DRIFT: in the store but not in the book (book/index.word) and not PENDING: {}",
+            missing.join(", ")
+        ))
+    }
+}

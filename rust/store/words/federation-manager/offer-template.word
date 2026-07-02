@@ -1,0 +1,8 @@
+When the operator offers a template to a peer:
+  If no caller, refuse with "offer-template requires an authenticated being." as unauthorized.
+  see resolve-federation-spec(params, caller) as spec.
+  For each w in spec's writes:
+    do set-being on the being $spec.managerId with { field: $w.field, value: $w.value, merge: false } as wrote.
+  see dispatch-federation-intent($spec.dispatch.peer, $spec.dispatch.intent, $spec.dispatch.payload) as sent.
+  do set-being on the being $spec.managerId with { field: $spec.sentWrite.field, value: $spec.sentWrite.value, merge: false } as marked.
+  Return negotiationId: $spec.negotiationId, peer: $spec.peer, subtreePath: $spec.subtreePath, status: "offered".

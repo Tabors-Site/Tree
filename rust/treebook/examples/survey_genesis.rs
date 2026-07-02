@@ -12,104 +12,21 @@
 // NODE-FREE: the whole pipeline is pure Rust over the determinism spine. Run with:
 //   cargo run -p treebook --example survey_genesis
 
-use std::path::PathBuf;
 
 use treebook::{survey_book, BookSource, Violation};
 use treegenesis::plant_and_ignite;
 
-/// the seed dir (env override or the repo's seed/).
-fn seed_dir() -> PathBuf {
-    match std::env::var("TREE_SEED_DIR") {
-        Ok(d) if !d.is_empty() => PathBuf::from(d),
-        _ => PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../seed")),
-    }
-}
-
-/// read a seed `.word` (or a flat file under store/), returning (label, text). The label is the path
-/// relative to the seed, the catalog's provenance.
-fn src(rel: &str) -> Option<BookSource> {
-    let p = seed_dir().join(rel);
-    match std::fs::read_to_string(&p) {
-        Ok(text) => Some(BookSource { file: rel.to_string(), text }),
-        Err(_) => None,
-    }
-}
-
-/// THE DEPENDENCY ORDER. word.word -> the foundation (descent order, GENESIS.md) -> the op bundles ->
-/// the able bundles -> genesis.word. Foundation words are listed explicitly in descent order; the op +
-/// able bundles are DISCOVERED recursively (so nothing is missed), with the foundation flats excluded.
+/// THE DEPENDENCY ORDER — the store's own book (treeseed::vocabulary reads book/index.word), then
+/// genesis.word last (it runs over the folded vocabulary + ables). The old hardcoded path arrays are
+/// dead: the index IS the order.
 fn book_in_dependency_order() -> Vec<BookSource> {
-    let mut sources = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-    let push = |sources: &mut Vec<BookSource>, seen: &mut std::collections::HashSet<String>, rel: &str| {
-        if seen.insert(rel.to_string()) {
-            if let Some(s) = src(rel) {
-                sources.push(s);
-            }
-        }
-    };
-
-    // 1. the root + the foundation, in DESCENT order (GENESIS.md conceptWords list).
-    let foundation = [
-        "store/words/word.word",
-        "store/words/iam.word",
-        "store/words/base.word",
-        "store/words/in.word",
-        "store/words/out.word",
-        "store/words/chain.word",
-        "store/words/history.word",
-        "store/words/story.word",
-        "store/words/fold.word",
-        "store/words/see.word",
-        "store/words/do.word",
-        "store/words/name.word",
-        "store/words/being.word",
-        "store/words/space.word",
-        "store/words/matter.word",
-        "store/words/weave.word",
-        "store/words/be.word",
-        "store/words/call.word",
-        "store/words/can.word",
-        "store/words/recall.word",
-        "store/words/able.word",
-        "store/words/flow.word",
-        "store/words/verbs.word", // the verb schema (folded by wordFold)
-        // control-flow words
-        "store/words/if.word",
-        "store/words/while.word",
-        "store/words/for.word",
-    ];
-    for rel in foundation {
-        push(&mut sources, &mut seen, rel);
+    let mut sources: Vec<BookSource> = treeseed::vocabulary()
+        .into_iter()
+        .filter_map(|rel| treeseed::word(&rel).map(|text| BookSource { file: rel, text }))
+        .collect();
+    if let Some(text) = treeseed::book("genesis.word") {
+        sources.push(BookSource { file: "book/genesis.word".to_string(), text });
     }
-
-    // 2. the OP bundles + the ABLE bundles: every remaining .word under store/words, discovered
-    //    recursively, sorted for a stable read order. The foundation flats are already `seen`.
-    let words_root = seed_dir().join("store/words");
-    let mut rest: Vec<String> = Vec::new();
-    let mut stack = vec![words_root.clone()];
-    while let Some(d) = stack.pop() {
-        if let Ok(rd) = std::fs::read_dir(&d) {
-            for ent in rd.flatten() {
-                let p = ent.path();
-                if p.is_dir() {
-                    stack.push(p);
-                } else if p.extension().and_then(|e| e.to_str()) == Some("word") {
-                    if let Ok(rel) = p.strip_prefix(seed_dir()) {
-                        rest.push(rel.to_string_lossy().to_string());
-                    }
-                }
-            }
-        }
-    }
-    rest.sort();
-    for rel in rest {
-        push(&mut sources, &mut seen, &rel);
-    }
-
-    // 3. genesis.word - the grant sequence, read LAST (it runs over the folded vocabulary + ables).
-    push(&mut sources, &mut seen, "store/genesis.word");
-
     sources
 }
 

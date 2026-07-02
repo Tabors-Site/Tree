@@ -1,0 +1,19 @@
+# end-matter.word — end-matter: retire a matter (materials/matter/ops.js, the end-matter DO op).
+#
+# A being deletes a matter. There is no host out: bytes are content-addressed and possibly shared, so
+# end-matter never touches the blob (casSweep + purge-content own blob lifecycle). The whole act IS the
+# do:end-matter fact; the matter reducer FOLDS its two consequences from that one verb (absent from its
+# space, unheld). WORD-SOLE (handler-less): end-matter.word is the ONLY path (do.js runOpWord runs it).
+# The control strand is .word; the lone substrate read is `resolve-end-matter-spec` (endMatterHost.js):
+# load the matter and gate author-or-root-owner, reusing the SAME loadTargetRow + resolveRootSpace +
+# getSpaceOwner the handler called. A host throw is this word's refusal.
+#
+# The verb carries no params (the reducer derives the tombstone from the verb itself), so the spec
+# returns empty factParams plus the matterId; the one auto-Fact path in do.js (runOpWord ->
+# stampsWordFact, idFrom:"matterId") lays the caller-attributed do:end-matter fact on the MATTER's reel.
+#
+# The standard trigger binds `target` (the matter {kind,id} / id), the `caller`, and `branch`.
+
+When a being ends a matter:
+  see resolve-end-matter-spec(target, caller, branch) as spec.
+  Return matterId: $spec.matterId, factParams: $spec.factParams.

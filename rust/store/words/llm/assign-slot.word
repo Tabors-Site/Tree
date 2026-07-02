@@ -1,0 +1,4 @@
+When a being assigns a slot of its own:
+  If no caller, refuse with "assign-slot requires an authenticated being." as unauthorized.
+  do assign-llm-slot on the being $caller with { slot: $params.slot, connectionId: $params.connectionId } as assigned.
+  Return assigned: $assigned.

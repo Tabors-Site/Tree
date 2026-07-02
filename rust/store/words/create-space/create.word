@@ -1,0 +1,4 @@
+When a being brings a space into a place:
+  If no caller, refuse with "create-space requires an identified actor".
+  see resolve-birth-space(target, targetKind, params, caller, branch) as birth.
+  Return spaceId: $birth.spaceId, factParams: $birth.enrichedSpec.

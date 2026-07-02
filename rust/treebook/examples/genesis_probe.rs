@@ -7,8 +7,6 @@
 //   2. VERIFY the born world: the vocabulary folds, the root + heaven spaces exist, the delegates exist
 //      (be:birth on their reels), the grants landed, every reel chain-verifies.
 
-use std::path::PathBuf;
-
 use treehash::Json;
 use treestore::{read_reel_file, verify_fact_chain};
 use treewordfold::{fold_word_set, resolve_word};
@@ -29,59 +27,6 @@ fn ok(v: &Json) -> bool {
     matches!(get(v, "ok"), Some(Json::Bool(true)))
 }
 
-fn seed_dir() -> PathBuf {
-    match std::env::var("TREE_SEED_DIR") {
-        Ok(d) if !d.is_empty() => PathBuf::from(d),
-        _ => PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../seed")),
-    }
-}
-
-/// The vocabulary in dependency order (the foundation flats, then every remaining op/able `.word`).
-fn vocabulary() -> Vec<String> {
-    let mut out = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-    let mut push = |out: &mut Vec<String>, rel: &str| {
-        if seen.insert(rel.to_string()) {
-            out.push(rel.to_string());
-        }
-    };
-    for rel in [
-        "store/words/word.word", "store/words/iam.word", "store/words/base.word",
-        "store/words/in.word", "store/words/out.word", "store/words/chain.word",
-        "store/words/history.word", "store/words/story.word", "store/words/fold.word",
-        "store/words/see.word", "store/words/do.word", "store/words/name.word",
-        "store/words/being.word", "store/words/space.word", "store/words/matter.word",
-        "store/words/weave.word", "store/words/be.word", "store/words/call.word",
-        "store/words/can.word", "store/words/recall.word", "store/words/able.word",
-        "store/words/flow.word", "store/words/verbs.word", "store/words/if.word",
-        "store/words/while.word", "store/words/for.word",
-    ] {
-        push(&mut out, rel);
-    }
-    let words_root = seed_dir().join("store/words");
-    let mut rest = Vec::new();
-    let mut stack = vec![words_root];
-    while let Some(d) = stack.pop() {
-        if let Ok(rd) = std::fs::read_dir(&d) {
-            for ent in rd.flatten() {
-                let p = ent.path();
-                if p.is_dir() {
-                    stack.push(p);
-                } else if p.extension().and_then(|e| e.to_str()) == Some("word") {
-                    if let Ok(rel) = p.strip_prefix(seed_dir()) {
-                        rest.push(rel.to_string_lossy().to_string());
-                    }
-                }
-            }
-        }
-    }
-    rest.sort();
-    for rel in rest {
-        push(&mut out, &rel);
-    }
-    out
-}
-
 fn main() {
     let dir = std::env::temp_dir().join("treebook-full-genesis");
     let _ = std::fs::remove_dir_all(&dir);
@@ -89,7 +34,7 @@ fn main() {
     println!("================ THE FULL CLEAN GENESIS (Node-free) ================");
     println!("fresh store: {}", dir.display());
 
-    let born = match treebook::full_genesis(&seed_dir(), &dir, &vocabulary()) {
+    let born = match treebook::full_genesis(&dir) {
         Ok(b) => b,
         Err(e) => {
             eprintln!("GENESIS REFUSED: {e}");

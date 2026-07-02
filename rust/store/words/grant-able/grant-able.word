@@ -1,0 +1,7 @@
+When a being grants a able to a being:
+  If no caller, refuse with "grant-able: identity required (the grantor's beingId)" as unauthorized.
+  If no able, refuse with "grant-able: able is required" as invalid-input.
+  If no anchorSpaceId, and no anchorBeingId, refuse with "grant-able: one of anchorSpaceId or anchorBeingId is required" as invalid-input.
+  If anchorSpaceId, and anchorBeingId, refuse with "grant-able: only one of anchorSpaceId or anchorBeingId may be set" as invalid-input.
+  If not able-exists(able), refuse with "grant-able: able is not registered" as invalid-input.
+  Return able: $able, grantee: $targetId, grantedBy: $caller.

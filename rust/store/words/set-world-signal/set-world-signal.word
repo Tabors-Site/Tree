@@ -1,0 +1,8 @@
+When a being publishes a world signal:
+  If not valid-namespace(namespace), refuse with "set-world-signal: namespace must be kebab-case" as invalid-input.
+  If not valid-key(key), refuse with "set-world-signal: key segments must be kebab-case" as invalid-input.
+  see parse-signal-value(value) as value.
+  see story-root() as root.
+  If no root, refuse with "set-world-signal: story root not initialized" as internal.
+  see signal-fact(namespace, key, value) as setSpaceParams.
+  Return published: true, namespace: $namespace, key: $key, value: $value, rootId: $root, factParams: $setSpaceParams.

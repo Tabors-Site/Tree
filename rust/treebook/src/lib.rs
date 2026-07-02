@@ -739,62 +739,18 @@ fn op_word_name(rel: &str) -> String {
     stem
 }
 
-/// The vocabulary the I reads, in dependency order: the foundation flats first (word→iam→…→for), then
-/// every remaining `.word` under `store/words`, sorted. THE ONE derivation (treeos genesis, the tests,
-/// the examples all call this) — until the order is declared in word (`book/index.word`, the plan's
-/// M1B), this fn is its single Rust stand-in; do not copy the list anywhere else.
-pub fn seed_vocabulary(seed: &Path) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-    let mut push = |out: &mut Vec<String>, rel: String| {
-        if seen.insert(rel.clone()) {
-            out.push(rel);
-        }
-    };
-    for f in [
-        "word", "iam", "base", "in", "out", "chain", "history", "story", "fold", "see", "do", "name",
-        "being", "space", "matter", "weave", "be", "call", "can", "recall", "able", "flow", "verbs",
-        "if", "while", "for",
-    ] {
-        push(&mut out, format!("store/words/{f}.word"));
-    }
-    let mut rest = Vec::new();
-    let mut stack = vec![seed.join("store/words")];
-    while let Some(d) = stack.pop() {
-        if let Ok(rd) = std::fs::read_dir(&d) {
-            for ent in rd.flatten() {
-                let p = ent.path();
-                if p.is_dir() {
-                    stack.push(p);
-                } else if p.extension().and_then(|e| e.to_str()) == Some("word") {
-                    if let Ok(rel) = p.strip_prefix(seed) {
-                        rest.push(rel.to_string_lossy().to_string());
-                    }
-                }
-            }
-        }
-    }
-    rest.sort();
-    for rel in rest {
-        push(&mut out, rel);
-    }
-    out
-}
-
 /// THE FULL GENESIS, NODE-FREE. Plant "I" on a fresh store, then I reads the whole book and the world
-/// is born. `seed_dir` is the seed root (its `store/` holds the vocabulary + the creation `.word` +
-/// genesis.word; its `store/words/ables` holds the able words the grant runner folds). `dir` is the
-/// FRESH store the world is written to (NEVER store/past). Returns the `BornWorld` anchors + tallies.
+/// is born. The book IS the rust store (treeseed): the reading order is `book/index.word`
+/// (treeseed::vocabulary), every word body is embedded beside its floor, the creation words + grants
+/// come from `book/`, and the able-specs the grant runner folds come from the `words/ables/`
+/// namespace. NO seed/ read anywhere. `dir` is the FRESH store the world is written to (NEVER
+/// store/past). Returns the `BornWorld` anchors + tallies.
 ///
 /// The reader is GENERIC: it coins whatever vocabulary statements it reads and seals whatever creation
 /// acts it reads; the only host knowledge is the ANCHOR BINDINGS (the ids of the spaces/beings already
 /// created), which the runner needs to resolve the grant flow's name refs — looking up an id you just
 /// created is floor, the grant is the Word (exactly genesis.word's header doctrine).
-pub fn full_genesis(
-    seed_dir: &Path,
-    dir: &Path,
-    vocabulary: &[String],
-) -> Result<BornWorld, GenesisBookError> {
+pub fn full_genesis(dir: &Path) -> Result<BornWorld, GenesisBookError> {
     // 1. IGNITE - the razor-thin egg: the ONE moment that brings the SIGNER into being, the Name "I".
     //    The being "Am" is NOT egg-born; it is the FIRST WORD I read from the book (below).
     let (planted, key) = treegenesis::plant_and_ignite(dir, STORY.as_str())
@@ -820,7 +776,7 @@ pub fn full_genesis(
     //     one inherent ordering: the first word births the being every coin then lands on. Read through
     //     the general reader as the Name "I" onto the being "Am"; the verse-birth is Am's reel fact #0.
     let first_word = AM_BEING; // "Am" - the first word / first being
-    if let Ok(sayer) = std::fs::read_to_string(seed_dir.join("store/words/iam.word")) {
+    if let Some(sayer) = treeseed::word("words/iam.word") {
         instate_book(I_NAME, first_word, &sayer, dir, "0", Some(sign_ref))?;
     }
 
@@ -831,20 +787,19 @@ pub fn full_genesis(
     //    not-yet-handled words (federation / llm — the other agent's) coin fine; the runtime guard only
     //    fires when a word is actually RUN (the creation + grant sequence below). Dependency order.
     let mut vocabulary_coined = 0;
-    for rel in vocabulary {
+    for rel in treeseed::vocabulary() {
         // iam.word (the sayer) was already read as the FIRST WORD above (it births Am); skip it here so
         // its verse is not re-read (Am is born once).
         if rel.ends_with("iam.word") {
             continue;
         }
-        let p = seed_dir.join(rel);
-        let text = match std::fs::read_to_string(&p) {
-            Ok(t) => t,
-            Err(_) => continue, // a missing optional source is skipped (the survey discovers the set)
+        let text = match treeseed::word(&rel) {
+            Some(t) => t,
+            None => continue, // vocabulary() already asserted every indexed word has a body
         };
         if is_op_word_file(&text) {
             // an op-word: one name-coin, no body run (the body runs only when the op is invoked).
-            let name = op_word_name(rel);
+            let name = op_word_name(&rel);
             if !name.is_empty() {
                 coin_word(&name, "op", &text, dir, "0", Some(sign_ref))?;
                 vocabulary_coined += 1;
@@ -860,15 +815,15 @@ pub fn full_genesis(
     //    the reader lowers to real facts. Each `I make <name>.` lays a do:create-space (a lowercase
     //    name) or a be:birth (a Capitalized Name) on the new reel; `I stand in heaven.` a do:move.
     let read_opt = |rel: &str, dir: &Path| -> Result<Option<BookRead>, GenesisBookError> {
-        match std::fs::read_to_string(seed_dir.join(rel)) {
-            Ok(text) => Ok(Some(read_creation(&text, dir, "0", Some(sign_ref))?)),
-            Err(_) => Ok(None),
+        match treeseed::book(rel) {
+            Some(text) => Ok(Some(read_creation(&text, dir, "0", Some(sign_ref))?)),
+            None => Ok(None),
         }
     };
 
     // the SPACES (genesis-spaces.word) — collect each created space's anchor (name -> reel id).
     let mut spaces: Vec<(String, String)> = Vec::new();
-    if let Some(read) = read_opt("store/genesis-spaces.word", dir)? {
+    if let Some(read) = read_opt("genesis-spaces.word", dir)? {
         for w in &read.words {
             if w.fact_id.is_some() {
                 if let Some(id) = created_space_id(&w.statement) {
@@ -880,7 +835,7 @@ pub fn full_genesis(
 
     // the DELEGATES (genesis-delegates.word) — collect each born being's anchor (able-name -> Name).
     let mut delegates: Vec<(String, String)> = Vec::new();
-    if let Some(read) = read_opt("store/genesis-delegates.word", dir)? {
+    if let Some(read) = read_opt("genesis-delegates.word", dir)? {
         for w in &read.words {
             if w.fact_id.is_some() {
                 if let Some(name) = created_being_name(&w.statement) {
@@ -892,7 +847,7 @@ pub fn full_genesis(
     }
 
     // MY PLACEMENT (genesis-home.word) — `I stand in heaven.` (the homeSpace half is a flagged gap).
-    let _ = read_opt("store/genesis-home.word", dir)?;
+    let _ = read_opt("genesis-home.word", dir)?;
 
     // 4. THE GRANTS — genesis.word's flow, run through the REAL runner with the anchor bindings so its
     //    name refs (cherub, heaven, root, …) resolve to the ids I just created. Each effect is a moment.
@@ -901,7 +856,7 @@ pub fn full_genesis(
         binds.push((k.clone(), jstr(v)));
     }
     let binds = Json::Obj(binds);
-    let grants_laid = run_grants(seed_dir, dir, &binds, sign_ref)?;
+    let grants_laid = run_grants(dir, &binds, sign_ref)?;
 
     Ok(BornWorld {
         i_name: planted.i_name,
@@ -939,16 +894,14 @@ fn created_being_name(statement: &str) -> Option<String> {
 /// bindings + the able-word folder + the materials/store op bodies + the story signer. Returns the
 /// count of grant facts laid. A denial surfaces as a Message (the grant flow refused on substrate).
 fn run_grants(
-    seed_dir: &Path,
     dir: &Path,
     binds: &Json,
     sign: &dyn Fn(&Json, &[String]) -> Json,
 ) -> Result<usize, GenesisBookError> {
-    let text = match std::fs::read_to_string(seed_dir.join("store/genesis.word")) {
-        Ok(t) => t,
-        Err(_) => return Ok(0), // no grants file — nothing to grant
+    let text = match treeseed::book("genesis.word") {
+        Some(t) => t,
+        None => return Ok(0), // no grants file — nothing to grant
     };
-    let ables_dir = seed_dir.join("store/words/ables");
     let actor = i_actor();
     // genesis.word's grants are INLINE deeds (do:grant-able lays its one fact directly — the JS
     // grant-able op's world effect is the one do:grant-able fact on the grantee's reel). Run with NO
@@ -964,7 +917,7 @@ fn run_grants(
         &actor,
         dir,
         "0",
-        |name| treeibp::fold_word_able(name, &ables_dir),
+        |name| treeseed::able_word(name).map(|t| treeibp::fold_able_noun(name, &t)),
         |_op, _noun| None,
         binds,
         None,

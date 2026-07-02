@@ -1,0 +1,26 @@
+# set-matter.word — set-matter: write a Matter field (matter/ops.js, the set-matter DO op).
+#
+# A being writes one field on a Matter — a schema scalar (name / content / spaceId / beingId / coord)
+# or a qualities path (qualities.<ns>[.<inner>]). WORD-SOLE (handler-less): set-matter.word is the ONLY
+# path (do.js runOpWord runs it). The CONTROL strand is .word: the `field`-required gate and the
+# return. The genuine substrate READS — load the matter row, the CAS-content existence check
+# (isCasRef + hasContent), the DELETED-sentinel comparisons (spaceId/beingId), and the COORD-BOUNDS
+# check against the matter's space size (assertMatterCoordInBounds reads Space.size and THROWS) — are
+# one host see-op, `resolve-set-matter-spec` (setMatterHost.js), reusing the SAME helpers the handler
+# called. It reimplements nothing and lays no fact; a host throw is this word's refusal.
+#
+# The word AUTHORS its fact: there is NO host: emit. resolve-set-matter-spec returns the validated
+# block { matterId, factParams } where factParams is the EXACT fact the dispatcher stamped before this
+# conversion — { field, value } (+ merge only when passed). The recorded `value` is the caller's
+# ORIGINAL value (the coord check VALIDATES but its filtered return was never the fact's value). The
+# word returns matterId: $spec.matterId, factParams: $spec.factParams; the ONE auto-Fact path in do.js
+# (runOpWord → stampsWordFact, idFrom:"matterId") lays the caller-attributed do:set-matter fact on the
+# MATTER's reel, and applySetField / applySetQualities fold it exactly as before.
+#
+# The STANDARD trigger binds `target` (the matter {kind,id} / id), the `field`, the `value`, the
+# `merge` flag, and `branch`.
+
+When a being sets a field on a matter:
+  If no field, refuse with "set-matter: `field` is required".
+  see resolve-set-matter-spec(target, field, value, merge, branch) as spec.
+  Return matterId: $spec.matterId, factParams: $spec.factParams.

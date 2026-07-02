@@ -1,0 +1,4 @@
+When a being deletes an llm connection:
+  If no caller, refuse with "delete-llm-connection requires an identified actor".
+  see resolve-connection-removal(target, params, caller, branch) as removal.
+  Return beingId: $removal.beingId, connectionId: $removal.connectionId, factParams: $removal.setBeingParams.

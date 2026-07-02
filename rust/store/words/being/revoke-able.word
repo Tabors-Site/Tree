@@ -1,0 +1,26 @@
+# revoke-able.word — revoke a able from a being (being/ops.js, the revoke-able DO op).
+#
+# The asymmetric counterpart of grant-able. Ables are auth (seed/AblesAreAuth.md): a being holds a
+# able by a grant entry on its reel; revoke removes the matching (able, anchor, grantedBy) tuple.
+# WORD-SOLE (handler-less): this `.word` is the ONLY path (do.js runOpWord runs it). The revoker's
+# capability is gated at the verb (the able-walk authorizes `revoke-able:<able>`); this validates the
+# request shape — exactly the gate chain the JS handler ran. There is NO substrate read: revoke removes
+# regardless (no able-exists check — you can revoke a able even if it is no longer registered), mirror-
+# ing revoke-inheritation (mode "revoke" drops the grantable check grant runs).
+#
+# The word authors NO factParams: like grant-able, it returns the caller-facing result and the ONE
+# auto-Fact path in do.js falls back to ctx.params (the raw revoke input — able + anchor + an explicit
+# grantedBy when the caller named one). The do:revoke-able fact lands on the grantee being's reel and
+# applyAbleGrants (reducerHelpers.js) drops the matching grant: it resolves grantedBy as
+# `params.grantedBy || fact.through`, so an OMITTED grantedBy revokes the CALLER's own grant (through =
+# the signer = the caller, byte-equal to the old handler defaulting grantedBy to identity.beingId), and
+# an EXPLICIT grantedBy revokes that specific grantor's grant. Same fold, both ways.
+#
+# The STANDARD trigger binds `target` (the grantee being), `targetId`, the `able`, the anchors, and the
+# explicit `grantedBy` (null when the caller revokes its own grant).
+
+When a being revokes a able from a being:
+  If no caller, refuse with "revoke-able: identity required (the revoker's beingId)" as unauthorized.
+  If no able, refuse with "revoke-able: `able` is required" as invalid-input.
+  If no anchorSpaceId, and no anchorBeingId, refuse with "revoke-able: one of `anchorSpaceId` or `anchorBeingId` is required" as invalid-input.
+  Return able: $able, granteeBeingId: $targetId, anchorSpaceId: $anchorSpaceId, anchorBeingId: $anchorBeingId.

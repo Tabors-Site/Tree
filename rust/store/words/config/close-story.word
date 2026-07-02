@@ -1,0 +1,25 @@
+# close-story.word — close-story: stop the running story (graceful shutdown), recorded as a
+# 5D NAME-ACT on the library reel.
+#
+# close-story is a STORY-LEVEL lifecycle act: closing the whole story halts EVERY future act across
+# ALL its reels — NOT close-history (which ends one branch). Its fact lives on the LIBRARY reel (the
+# out-of-history story reel, like config) as a bodiless verb:"name" name-act (act:"close-story"),
+# paired with the engine's dispatch gate that refuses acts once the story is closed.
+#
+# WORD-SOLE (Tabor's no-mirror law): NO JS handler. A name-act signs on the acting Name's own reel,
+# out of any history, which a world `.word` cannot reach — so this word only VALIDATES (the heaven-
+# authority gate) + authors the fact's `factParams`; do.js's runOpNameAct (op.word.factVerb="name")
+# lays the name-act on the library reel, then runs the post-seal `after-name-act` hook.
+#
+# The heaven-authority gate is the floor read `has-heaven-authority(caller)` (closeStoryHostEnv wraps
+# hasHeavenAuthority — heaven owner OR angel able, the SAME gate the JS handler used). The shutdown is
+# NOT in the word: the latch (markStoryClosed) + the 250ms self-SIGTERM are the op's `after-name-act`,
+# run ONLY after the close-story name-act SEALS — so a refused/unauthorized act never shuts the story
+# down (strictly safer than the old handler, which gated before but still ran the shutdown inline).
+#
+# The STANDARD trigger binds `caller` (the actor beingId) and `branch`.
+
+When a being closes the story:
+  If no caller, refuse with "close-story requires an authenticated being." as unauthorized.
+  If not has-heaven-authority(caller), refuse with "Only beings with heaven authority (owner or angel able) can close the story." as forbidden.
+  Return closing: true, factParams: { closedBy: $caller }.

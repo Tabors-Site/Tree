@@ -1,0 +1,12 @@
+When a being deletes a history pointer:
+  If no caller, refuse with "delete-pointer requires an authenticated being" as unauthorized.
+  see valid-pointer-name(name) as validName.
+  If no validName, refuse with "pointer name is invalid; must be a lowercase label (no consecutive or trailing hyphens)" as invalid-input.
+  If is-reserved-pointer(validName), refuse with "that pointer is reserved and cannot be deleted; re-point it via set-pointer instead" as forbidden.
+  see find-pointers-space-id() as historiesSpace.
+  If no historiesSpace, refuse with "the .histories heaven space was not found; story is not properly bootstrapped" as internal.
+  see read-pointers() as current.
+  see delete-pointer-map(current, validName) as outcome.
+  If no outcome, Return name: $validName, deleted: false, alreadyAbsent: true.
+  replace the space historiesSpace's qualities.pointers with outcome's map.
+  Return name: $validName, deleted: true, alreadyAbsent: false.
