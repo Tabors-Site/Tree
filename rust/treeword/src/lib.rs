@@ -473,35 +473,9 @@ fn effect_rules() -> &'static [(Regex, EffBuilder)] {
                 obj(node)
             },
         ),
-        // call <X>, saying <Y> [as <bind>].   -> a CALL (the quotative hinge: talk content).
-        (
-            Regex::new(r"(?i)^call\s+(.+?),\s*saying\s+(.+?)(?:\s+as\s+(\w+))?\.?$").unwrap(),
-            |m, _ctx| {
-                let mut node = vec![("kind", jstr("call")), ("of", ref_obj(&ref_key(&m[1]))), ("saying", ref_lit(m[2].trim()))];
-                if let Some(b) = m.get(3) {
-                    if !b.as_str().is_empty() {
-                        node.push(("bind", jstr(b.as_str())));
-                    }
-                }
-                obj(node)
-            },
-        ),
-        // call <X> to <Y>[, with <Z>] [as <bind>].   -> a CALL (the intent hinge: summon-to-act).
-        (
-            Regex::new(r"(?i)^call\s+(.+?)\s+to\s+([\w-]+)(?:,\s*with\s+(.+?))?(?:\s+as\s+(\w+))?\.?$").unwrap(),
-            |m, _ctx| {
-                let mut node = vec![("kind", jstr("call")), ("of", ref_obj(&ref_key(&m[1]))), ("to", jstr(&m[2].to_lowercase()))];
-                if let Some(w) = m.get(3) {
-                    node.push(("with", ref_lit(w.as_str().trim())));
-                }
-                if let Some(b) = m.get(4) {
-                    if !b.as_str().is_empty() {
-                        node.push(("bind", jstr(b.as_str())));
-                    }
-                }
-                obj(node)
-            },
-        ),
+        // (`call <X>, saying <Y>` (quotative) and `call <X> to <Y>[, with <Z>]` (intent) -> a CALL are now
+        // the WORD-DRIVEN READER (deed voice) — reader.rs `read_call`: `call` a verb from the word, the role
+        // hinges (saying/to/with/as) read there, ref-resolution the shared floor. Both regexes were DELETED.)
         // set the <kind> <ref>'s <field> to <value>.   (THE WALL write -> do:set-<kind>)
         (
             Regex::new(r"(?i)^set the (being|space|matter) ([\w-]+)'s (\$?[\w.]+) to (.+?)\.$").unwrap(),
@@ -1365,7 +1339,10 @@ pub fn parse_header(line: &str, state_var: &str) -> Option<Json> {
 
 /// parser.js `refKey(s)`: trim, strip trailing punctuation, a leading article, possessive `'s `→`.`,
 /// spaces→`-`.
-fn ref_key(s: &str) -> String {
+// FLOOR (reference resolution — shared with the deed-voice reader, reader.rs): normalize a reference
+// (strip trailing punctuation + a leading article, `'s `->`.`, spaces->`-`). A parse primitive, not
+// per-sentence meaning, so the reader reuses it rather than duplicating.
+pub(crate) fn ref_key(s: &str) -> String {
     let t = s.trim();
     let t = Regex::new(r"[,.;:]+$").unwrap().replace(t, "").to_string();
     let t = Regex::new(r"(?i)^(the|a|an)\s+").unwrap().replace(&t, "").to_string();
@@ -1381,7 +1358,7 @@ fn camel_key(s: &str) -> String {
         .to_string()
 }
 
-fn ref_obj(r: &str) -> Json {
+pub(crate) fn ref_obj(r: &str) -> Json {
     obj(vec![("ref", jstr(r))])
 }
 
@@ -1435,8 +1412,8 @@ fn operand_fields(v: &str) -> (&'static str, Json) {
     }
 }
 
-/// parser.js `refLit(v)`: `{ref}` or the bare value.
-fn ref_lit(v: &str) -> Json {
+/// parser.js `refLit(v)`: `{ref}` or the bare value. FLOOR — shared with the deed-voice reader.
+pub(crate) fn ref_lit(v: &str) -> Json {
     match oper(v) {
         Oper::Ref(r) => ref_obj(&r),
         Oper::Value(val) => val,

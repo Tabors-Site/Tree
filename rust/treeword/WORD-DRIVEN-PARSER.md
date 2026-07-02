@@ -342,6 +342,12 @@ the no-mirror law made structural.
 - Adding a `Regex::new(...)` for a sentence form. → It's a `.word` frame, not a regex.
 - "Porting one more rule from parser.js." → We are NOT copying parser.js. It is the disease.
 - Hardcoding a verb→act mapping in Rust (`"make" => be:birth`). → That mapping lives in `.word`.
+  - **THE SNEAKY FORM (caught 2026-07-01):** resolving the verb from the vocab and THEN `match verb.present
+    { "move" => move_act, "call" => read_call }` — a per-verb arm that emits a per-verb IR SHAPE — is STILL
+    this tripwire. The vocab-lookup is floor; the per-verb arm is the regex RELOCATED into the reader, not
+    removed. Adding a `"word" => shape` arm is "hardcoding one word at a time" wearing a vocab hat. The
+    parser must emit the VERB GENERICALLY (the verb name + object + roles, uniform); the op-name / shape /
+    what-it-does is the verb's `.word` + the word-driven fold. If you're writing a new arm per verb, STOP.
 - Special-casing the genesis verse / recall / any single sentence in the parser. → It's `.word`, read
   generically. (You did exactly this and it was reverted. See git.)
 - Growing the host axiom past the minimum to "make it work". → The minimum is fixed; grammar is `.word`.

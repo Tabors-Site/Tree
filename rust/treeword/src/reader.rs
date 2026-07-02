@@ -112,22 +112,102 @@ pub fn read_effect(clause: &str, vocab: &Vocabulary) -> Option<Json> {
             return Some(move_direction_act(dir));
         }
     }
-    // the deed voice has NO subject: token 0 IS the verb, resolved from the word.
+    // DRIFT / STOPGAP, honestly marked (WORD-DRIVEN-PARSER.md tripwire "THE SNEAKY FORM"): the vocab
+    // resolves the verb (floor), but the `match verb.present { "move" => …, "call" => … }` below is a
+    // PER-VERB ARM emitting a per-verb IR SHAPE — that shape is MEANING (what the deed does), and it is the
+    // regex RELOCATED into the reader, not removed. The right shape is GENERIC: emit the verb + object +
+    // roles uniformly, and let each verb's `.word` + the word-driven fold decide the op-name / shape / what
+    // it does. These arms are frozen mirrors of that fold, kept until the generic reader + fold land (the
+    // keystone / joint crystallization). DO NOT add more per-verb arms — that is drift dressed as progress.
     let verb = vocab.verb_by_present(tokens[0])?;
     let rest = &tokens[1..];
-    match verb.family {
+    let rest_raw = s[tokens[0].len()..].trim();
+    match verb.present.as_str() {
         // `move <direction>` -> do:move params.direction (NO `of` — $caller walks itself). A bare compass
         // direction is the object; `move to <space>` is the "I" voice (read_act), so a non-compass `move`
         // defers to the fallback.
-        Some(Family::Do) if verb.present.as_str() == "move" => {
+        "move" => {
             let dir = rest.first().map(|d| d.to_lowercase())?;
             if !is_compass(&dir) {
                 return None;
             }
             Some(move_direction_act(&dir))
         }
+        // `call <X>, saying <Y>` (quotative — talk content) / `call <X> to <Y>[, with <Z>]` (intent —
+        // summon-to-act) -> a CALL. The verb came from the word; the roles are read; refs are floor.
+        "call" => read_call(rest_raw),
         _ => None, // other deeds not migrated to the reader yet -> parse_effect falls back to the tables
     }
+}
+
+/// `call <X>, saying <Y> [as <bind>]` (quotative) OR `call <X> to <Y>[, with <Z>] [as <bind>]` (intent)
+/// -> a CALL. Matches the retired call regexes EXACTLY: kind:call, of:ref(X), then saying:lit(Y) | to:
+/// <intent>+with:lit(Z); `as <bind>` names the reply binding. `rest` is the clause AFTER `call`. The verb
+/// `call` was resolved from the vocabulary; the role hinges (`, saying `/` to `/`, with `/` as `) are read
+/// here; reference resolution (ref_key/ref_obj/ref_lit) is the shared FLOOR. None -> parse_effect (but the
+/// call regexes are deleted, so None here means a malformed call — the same nothing the regex produced).
+fn read_call(rest: &str) -> Option<Json> {
+    // peel an optional trailing ` as <bind>` (a bare word at the very end) — shared by both forms. An
+    // ` as ` INSIDE a quoted message is NOT the bind (the tail must be a bare word), matching the regex.
+    let (body, bind) = peel_as_bind(rest);
+    // FORM 1 (quotative): the `, saying ` hinge splits callee X from message Y. Tried FIRST (as the regexes were).
+    if let Some((x, y)) = split_once_ci(&body, ", saying ") {
+        let mut node = vec![
+            ("kind", jstr("call")),
+            ("of", crate::ref_obj(&crate::ref_key(x))),
+            ("saying", crate::ref_lit(y.trim())),
+        ];
+        if let Some(b) = &bind {
+            node.push(("bind", jstr(b)));
+        }
+        return Some(obj(node));
+    }
+    // FORM 2 (intent): the ` to ` hinge splits callee X from the intent word Y; an optional `, with <Z>`.
+    if let Some((x, after)) = split_once_ci(&body, " to ") {
+        let (to_word, with) = match split_once_ci(after, ", with ") {
+            Some((t, z)) => (t.trim(), Some(z.trim())),
+            None => (after.trim(), None),
+        };
+        // the intent is a single word (`[\w-]+`, lowercased) — reject anything else (defer to the fallback).
+        if to_word.is_empty() || !to_word.chars().all(|c| c.is_alphanumeric() || c == '-') {
+            return None;
+        }
+        let mut node = vec![
+            ("kind", jstr("call")),
+            ("of", crate::ref_obj(&crate::ref_key(x))),
+            ("to", jstr(&to_word.to_lowercase())),
+        ];
+        if let Some(z) = with {
+            node.push(("with", crate::ref_lit(z)));
+        }
+        if let Some(b) = &bind {
+            node.push(("bind", jstr(b)));
+        }
+        return Some(obj(node));
+    }
+    None
+}
+
+/// Peel an optional trailing ` as <bind>` (a bare word `[\w-]` at the very end) off a deed body. Returns
+/// (body-without-suffix, the bind if present). Because the tail must be a bare word, an ` as ` inside a
+/// quoted message is NOT mistaken for the bind — the retired regexes' `(?:\s+as\s+(\w+))?$`.
+fn peel_as_bind(s: &str) -> (String, Option<String>) {
+    let lower = s.to_lowercase();
+    if let Some(pos) = lower.rfind(" as ") {
+        let tail = s[pos + 4..].trim();
+        if !tail.is_empty() && tail.chars().all(|c| c.is_alphanumeric() || matches!(c, '-' | '_')) {
+            return (s[..pos].trim().to_string(), Some(tail.to_string()));
+        }
+    }
+    (s.trim().to_string(), None)
+}
+
+/// Case-insensitive `split_once`: the FIRST occurrence of `sep` (compared lowercased), returning the
+/// (before, after) slices of the ORIGINAL string so case/quotes in the parts survive. ASCII separators
+/// (`, saying `/` to `/…) over ASCII `.word`, so byte positions in the lowercased copy match the original.
+fn split_once_ci<'a>(s: &'a str, sep: &str) -> Option<(&'a str, &'a str)> {
+    let lower = s.to_lowercase();
+    lower.find(&sep.to_lowercase()).map(|pos| (&s[..pos], &s[pos + sep.len()..]))
 }
 
 /// `w`/`a`/`s`/`d` -> its compass direction (the coined WASD keys), case-insensitive. None for any other
@@ -603,8 +683,31 @@ mod tests {
         assert_eq!(dir("d").as_deref(), Some("east"));
         // `move to <space>` is the "I" voice (a destination), NOT a compass deed -> None (defers).
         assert!(read_effect("move to heaven.", &v).is_none(), "move to a space is the I-voice, not a deed");
-        // an unmigrated deed (call/see/the-…) -> None, so parse_effect falls back to the effect tables.
-        assert!(read_effect("call Bob, saying hi.", &v).is_none(), "call not migrated -> fallback");
+        // an unmigrated deed (see/the-…) -> None, so parse_effect falls back to the effect tables.
+        assert!(read_effect("see the being named Bob as b.", &v).is_none(), "see not migrated -> fallback");
         assert!(read_effect("the cherub forms a being.", &v).is_none(), "a `the …` effect -> fallback");
+    }
+
+    #[test]
+    fn reads_call_deeds_off_the_word() {
+        let v = full_vocab();
+        // FORM 1 (quotative): `call <X>, saying <Y>` -> kind:call, of:ref(X), saying:lit(Y).
+        let c = read_effect("call the cherub, saying \"hello\".", &v).expect("call…saying is a deed");
+        assert_eq!(gs(&c, "kind"), Some("call"));
+        assert_eq!(get(&c, "of").and_then(|o| gs(o, "ref")), Some("cherub"), "callee -> ref (article stripped)");
+        assert_eq!(gs(&c, "saying"), Some("hello"), "the quoted message -> a literal value");
+        assert!(get(&c, "bind").is_none(), "no `as` -> no bind");
+        // `as <bind>` names the reply binding, and the message stops before it.
+        let cb = read_effect("call Bob, saying hi as reply.", &v).expect("call with bind");
+        assert_eq!(gs(&cb, "saying"), Some("hi"), "the message stops before `as <bind>`");
+        assert_eq!(gs(&cb, "bind"), Some("reply"), "trailing `as <bind>`");
+        // FORM 2 (intent): `call <X> to <Y>, with <Z>` -> kind:call, of:ref(X), to:<intent>, with:lit(Z).
+        let i = read_effect("call the birther to birth, with $spec.", &v).expect("call…to is a deed");
+        assert_eq!(gs(&i, "kind"), Some("call"));
+        assert_eq!(get(&i, "of").and_then(|o| gs(o, "ref")), Some("birther"));
+        assert_eq!(gs(&i, "to"), Some("birth"), "the intent verb, lowercased");
+        assert_eq!(get(&i, "with").and_then(|w| gs(w, "ref")), Some("spec"), "`with $spec` -> a ref");
+        // a bare `call` with neither hinge is malformed -> None (the same nothing the regex gave).
+        assert!(read_effect("call nobody.", &v).is_none(), "no saying/to hinge -> None");
     }
 }
