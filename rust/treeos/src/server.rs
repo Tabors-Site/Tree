@@ -31,16 +31,18 @@ pub fn run() {
         let addr = args.get(2).cloned().unwrap_or_else(default_addr);
         let root = args.get(3).cloned().unwrap_or_else(default_store);
         // advertise this reality on the LAN (dns.md phase 1) — best-effort; keep the daemon alive for the
-        // serve loop so peers can discover us by name, no DNS.
-        let reality = env::var("STORY_DOMAIN").unwrap_or_else(|_| "localhost".to_string());
+        // serve loop so peers can discover us by name, no DNS. The self-pin is a `peer-pin` act on this
+        // store's library reel, so `reality` MUST be the same alias the fold reads (story_alias).
+        let reality = crate::config::story_alias();
         let port = addr.rsplit(':').next().and_then(|p| p.parse().ok()).unwrap_or(7070);
-        let _mdns = crate::mdns::advertise(&reality, port);
+        let _mdns = crate::mdns::advertise(Path::new(&root), &reality, port);
         serve(&addr, Path::new(&root));
     } else if args.get(1).map(String::as_str) == Some("discover") {
         // find TreeOS realities on the LAN, verify each signed address-fact, pin the verified ones:
         //   treeos discover [seconds]
         let secs = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(3);
-        let peers = crate::mdns::discover(secs, true);
+        let store = default_store();
+        let peers = crate::mdns::discover(Path::new(&store), secs, true);
         if peers.is_empty() {
             println!("no TreeOS realities found on the LAN");
         }
@@ -48,13 +50,13 @@ pub fn run() {
             println!("{}", treehash::stringify(p));
         }
     } else if args.get(1).map(String::as_str) == Some("peers") {
-        // show the Peering cache (verified claimants per alias, collisions and all):  treeos peers
-        println!("{}", treehash::stringify(&crate::federation::peering_cache()));
+        // show the folded Peering directory (verified claimants per alias, collisions and all): treeos peers
+        println!("{}", treehash::stringify(&crate::federation::peering_cache(Path::new(&default_store()))));
     } else if args.get(1).map(String::as_str) == Some("whois") {
-        // resolve an alias against MY Peering cache: where does it land, or is it ambiguous?
+        // resolve an alias against MY library reel's peering: where does it land, or is it ambiguous?
         //   treeos whois <alias>
         let alias = args.get(2).cloned().unwrap_or_default();
-        match crate::federation::resolve_verified(&alias) {
+        match crate::federation::resolve_verified(Path::new(&default_store()), &alias) {
             Ok(addr) => println!("{alias} -> {addr}"),
             Err(e) => {
                 println!("{e}");
@@ -69,10 +71,10 @@ pub fn run() {
             eprintln!("usage: treeos handshake <host:port>");
             std::process::exit(1);
         }
-        let alias = env::var("STORY_DOMAIN").unwrap_or_else(|_| "localhost".to_string());
+        let alias = crate::config::story_alias();
         let my_host = crate::mdns::local_ip();
         let my_port: u16 = env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(7070);
-        match crate::federation::handshake(&peer, &alias, &my_host, my_port) {
+        match crate::federation::handshake(Path::new(&default_store()), &peer, &alias, &my_host, my_port) {
             Ok(claimants) => {
                 println!("handshook with {peer} — introduced myself as '{alias}', pinned {} peer(s):", claimants.len());
                 for c in claimants {
@@ -92,7 +94,7 @@ pub fn run() {
             eprintln!("usage: treeos pin <alias> <pubkey>");
             std::process::exit(1);
         }
-        match crate::federation::pin_choice(&alias, &pubkey) {
+        match crate::federation::pin_choice(Path::new(&default_store()), &alias, &pubkey) {
             Ok(()) => println!("pinned '{alias}' -> {pubkey}"),
             Err(e) => {
                 eprintln!("treeos pin: {e}");
@@ -105,7 +107,7 @@ pub fn run() {
         let alias = args.get(2).cloned().unwrap_or_default();
         let via = if args.get(3).map(String::as_str) == Some("via") { args.get(4).cloned() } else { args.get(3).cloned() };
         match (alias.is_empty(), via) {
-            (false, Some(peer)) => match crate::federation::resolve_via_peer(&peer, &alias) {
+            (false, Some(peer)) => match crate::federation::resolve_via_peer(Path::new(&default_store()), &peer, &alias) {
                 Ok(claimants) => {
                     println!("'{alias}' resolved via {peer} — pinned {} claimant(s):", claimants.len());
                     for c in claimants {

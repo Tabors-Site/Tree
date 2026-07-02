@@ -27,17 +27,18 @@ use std::time::Duration;
 
 use treehash::Json;
 
-// ── Signed address-fact resolution (the dns.md/ip..md security core) ──────────────────────────────
-// Federation resolves a peer NOT by trusting DNS, but by a SIGNED ADDRESS-FACT pinned in the local
-// Peering cache (.story/peers.json): `{ "<domain>": { pubkey, host, port, transport, sig } }`. `pubkey`
-// is the peer's I key, pinned trust-on-first-use; `sig` is that key's signature over the canonical
-// address-fact content. We refuse to connect unless the signature verifies — so a hijacked DNS record
-// or spoofed reachability is powerless (it cannot forge the I signature), and the verified host/port
-// come from the SIGNED content, not from whatever DNS would answer.
-
-fn peers_path() -> &'static Path {
-    Path::new(".story/peers.json")
-}
+// ── Signed address-fact resolution, CHAIN-NATIVE (the dns.md/ip..md security core) ─────────────────
+// Federation resolves a peer NOT by trusting DNS, but by a SIGNED ADDRESS-FACT that I pinned as an ACT
+// on the LIBRARY REEL (verb "peer", act "peer-pin"), folded into `state.peers`. `pubkey` is the peer's I
+// key; `sig` is that key's signature over the canonical address-fact content. We refuse to connect unless
+// the signature verifies — a hijacked DNS record or spoofed reachability is powerless (it cannot forge
+// the I signature). There is NO `.story/peers.json` side-file: a peering is an event on the chain, not a
+// mutable cache. Writes go through `crate::act::peering_act` (I-signed); reads fold the library reel here.
+//
+// COLLISION-AWARE (dns.md Phase 5): an alias is a nickname more than one reality may claim, so an entry
+// holds an ARRAY of claims: `{ "<alias>": { "claims": [ {pubkey,host,port,transport,sig}, … ], "pinned"? } }`.
+// Resolution verifies each and then: 0 valid -> refuse; 1 -> resolve; >=2 -> refuse and SURFACE all
+// claimants, unless a `pinned` pubkey (a `peer-choose` act) selects one.
 
 fn get<'a>(v: &'a Json, k: &str) -> Option<&'a Json> {
     match v {
@@ -55,16 +56,7 @@ fn obj(pairs: Vec<(&str, Json)>) -> Json {
     Json::Obj(pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
 }
 
-// ── The Peering cache is COLLISION-AWARE (dns.md Phase 5 "Collide") ────────────────────────────────
-// An alias is a nickname, not an ICANN-owned name: MORE THAN ONE reality may claim `tabors-site`, each
-// having signed its OWN claim with its OWN I key. So an entry holds an ARRAY of claims, not one:
-//   { "<alias>": { "claims": [ {pubkey,host,port,transport,sig}, ... ], "pinned": "<pubkey>"? } }
-// Resolution VERIFIES each claim and then: 0 valid -> refuse; 1 -> resolve; >=2 -> refuse and SURFACE
-// all claimants (the system tells you about the ambiguity instead of silently picking one), unless a
-// `pinned` pubkey (a local trust choice) selects exactly one. Legacy flat `{pubkey,...}` entries are
-// read as a one-claim array (back-compat with the phase-1/2 cache).
-
-/// A verified claim distilled from a cache entry (the signature already checks out against `pubkey`).
+/// A verified claim distilled from a folded peers entry (the signature checks out against `pubkey`).
 pub struct Claim {
     pub pubkey: String,
     pub host: String,
@@ -72,11 +64,20 @@ pub struct Claim {
     pub transport: String,
 }
 
-/// Pull the claim list out of a cache entry, tolerating the legacy flat single-claim shape.
+/// Fold the LIBRARY REEL and return its `state.peers` map — the chain-native Peering directory, folded
+/// from every `peer-pin` / `peer-choose` act I sealed. No side-file: the reel is the truth.
+fn folded_peers(root: &Path) -> Json {
+    let alias = crate::config::story_alias();
+    let facts = treestore::read_reel_file(root, "0", "library", &alias, None, None);
+    let state = treefold::fold("library", &facts);
+    get(&state, "peers").cloned().unwrap_or_else(|| Json::Obj(vec![]))
+}
+
+/// Pull the claim list out of a folded peers entry.
 fn entry_claims(entry: &Json) -> Vec<Json> {
     match get(entry, "claims") {
         Some(Json::Arr(a)) => a.clone(),
-        _ if get(entry, "pubkey").is_some() => vec![entry.clone()], // legacy flat entry = one claim
+        _ if get(entry, "pubkey").is_some() => vec![entry.clone()], // tolerate a flat single-claim entry
         _ => vec![],
     }
 }
@@ -99,19 +100,11 @@ fn verify_claim(domain: &str, claim: &Json) -> Option<Claim> {
     Some(Claim { pubkey, host, port, transport })
 }
 
-/// Read the Peering cache (or an empty object if none/unreadable).
-fn read_cache() -> Json {
-    std::fs::read_to_string(peers_path())
-        .ok()
-        .and_then(|s| treehash::parse(&s).ok())
-        .unwrap_or_else(|| Json::Obj(vec![]))
-}
-
-/// The VERIFIED claimants for an alias, plus the locally pinned pubkey (if any). Unsigned/invalid claims
-/// are dropped silently — only cryptographically valid claimants survive.
-pub fn verified_claimants(domain: &str) -> (Vec<Claim>, Option<String>) {
-    let cache = read_cache();
-    let entry = match get(&cache, domain) {
+/// The VERIFIED claimants for an alias (from the folded library reel), plus the pinned pubkey (if any).
+/// Unsigned/invalid claims are dropped silently — only cryptographically valid claimants survive.
+pub fn verified_claimants(root: &Path, domain: &str) -> (Vec<Claim>, Option<String>) {
+    let peers = folded_peers(root);
+    let entry = match get(&peers, domain) {
         Some(e) => e,
         None => return (vec![], None),
     };
@@ -120,19 +113,18 @@ pub fn verified_claimants(domain: &str) -> (Vec<Claim>, Option<String>) {
     (claims, pinned)
 }
 
-/// Resolve a peer reality domain to a VERIFIED `host:port`, or refuse. Reads the pinned signed address-
-/// facts from `.story/peers.json`, rebuilds each canonical content, and checks the signature against the
-/// claimant's I pubkey. An unknown peer or all-invalid claims REFUSE (no fall back to raw DNS — that is
-/// the whole security point). A COLLISION (>=2 valid claimants) refuses and surfaces them, unless a
-/// `pinned` pubkey resolves the tie. The verified host/port are the peer's own I-signed reachability;
-/// reaching a LAN/private address is allowed (the trust is the signature, not the IP).
-pub fn resolve_verified(domain: &str) -> Result<String, String> {
-    let (mut claims, pinned) = verified_claimants(domain);
+/// Resolve a peer reality domain to a VERIFIED `host:port`, or refuse. Folds the library reel's peering
+/// acts, rebuilds each claim's canonical content, and checks the signature against the claimant's I
+/// pubkey. An unknown peer or all-invalid claims REFUSE (no fall back to raw DNS — the security point). A
+/// COLLISION (>=2 valid claimants) refuses and surfaces them, unless a `pinned` pubkey (a `peer-choose`
+/// act) resolves the tie. Reaching a LAN/private address is allowed (the trust is the signature, not IP).
+pub fn resolve_verified(root: &Path, domain: &str) -> Result<String, String> {
+    let (mut claims, pinned) = verified_claimants(root, domain);
     if let Some(pin) = &pinned {
         claims.retain(|c| &c.pubkey == pin);
     }
     match claims.len() {
-        0 => Err(format!("unknown peer '{domain}': no verified claimant in the Peering cache")),
+        0 => Err(format!("unknown peer '{domain}': no verified claimant on the library reel")),
         1 => {
             let c = &claims[0];
             Ok(format!("{}:{}", c.host, c.port))
@@ -166,76 +158,46 @@ pub fn publish_address_fact(reality: &str, host: &str, port: u16, transport: &st
     ]))
 }
 
-fn write_cache(cache: &Json) -> Result<(), String> {
-    std::fs::create_dir_all(".story").map_err(|e| e.to_string())?;
-    std::fs::write(peers_path(), treehash::stringify(cache)).map_err(|e| e.to_string())
+/// Pin a VERIFIED claim by sealing a `peer-pin` act on the LIBRARY REEL AS I — chain-native, no side-file.
+/// The fold keeps a different-key claimant for the same alias as a SEPARATE claimant (a collision, surfaced
+/// at resolve time) and refreshes a same-key claim (an address change). The caller has already verified the
+/// signature; here I record my choice to trust it as an event on the reel. The claim carries its own alias
+/// in `reality`.
+pub fn pin_claim(root: &Path, claim: &Json) -> Result<(), String> {
+    let alias = gstr(claim, "reality").ok_or("claim missing reality/alias")?;
+    outcome(crate::act::peering_act("peer-pin", claim.clone(), root, &alias))
 }
 
-/// Pin/refresh a VERIFIED claim into the Peering cache under `alias`. A claim from a DIFFERENT pubkey is
-/// kept as a SEPARATE claimant (that is a collision, surfaced at resolve time); a claim from the SAME
-/// pubkey refreshes in place (an address change — restamp and re-inform). The caller has already checked
-/// the signature (trust-on-first-use). Returns whether this pin introduced a NEW claimant (a fresh pubkey).
-pub fn pin_claim(alias: &str, claim: &Json) -> Result<bool, String> {
-    let pubkey = gstr(claim, "pubkey").ok_or("claim missing pubkey")?;
-    let mut cache = read_cache();
-    let top = match &mut cache {
-        Json::Obj(e) => e,
-        _ => return Err("Peering cache is not an object".to_string()),
-    };
-    let (mut claims, pinned) = match top.iter().find(|(k, _)| k == alias) {
-        Some((_, v)) => (entry_claims(v), gstr(v, "pinned")),
-        None => (vec![], None),
-    };
-    let is_new = !claims.iter().any(|c| gstr(c, "pubkey").as_deref() == Some(pubkey.as_str()));
-    claims.retain(|c| gstr(c, "pubkey").as_deref() != Some(pubkey.as_str())); // same pubkey -> refresh
-    claims.push(claim.clone());
-    let mut pairs: Vec<(&str, Json)> = vec![("claims", Json::Arr(claims))];
-    if let Some(p) = &pinned {
-        pairs.push(("pinned", Json::Str(p.clone())));
-    }
-    let new_entry = obj(pairs);
-    match top.iter_mut().find(|(k, _)| k == alias) {
-        Some((_, v)) => *v = new_entry,
-        None => top.push((alias.to_string(), new_entry)),
-    }
-    write_cache(&cache)?;
-    Ok(is_new)
+/// Record a collision trust CHOICE by sealing a `peer-choose` act on the library reel AS I. This is the
+/// decision dns.md leaves OUT of any central authority — you pin the pubkey you trust for a nickname.
+pub fn pin_choice(root: &Path, alias: &str, pubkey: &str) -> Result<(), String> {
+    let params = obj(vec![("reality", Json::Str(alias.to_string())), ("pubkey", Json::Str(pubkey.to_string()))]);
+    outcome(crate::act::peering_act("peer-choose", params, root, alias))
 }
 
-/// Record a local trust CHOICE for an alias: which claimant pubkey to resolve to when there's a collision.
-/// This is the human/policy decision dns.md leaves OUT of any central authority — you pin the pubkey you
-/// trust for a nickname; nobody owns the nickname.
-pub fn pin_choice(alias: &str, pubkey: &str) -> Result<(), String> {
-    let mut cache = read_cache();
-    let top = match &mut cache {
-        Json::Obj(e) => e,
-        _ => return Err("Peering cache is not an object".to_string()),
-    };
-    let claims = match top.iter().find(|(k, _)| k == alias) {
-        Some((_, v)) => entry_claims(v),
-        None => return Err(format!("no such alias '{alias}' in the Peering cache")),
-    };
-    let new_entry = obj(vec![("claims", Json::Arr(claims)), ("pinned", Json::Str(pubkey.to_string()))]);
-    if let Some((_, v)) = top.iter_mut().find(|(k, _)| k == alias) {
-        *v = new_entry;
+/// One peering-act outcome -> Result (Authorized = Ok, Denied = Err).
+fn outcome(outcomes: Vec<treeibp::Outcome>) -> Result<(), String> {
+    match outcomes.into_iter().next() {
+        Some(treeibp::Outcome::Authorized(_)) => Ok(()),
+        Some(treeibp::Outcome::Denied(r)) => Err(r),
+        None => Err("peering act produced no outcome".to_string()),
     }
-    write_cache(&cache)
 }
 
-/// The whole Peering cache (for `treeos peers`).
-pub fn peering_cache() -> Json {
-    read_cache()
+/// The whole folded peers directory (for `treeos peers`).
+pub fn peering_cache(root: &Path) -> Json {
+    folded_peers(root)
 }
 
 /// Answer a FORWARDING query (dns.md Phase 6, the peer SIDE): the signed claim(s) THIS reality can vouch
-/// for about `alias`, straight from its Peering cache. Every returned claim carries its claimant's OWN
+/// for about `alias`, folded from its library reel. Every returned claim carries its claimant's OWN
 /// I-signature, so the asker verifies it independently — the forwarder cannot forge or substitute a claim,
 /// it can only pass along (or withhold) ones it holds. A reality self-pins its own claim when it serves,
 /// so asking A about A returns A's own signed fact; asking A about B returns B's (if A has met B).
-pub fn resolve_reply(alias: &str) -> Json {
-    let cache = read_cache();
+pub fn resolve_reply(root: &Path, alias: &str) -> Json {
+    let peers = folded_peers(root);
     let mut claims: Vec<Json> = Vec::new();
-    if let Some(entry) = get(&cache, alias) {
+    if let Some(entry) = get(&peers, alias) {
         for raw in entry_claims(entry) {
             if verify_claim(alias, &raw).is_some() {
                 claims.push(raw);
@@ -248,9 +210,9 @@ pub fn resolve_reply(alias: &str) -> Json {
 /// FORWARDING (dns.md Phase 6, the asker SIDE): ask a KNOWN peer "who is `<alias>`?" over the wire; it
 /// replies with the signed claim(s) it holds. Each claim is self-verifying (the claimant's own I-signature
 /// over its address-fact), so a malicious forwarder cannot forge one: we VERIFY every returned claim and
-/// PIN the valid ones into our Peering cache. This is discovery by INTRODUCTION with no central
+/// PIN the valid ones (a `peer-pin` act on our library reel). Discovery by INTRODUCTION with no central
 /// infrastructure — D finds B by asking A, trusting B's key, never A's word. Returns the pinned claimants.
-pub fn resolve_via_peer(peer: &str, alias: &str) -> Result<Vec<String>, String> {
+pub fn resolve_via_peer(root: &Path, peer: &str, alias: &str) -> Result<Vec<String>, String> {
     let query = treehash::stringify(&obj(vec![
         ("verb", Json::Str("resolve".to_string())),
         ("alias", Json::Str(alias.to_string())),
@@ -264,7 +226,7 @@ pub fn resolve_via_peer(peer: &str, alias: &str) -> Result<Vec<String>, String> 
     let mut pinned = Vec::new();
     for c in &claims {
         if let Some(v) = verify_claim(alias, c) {
-            pin_claim(alias, c)?;
+            pin_claim(root, c)?;
             pinned.push(format!("{} ({}:{})", v.pubkey, v.host, v.port));
         }
     }
@@ -275,11 +237,11 @@ pub fn resolve_via_peer(peer: &str, alias: &str) -> Result<Vec<String>, String> 
 }
 
 /// The LIVE HANDSHAKE (dns.md Phase 2): open a connection to a peer and exchange signed "I am `<alias>`"
-/// address-facts, each side VERIFYING + PINNING the other. Unlike trusting an mDNS multicast, this
-/// confirms the peer is actually REACHABLE and controls its key live, and it is BIDIRECTIONAL — the peer
-/// caches US too (it pins the fact we offer). `my_*` describe our own reachability to introduce. Returns
-/// the peer claimant(s) we pinned.
-pub fn handshake(peer: &str, my_alias: &str, my_host: &str, my_port: u16) -> Result<Vec<String>, String> {
+/// address-facts, each side VERIFYING + PINNING the other (a `peer-pin` act on each reel). Unlike trusting
+/// an mDNS multicast, this confirms the peer is actually REACHABLE and controls its key live, and it is
+/// BIDIRECTIONAL — the peer records us too. `my_*` describe our own reachability to introduce. Returns the
+/// peer claimant(s) we pinned.
+pub fn handshake(root: &Path, peer: &str, my_alias: &str, my_host: &str, my_port: u16) -> Result<Vec<String>, String> {
     let my_fact = publish_address_fact(my_alias, my_host, my_port, "ws")?;
     let msg = treehash::stringify(&obj(vec![
         ("verb", Json::Str("hello".to_string())),
@@ -296,7 +258,7 @@ pub fn handshake(peer: &str, my_alias: &str, my_host: &str, my_port: u16) -> Res
         let alias = gstr(c, "reality").unwrap_or_default();
         if !alias.is_empty() {
             if let Some(v) = verify_claim(&alias, c) {
-                pin_claim(&alias, c)?;
+                pin_claim(root, c)?;
                 pinned.push(format!("{alias}: {} ({}:{})", v.pubkey, v.host, v.port));
             }
         }
@@ -307,16 +269,17 @@ pub fn handshake(peer: &str, my_alias: &str, my_host: &str, my_port: u16) -> Res
     Ok(pinned)
 }
 
-/// Answer a HELLO (the peer side of the handshake): VERIFY + PIN the caller's offered signed fact, then
-/// introduce OURSELVES back with our own signed claim(s). Both sides end up caching each other. The
-/// caller's fact carries its own I-signature, so a forged introduction is dropped, not pinned.
-pub fn hello_reply(incoming_fact: &Json, own_alias: &str) -> Json {
+/// Answer a HELLO (the peer side of the handshake): VERIFY + PIN the caller's offered signed fact (a
+/// `peer-pin` act on our reel), then introduce OURSELVES back with our own signed claim(s). Both sides end
+/// up recording each other. The caller's fact carries its own I-signature, so a forged introduction is
+/// dropped, not pinned.
+pub fn hello_reply(root: &Path, incoming_fact: &Json, own_alias: &str) -> Json {
     if let Some(alias) = gstr(incoming_fact, "reality") {
         if verify_claim(&alias, incoming_fact).is_some() {
-            let _ = pin_claim(&alias, incoming_fact);
+            let _ = pin_claim(root, incoming_fact);
         }
     }
-    resolve_reply(own_alias)
+    resolve_reply(root, own_alias)
 }
 
 /// A fixed Sec-WebSocket-Key (any valid base64 16-byte value works — the server computes the accept and

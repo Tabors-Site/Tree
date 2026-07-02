@@ -203,6 +203,41 @@ pub fn declare_name(op: &str, nid: &str, _name: &str, spec: &Json, root: &Path, 
     }
 }
 
+/// Seal a PEERING act onto the library reel AS I (dns.md, chain-native). `peer-pin` carries a peer's own
+/// signed address-fact (its {reality, pubkey, host, port, transport, sig}); `peer-choose` records a
+/// collision trust choice ({reality, pubkey}). Same moment-seal path as `declare_name` — one act, one
+/// fact, of:{kind:library} — signed by the custodial story key. This REPLACES the `.story/peers.json`
+/// drift: a peering is now an EVENT I authored on the reel (auditable, replayable, federatable), folded
+/// into `state.peers`, not a mutable side-file. `params` is the peer's fact (peer-pin) or {reality,pubkey}.
+pub fn peering_act(act_kind: &str, params: Json, root: &Path, story_domain: &str) -> Vec<treeibp::Outcome> {
+    let fact = Json::Obj(vec![
+        ("verb".into(), Json::Str("peer".into())),
+        ("act".into(), Json::Str(act_kind.into())),
+        ("through".into(), Json::Str("I".into())),
+        ("of".into(), Json::Obj(vec![("kind".into(), Json::Str("library".into())), ("id".into(), Json::Str(story_domain.into()))])),
+        ("params".into(), params),
+        ("history".into(), Json::Str("0".into())),
+    ]);
+    let act = Json::Obj(vec![
+        ("by".into(), Json::Str("I".into())),
+        ("through".into(), Json::Str("I".into())),
+        ("story".into(), Json::Str(story_domain.into())),
+        ("history".into(), Json::Str("0".into())),
+        ("deltaF".into(), Json::Arr(vec![fact.clone()])),
+    ]);
+    let i_actor = Json::Obj(vec![("nameId".into(), Json::Str("I".into())), ("name".into(), Json::Str("I".into()))]);
+    let signer = match story_signer(&i_actor) {
+        Some(s) => s,
+        None => return vec![treeibp::Outcome::Denied("no story key to sign the peering act".into())],
+    };
+    let sign_ref: &dyn Fn(&Json, &[String]) -> Json = &signer;
+    let ord = treestore::next_ord(root);
+    match treestore::commit_moment_signed(root, &act, ord, sign_ref) {
+        Ok(_) => vec![treeibp::Outcome::Authorized(fact)],
+        Err(e) => vec![treeibp::Outcome::Denied(format!("peer:{act_kind} seal failed: {e:?}"))],
+    }
+}
+
 /// One act outcome as a wire row (the stamped fact, or a denial reason).
 pub fn outcome_json(o: &treeibp::Outcome) -> Json {
     match o {

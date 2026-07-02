@@ -236,7 +236,7 @@ fn handle_wire_inner(msg: &str, root: &Path) -> String {
                 if let Some(peer) = treecognition::federation::cross_story_target(&addr, &local) {
                     // resolve the peer to a VERIFIED host:port via its pinned signed address-fact (not
                     // raw DNS) — refuse if the signature does not check out.
-                    let target = match crate::federation::resolve_verified(&peer) {
+                    let target = match crate::federation::resolve_verified(root, &peer) {
                         Ok(t) => t,
                         Err(e) => return json(&IbpError::new(code::PEER_UNREACHABLE, format!("federation to {peer}: {e}")).envelope()),
                     };
@@ -264,14 +264,14 @@ fn handle_wire_inner(msg: &str, root: &Path) -> String {
             // pass along (or withhold) what we know. Discovery by introduction, no central directory.
             Some("resolve") => {
                 let alias = get_str(&req, "alias").unwrap_or_default();
-                return treehash::stringify(&crate::federation::resolve_reply(&alias));
+                return treehash::stringify(&crate::federation::resolve_reply(root, &alias));
             }
             // HANDSHAKE (dns.md Phase 2): a peer opens with "here is my signed I-am"; we verify + pin it
             // and introduce ourselves back. Both realities end up caching each other, reachability-proven.
             Some("hello") => {
                 let fact = get(&req, "fact").cloned().unwrap_or(Json::Null);
                 let local = crate::config::story_alias(); // our alias = STORY_DOMAIN, the same source advertise self-pins under
-                return treehash::stringify(&crate::federation::hello_reply(&fact, &local));
+                return treehash::stringify(&crate::federation::hello_reply(root, &fact, &local));
             }
             // cognize = the autonomous loop (moment -> decide a Word -> act), built on the two primitives.
             Some("cognize") => {

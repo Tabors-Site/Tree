@@ -22,10 +22,10 @@ Binaries land in `rust/target/release/` — `treeos` (the Story) and `treeportal
 A **store** is your Story's world on disk — its own chain, like a fresh database. `genesis` plants a new one:
 
 ```bash
-./rust/target/release/treeos genesis store/mine
+./rust/target/release/treeos genesis store/past
 ```
 
-That's it: a fresh world at `store/mine` (the Name "I", the being "Am", vocabulary, spaces). Pick any folder name for a separate Story. It won't overwrite an existing one.
+That's it: a fresh world at `store/past` (the Name "I", the being "Am", vocabulary, spaces). Pick any folder name for a separate Story. It won't overwrite an existing one.
 
 ## Run
 

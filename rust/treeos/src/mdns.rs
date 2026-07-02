@@ -5,6 +5,7 @@
 // (federation::resolve_verified refuses anything unsigned or invalid); mDNS is only the discovery channel.
 
 use std::collections::HashMap;
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
@@ -39,7 +40,7 @@ fn gstr(v: &Json, k: &str) -> Option<String> {
 /// Advertise THIS reality on the LAN: register `_treeos._tcp` carrying the signed address-fact in the TXT.
 /// Keep the returned daemon alive to stay advertised. Best-effort — a failure warns and the reality still
 /// serves. `reality` is the Story's name/alias, `port` the serve port.
-pub fn advertise(reality: &str, port: u16) -> Option<ServiceDaemon> {
+pub fn advertise(root: &Path, reality: &str, port: u16) -> Option<ServiceDaemon> {
     let host_ip = local_ip();
     let fact = match crate::federation::publish_address_fact(reality, &host_ip, port, "ws") {
         Ok(f) => f,
@@ -48,9 +49,10 @@ pub fn advertise(reality: &str, port: u16) -> Option<ServiceDaemon> {
             return None;
         }
     };
-    // self-pin our OWN signed claim so we can forward it (dns.md Phase 6) and so an alias collision with
-    // another claimant surfaces here too (Phase 5) — a reality is a claimant for its own alias.
-    let _ = crate::federation::pin_claim(reality, &fact);
+    // self-pin our OWN signed claim (a `peer-pin` act on our library reel) so we can forward it (dns.md
+    // Phase 6) and so an alias collision with another claimant surfaces here too (Phase 5) — a reality is
+    // a claimant for its own alias.
+    let _ = crate::federation::pin_claim(root, &fact);
     let mut props: HashMap<String, String> = HashMap::new();
     props.insert("reality".into(), reality.to_string());
     props.insert("pubkey".into(), gstr(&fact, "pubkey").unwrap_or_default());
@@ -87,9 +89,9 @@ pub fn advertise(reality: &str, port: u16) -> Option<ServiceDaemon> {
 
 /// Discover TreeOS realities on the LAN for `secs` seconds. Each is only accepted if its TXT signed
 /// address-fact VERIFIES against its own I-key (unsigned/invalid are ignored). When `pin` is set, the
-/// verified fact is written into the Peering cache so `federation::resolve_verified` can reach it. Returns
-/// the verified peers (each the same record shape `publish_address_fact` mints).
-pub fn discover(secs: u64, pin: bool) -> Vec<Json> {
+/// verified fact is sealed as a `peer-pin` act on the library reel so `federation::resolve_verified` can
+/// reach it. Returns the verified peers (each the same record shape `publish_address_fact` mints).
+pub fn discover(root: &Path, secs: u64, pin: bool) -> Vec<Json> {
     let daemon = match ServiceDaemon::new() {
         Ok(d) => d,
         Err(e) => {
@@ -115,9 +117,9 @@ pub fn discover(secs: u64, pin: bool) -> Vec<Json> {
                     let reality = gstr(&peer, "reality").unwrap_or_default();
                     if !reality.is_empty() && seen.insert(reality.clone()) {
                         if pin {
-                            // collision-aware pin: a different-key claimant for the same alias is KEPT as a
-                            // separate claimant (surfaced at resolve time), not silently overwritten.
-                            if let Err(e) = crate::federation::pin_claim(&reality, &peer) {
+                            // collision-aware pin (a `peer-pin` act): a different-key claimant for the same
+                            // alias is KEPT as a separate claimant (surfaced at resolve), not overwritten.
+                            if let Err(e) = crate::federation::pin_claim(root, &peer) {
                                 eprintln!("mDNS pin '{reality}': {e}");
                             }
                         }

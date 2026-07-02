@@ -576,6 +576,69 @@ pub fn reduce_library(state: &Json, fact: &Json) -> Json {
             let peers = v::del(&peers, v::as_str(&domain).unwrap_or(""));
             v::set(state, "peers", peers)
         }
+        "peer-pin" => {
+            // a peer's SIGNED address-fact, appended as a CLAIMANT under peers[alias] (dedup by pubkey).
+            // The chain-native replacement for the .story/peers.json drift: a peering is an act I authored
+            // on the library reel, folded here, not a mutable side-file. Multi-claimant = an alias is a
+            // nickname more than one reality may claim (the collision is surfaced at resolve time).
+            let alias = match v::get(&p, "reality").or_else(|| v::get(&p, "domain")) {
+                Some(d) if v::truthy(d) => v::as_str(d).unwrap_or("").to_string(),
+                _ => return state.clone(),
+            };
+            let pubkey = match v::get(&p, "pubkey") {
+                Some(Json::Str(s)) if !s.is_empty() => s.clone(),
+                _ => return state.clone(),
+            };
+            if alias.is_empty() {
+                return state.clone();
+            }
+            let claim = obj_from(&[
+                ("reality", Json::Str(alias.clone())),
+                ("pubkey", Json::Str(pubkey.clone())),
+                ("host", v::nullish(v::get(&p, "host"), Json::Null)),
+                ("port", v::nullish(v::get(&p, "port"), Json::Null)),
+                ("transport", v::nullish(v::get(&p, "transport"), Json::Str("ws".to_string()))),
+                ("sig", v::nullish(v::get(&p, "sig"), Json::Null)),
+            ]);
+            let peers = v::get(state, "peers").cloned().unwrap_or_else(v::empty_obj);
+            let entry = v::get(&peers, &alias).cloned().unwrap_or_else(v::empty_obj);
+            let mut claims: Vec<Json> = match v::get(&entry, "claims") {
+                Some(Json::Arr(a)) => a
+                    .iter()
+                    .filter(|c| match v::get(c, "pubkey") {
+                        Some(Json::Str(k)) => k != &pubkey, // same pubkey -> refresh (drop the old)
+                        _ => true,
+                    })
+                    .cloned()
+                    .collect(),
+                _ => vec![],
+            };
+            claims.push(claim);
+            let entry = match v::get(&entry, "pinned") {
+                Some(Json::Str(pin)) => obj_from(&[("claims", Json::Arr(claims)), ("pinned", Json::Str(pin.clone()))]),
+                _ => obj_from(&[("claims", Json::Arr(claims))]),
+            };
+            v::set(state, "peers", v::set(&peers, &alias, entry))
+        }
+        "peer-choose" => {
+            // a local trust CHOICE on an alias COLLISION: peers[alias].pinned = pubkey (claims preserved).
+            let alias = match v::get(&p, "reality").or_else(|| v::get(&p, "domain")) {
+                Some(d) if v::truthy(d) => v::as_str(d).unwrap_or("").to_string(),
+                _ => return state.clone(),
+            };
+            let pubkey = match v::get(&p, "pubkey") {
+                Some(Json::Str(s)) if !s.is_empty() => s.clone(),
+                _ => return state.clone(),
+            };
+            if alias.is_empty() {
+                return state.clone();
+            }
+            let peers = v::get(state, "peers").cloned().unwrap_or_else(v::empty_obj);
+            let entry = v::get(&peers, &alias).cloned().unwrap_or_else(v::empty_obj);
+            let claims = v::get(&entry, "claims").cloned().unwrap_or_else(|| Json::Arr(vec![]));
+            let entry = obj_from(&[("claims", claims), ("pinned", Json::Str(pubkey))]);
+            v::set(state, "peers", v::set(&peers, &alias, entry))
+        }
         "config-set" => {
             let key = match v::get(&p, "key") {
                 Some(k) if !v::is_null(k) => k.clone(),
