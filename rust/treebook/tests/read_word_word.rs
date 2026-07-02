@@ -199,7 +199,7 @@ fn guard_1_refuses_a_run_on_word() {
 }
 
 /// GUARD 2 FIRES: a word whose `see <op>` escape names an UNREGISTERED host see-op is refused, naming the
-/// word + the op. Registry = identification (we ask treehost::Resolvers, no declared table).
+/// word + the op. Registry = identification (we ask treeseed::Resolvers, no declared table).
 #[test]
 fn guard_2_refuses_a_word_with_missing_logic() {
     let dir = fresh_store("guard2");

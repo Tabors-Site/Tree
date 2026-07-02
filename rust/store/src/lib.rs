@@ -1,6 +1,21 @@
 // TreeOS Seed (Rust) . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// treehost — the HOST SEE-OP BRIDGE. The materials act-handlers are WORD-SOLE: each `.word`
+// treeseed — THE STORE. One place holding every word of the story with its floor Rust BESIDE it:
+//
+//   store/
+//     book/                the genesis book — index.word (the reading order) + the genesis words
+//     words/<name>.word    a flat file = a pure CONCEPT (English only, no floor)
+//     words/<bundle>/      a dir = an IMPLEMENTATION — the .word (the meaning) + its floor .rs
+//     src/lib.rs           this file: the resolver seam + the #[path] registrations + the lookup API
+//
+// THE SEAM LAW, structural: to see what a word MEANS you open its `.word`; to see the floor it stands
+// on you open the `.rs` sitting next to it. A floor `.rs` with no sibling `.word` is drift; meaning in
+// an `.rs` that its `.word` does not say is drift (WORD-DRIVEN-PARSER.md). The engine (treeos) boots
+// from THIS store; the JS `seed/` tree is a dead reference corpus. Each floor module below is
+// registered with a `#[path]` line into its bundle dir — one line, right above the `Resolvers` match
+// arm a new bundle must also add, so a bundle cannot be half-wired.
+//
+// (Formerly the treehost crate.) The HOST SEE-OP BRIDGE half: materials act-handlers are WORD-SOLE — each `.word`
 // (set-being.word / set-space.word / create.word / end-space.word / set-matter.word /
 // create-matter.word) is the ONLY path, and its genuine substrate READS bottom out in a host see-op,
 // `see resolve-X(args) as bind` — the strand the JS floor (`*Host.js`) carried. treeibp::run_body
@@ -48,28 +63,51 @@ use treehash::Json;
 
 pub mod toolkit;
 
+#[path = "../words/able-manager/able_manager.rs"]
 mod able_manager;
+#[path = "../words/acquisition/acquisition.rs"]
 mod acquisition;
+#[path = "../words/being/being.rs"]
 mod being;
+#[path = "../words/being/birth.rs"]
 mod birth;
+#[path = "../words/cherub/cherub.rs"]
 mod cherub;
+#[path = "../words/config/config.rs"]
 mod config;
+#[path = "../words/credential/credential.rs"]
 mod credential;
+#[path = "../words/able-manager/flow.rs"]
 mod flow;
+#[path = "../words/key/key.rs"]
 mod key;
+#[path = "../words/grant-able/grant.rs"]
 mod grant;
+#[path = "../words/history-pointers/history_pointers.rs"]
 mod history_pointers;
+#[path = "../words/being/inheritation.rs"]
 mod inheritation;
+#[path = "../words/llm/llm.rs"]
 mod llm;
+#[path = "../words/matter/matter.rs"]
 mod matter;
+#[path = "../words/model/model.rs"]
 mod model;
+#[path = "../words/owner/owner.rs"]
 mod owner;
+#[path = "../words/portal/portal.rs"]
 mod portal;
+#[path = "../words/matter/purge.rs"]
 mod purge;
+#[path = "../words/move/relocate.rs"]
 mod relocate;
+#[path = "../words/matter/rename.rs"]
 mod rename;
+#[path = "../words/set-render/render.rs"]
 mod render;
+#[path = "../words/space/space.rs"]
 mod space;
+#[path = "../words/set-world-signal/worldsignal.rs"]
 mod worldsignal;
 
 pub use able_manager::{author_able, remove_able};

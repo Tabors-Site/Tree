@@ -33,7 +33,7 @@
 use std::path::Path;
 use std::sync::Mutex;
 use treehash::Json;
-use treehost::HostError; // the host see-op refusal (the .word's refusal); the resolver seam run_body calls
+use treeseed::HostError; // the host see-op refusal (the .word's refusal); the resolver seam run_body calls
 use treestore::{
     commit_moment, commit_moment_signed, next_ord, read_ord, read_reel_file, verify_fact_chain,
 };
@@ -600,15 +600,15 @@ fn act_inner(
     // resolver runs BEFORE the act's authorize (it's the substrate READ the `.word` runs to BUILD its
     // fact). I (the bootstrap Name / boot mirror) bypasses the create/end resolvers' gates; a real
     // being is a `caller`. The closure closes over (dir, history, resolver, auth) and calls
-    // treehost::Resolvers - the faithful mirror of the `host`/`able_spec_of` injection seams.
+    // treeseed::Resolvers - the faithful mirror of the `host`/`able_spec_of` injection seams.
     let auth = match get_str(actor, "beingId") {
-        Some(b) if b == I_AM => treehost::AuthCtx::i_am(),
-        Some(b) if !b.is_empty() => treehost::AuthCtx::caller(b),
-        _ => treehost::AuthCtx::default(),
+        Some(b) if b == I_AM => treeseed::AuthCtx::i_am(),
+        Some(b) if !b.is_empty() => treeseed::AuthCtx::caller(b),
+        _ => treeseed::AuthCtx::default(),
     };
-    let resolver = treehost::Resolvers; // the default see-op table (resolve-X -> its native body)
+    let resolver = treeseed::Resolvers; // the default see-op table (resolve-X -> its native body)
     let see_op = |op: &str, args: &[Json]| -> Result<Json, HostError> {
-        treehost::HostResolver::resolve(&resolver, op, args, dir, history, &auth)
+        treeseed::HostResolver::resolve(&resolver, op, args, dir, history, &auth)
     };
 
     // Run the WHOLE body through the EXPANDING driver. A deed naming a declared op-word (its `.word`
@@ -951,13 +951,13 @@ pub fn run_op_word(
     sign: Option<&dyn Fn(&Json, &[String]) -> Json>,
 ) -> Vec<Outcome> {
     let auth = match get_str(actor, "beingId") {
-        Some(b) if b == I_AM => treehost::AuthCtx::i_am(),
-        Some(b) if !b.is_empty() => treehost::AuthCtx::caller(b),
-        _ => treehost::AuthCtx::default(),
+        Some(b) if b == I_AM => treeseed::AuthCtx::i_am(),
+        Some(b) if !b.is_empty() => treeseed::AuthCtx::caller(b),
+        _ => treeseed::AuthCtx::default(),
     };
-    let resolver = treehost::Resolvers;
+    let resolver = treeseed::Resolvers;
     let see_op = |op: &str, args: &[Json]| -> Result<Json, HostError> {
-        treehost::HostResolver::resolve(&resolver, op, args, dir, history, &auth)
+        treeseed::HostResolver::resolve(&resolver, op, args, dir, history, &auth)
     };
     let specs = match run_op_body(word, actor, trigger, history, &see_op) {
         Ok(specs) => specs,

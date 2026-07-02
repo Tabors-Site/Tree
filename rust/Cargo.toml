@@ -19,17 +19,18 @@
 #   treegenesis— the genesis planter (headless): plant a fresh Story's signed clock-free root birth (the
 #                lone 2-fact/2-reel fusion: name:declare + be:birth), over treestore + treesign. STANDALONE,
 #                not wired into treeos (see treegenesis/NOTES.md for the genesis-subcommand handoff).
-#   treehost   — the HOST SEE-OP BRIDGE: the *Host.js resolver bodies (setBeingHost / setSpaceHost /
+#   treeseed (store/) — THE STORE: every word beside its floor Rust (words/<bundle>/*.word + .rs),
+#                the genesis book, and the HOST SEE-OP BRIDGE resolver bodies (setBeingHost / setSpaceHost /
 #                spaceHost / endSpaceHost / setMatterHost / matterHost) as native Rust. The materials
 #                act-handlers are WORD-SOLE; their substrate reads bottom out in `see resolve-X(args) as
 #                bind` host see-ops that treeibp::run_body does not evaluate yet. This crate ports the
 #                resolvers' READ + VALIDATION behind an injectable dispatch SEAM (the HostResolver trait),
 #                composing the past-engine crates. AUTHORITY (the able-walk / owner) is the CALLER's input
-#                (an AuthCtx), so treehost does NOT dep treeibp/treeval. See treehost/NOTES.md for the
+#                (an AuthCtx), so treeseed does NOT dep treeibp/treeval. See store/NOTES.md for the
 #                run_body wiring handoff (mirror able_spec_of: an additive `see` arm, not a rewrite).
 [workspace]
 resolver = "2"
-members = ["treehash", "treefold", "treeverify", "treestore", "treecas", "treeproj", "treesecondary", "treeos", "treeword", "treeval", "treeibp", "treesign", "treegenesis", "treehost", "treecognition", "treewordfold", "treebook", "treeaddress", "treeprotocol", "treematter", "treeportal", "treesymbol"]
+members = ["treehash", "treefold", "treeverify", "treestore", "treecas", "treeproj", "treesecondary", "treeos", "treeword", "treeval", "treeibp", "treesign", "treegenesis", "store", "treecognition", "treewordfold", "treebook", "treeaddress", "treeprotocol", "treematter", "treeportal", "treesymbol"]
 # treehash-node (the napi FFI wrapper) is EXCLUDED: it pulls napi from crates.io and builds a cdylib,
 # so it stays out of the zero-dependency determinism-spine workspace. Build it on its own.
 exclude = ["treehash-node"]

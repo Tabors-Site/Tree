@@ -11,8 +11,8 @@ use std::path::Path;
 
 use treecas::{put_content, Meta};
 use treehash::{canonicalize, Json};
-use treehost::toolkit::{get, get_str};
-use treehost::{
+use treeseed::toolkit::{get, get_str};
+use treeseed::{
     able_request, asked_policy, author_able, delete_pointer_map, find_pointers_space_id,
     grant_internal, load_key, may_set_model, mint_credential, paper_form, parse_signal_value,
     read_credential, read_pointers, reel_head_of, remove_able,
@@ -667,7 +667,7 @@ fn create_matter_happy_type_gate_and_content_id() {
     assert_eq!(get_str(spec, "name"), Some("hello"));
 
     // the matterId IS the content hash of the enriched spec (verify the bridge mint matches the toolkit).
-    let recomputed = treehost::toolkit::matter_content_id(spec);
+    let recomputed = treeseed::toolkit::matter_content_id(spec);
     assert_eq!(matter_id, recomputed, "matterId == matterContentId(enrichedSpec)");
 
     // type gate: an http type cannot carry TEXT content -> Invalid (typeAllowsContentKind false).
@@ -932,7 +932,7 @@ fn reason_code_round_trips() {
     // an unknown code falls back to Internal (the JS `code || INTERNAL`).
     assert_eq!(Reason::from_code("not-a-real-code"), Reason::Internal);
     // a HostError carries the reason + a human message; code() is the reason's kebab.
-    let e = treehost::HostError::name_taken("set-being", "Bob", "0");
+    let e = treeseed::HostError::name_taken("set-being", "Bob", "0");
     assert_eq!(e.reason, Reason::NameCollision);
     assert_eq!(e.code(), "name-collision");
     assert!(e.message.contains("Bob") && e.to_string().contains("already taken"));
@@ -1368,7 +1368,7 @@ fn dispatch_routes_new_see_ops() {
 // be:birth (resolve-birth-being)
 // ════════════════════════════════════════════════════════════════════════════════════════════════
 
-use treehost::resolve_birth_being;
+use treeseed::resolve_birth_being;
 
 /// A be:birth spec params object (name + extras).
 fn birth_spec(name: &str, home_space: &str, extra: Vec<(&str, Json)>) -> Json {
@@ -1397,7 +1397,7 @@ fn birth_being_happy_spec_and_content_id() {
     .expect("birth happy");
 
     // content-id is byte-identical to beingContentId({parentBeingId, name, homeHistory, bornAt}).
-    let want_id = treehost::toolkit::being_content_id(&obj(vec![
+    let want_id = treeseed::toolkit::being_content_id(&obj(vec![
         ("parentBeingId", jstr("mom")),
         ("name", jstr("child")),
         ("homeHistory", jstr("0")),
@@ -2388,7 +2388,7 @@ fn wave2_crypto_ops_route_through_table() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════
-// LLM connections + config (wave-3): the see-arm reaches treehost::Resolvers, which COMPOSES
+// LLM connections + config (wave-3): the see-arm reaches treeseed::Resolvers, which COMPOSES
 // treecognition::connect's resolver bodies. Drive each through the dispatch table (the exact path the
 // act's see-arm / the survey probe use). Plant a being whose qualities.llmConnections holds a
 // connection, set JWT_SECRET (the FRESH treesign seal) + allowedLlmDomains so the SSRF gate + encrypt run.

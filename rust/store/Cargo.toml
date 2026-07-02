@@ -1,8 +1,8 @@
 [package]
-name = "treehost"
+name = "treeseed"
 version = "0.1.0"
 edition = "2021"
-description = "TreeOS host SEE-OP BRIDGE: the *Host.js resolver bodies as native Rust. The materials act-handlers are WORD-SOLE (.word files) whose substrate reads bottom out in `see resolve-X(args) as bind` host see-ops (setBeingHost.js / setSpaceHost.js / spaceHost.js / endSpaceHost.js / setMatterHost.js / matterHost.js). treeibp::run_body does not evaluate those `see` nodes yet, so the .word files cannot execute end-to-end. This crate ports the resolver bodies' substrate-READ + VALIDATION (load-row, name-uniqueness, coord-bounds, CAS-existence, the DELETED-sentinel, the type-registry gate, the content-addressed id mint) behind an injectable dispatch SEAM (the HostResolver trait), composing the past-engine crates (treeproj find/refold, treefold fold, treecas existence, treestore reels, treehash hash). AUTHORITY (the able-walk / owner) is the CALLER's input (an AuthCtx parameter), so this crate does NOT depend on treeibp/treeval."
+description = "THE STORE — every word of the story with its floor Rust BESIDE it (words/<bundle>/<word>.word + <floor>.rs), the genesis book (book/), and the resolver seam (AuthCtx/HostResolver/Resolvers). One place: to see what a word MEANS open its .word; to see its floor open the .rs next to it. The engine (treeos) boots from THIS store — the JS seed/ tree is a dead reference corpus. Formerly the treehost crate; the resolvers now live inside their word bundles."
 license = "AGPL-3.0"
 
 [dependencies]
@@ -37,7 +37,7 @@ treestore = { path = "../treestore" }
 treecas = { path = "../treecas" }
 
 [lib]
-name = "treehost"
+name = "treeseed"
 path = "src/lib.rs"
 
 # treehost does NOT depend on treeibp or treeval: the AUTHORITY result (has_authority_over / owner)

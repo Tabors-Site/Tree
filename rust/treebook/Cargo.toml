@@ -16,7 +16,7 @@ treeval = { path = "../treeval" }
 # seal one acting word as a MOMENT (act-first, signed) — the doctrine-correct write path.
 treestore = { path = "../treestore" }
 # the host see-op REGISTRY (GUARD 2 probes whether a host op is registered/reserved).
-treehost = { path = "../treehost" }
+treeseed = { path = "../store" }
 # the turtle plants genesis ("I") — full_genesis ignites the world before reading the whole book.
 treegenesis = { path = "../treegenesis" }
 # full_genesis signs the book's coins + the creation acts with the story key (as treeos does).

@@ -13,7 +13,7 @@
 
 .test
 # localStore: CAS bytes for matter content + resource files.
-store
+/store
 
 
 

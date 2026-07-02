@@ -3566,8 +3566,8 @@ version = "0.1.0"
 dependencies = [
  "treegenesis",
  "treehash",
- "treehost",
  "treeibp",
+ "treeseed",
  "treesign",
  "treestore",
  "treeval",
@@ -3618,28 +3618,14 @@ name = "treehash"
 version = "0.1.0"
 
 [[package]]
-name = "treehost"
-version = "0.1.0"
-dependencies = [
- "getrandom 0.2.17",
- "treecas",
- "treecognition",
- "treefold",
- "treehash",
- "treeproj",
- "treesign",
- "treestore",
-]
-
-[[package]]
 name = "treeibp"
 version = "0.1.0"
 dependencies = [
  "treefold",
  "treehash",
- "treehost",
  "treeproj",
  "treesecondary",
+ "treeseed",
  "treesign",
  "treestore",
  "treeval",
@@ -3711,6 +3697,20 @@ name = "treesecondary"
 version = "0.1.0"
 dependencies = [
  "treehash",
+]
+
+[[package]]
+name = "treeseed"
+version = "0.1.0"
+dependencies = [
+ "getrandom 0.2.17",
+ "treecas",
+ "treecognition",
+ "treefold",
+ "treehash",
+ "treeproj",
+ "treesign",
+ "treestore",
 ]
 
 [[package]]

@@ -37,7 +37,7 @@
 //
 //   GUARD 2 (MISSING LOGIC). A word may bottom out in a host see-op escape - `see <host-op>(args)` - the
 //     strand a host-coupled word reaches for substrate it cannot author as a Word literal. For the word
-//     to RUN, that host-op's logic must be REGISTERED: treehost::Resolvers must resolve <host-op>. A word
+//     to RUN, that host-op's logic must be REGISTERED: treeseed::Resolvers must resolve <host-op>. A word
 //     that names an UNREGISTERED see-op is host-reserved but its logic is missing - REFUSED (MissingLogic),
 //     naming the word + the op. A word with NO see-op escape is improv (a pure-Word declaration) and is
 //     fine. The registry IS the identification: a handler self-identifies by being registered. There is
@@ -49,7 +49,7 @@
 use std::path::Path;
 
 use treehash::Json;
-use treehost::{AuthCtx, HostResolver, Resolvers};
+use treeseed::{AuthCtx, HostResolver, Resolvers};
 
 // ── tiny Json helpers (treebook stays dependency-light) ──────────────────────────────────────────────
 
@@ -222,7 +222,7 @@ fn collect_see_ops(nodes: &[Json], ops: &mut Vec<String>) {
     }
 }
 
-/// GUARD 2: is `op` REGISTERED in the host see-op registry (treehost::Resolvers)? We ask the registry,
+/// GUARD 2: is `op` REGISTERED in the host see-op registry (treeseed::Resolvers)? We ask the registry,
 /// never a declared table: a handler self-identifies by being registered. An UNKNOWN op surfaces as the
 /// registry's `SEE_FLOOR reject-unknown` Internal refusal (its message contains "unknown see-op"); any
 /// OTHER error (a substrate refusal: bad args, not-found) means the op IS registered (the resolver ran
