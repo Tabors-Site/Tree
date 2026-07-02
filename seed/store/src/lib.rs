@@ -16,8 +16,8 @@
 // arm a new bundle must also add, so a bundle cannot be half-wired.
 //
 // (Formerly the treehost crate.) The HOST SEE-OP BRIDGE half: materials act-handlers are WORD-SOLE — each `.word`
-// (set-being.word / set-space.word / makespace.word / end-space.word / set-matter.word /
-// makematter.word) is the ONLY path, and its genuine substrate READS bottom out in a host see-op,
+// (set-being.word / set-space.word / space+matter make.word / end-space.word / set-matter.word)
+// is the ONLY path, and its genuine substrate READS bottom out in a host see-op,
 // `see resolve-X(args) as bind` — the strand the JS floor (`*Host.js`) carried. treeibp::run_body
 // evaluates `act` nodes but NOT `see resolve-X` nodes, so those `.word` files cannot run end-to-end.
 // This crate IS those resolver bodies, ported native:
@@ -150,7 +150,7 @@ pub use worldsignal::{
 ///
 /// Fields:
 ///   - `actor_being_id`: the real caller's beingId (the JS `ctx.identity.beingId` / `caller` arg). It
-///     is the matter/space CREATOR (makematter/makespace attribute to it) and the space DELETER
+///     is the matter/space CREATOR (make attributes to it) and the space DELETER
 ///     (end-space records it). Required for create (the `.word` refuses "no caller").
 ///   - `authorized`: the verb-dispatcher's able-walk verdict for THIS act (the JS trusts it). The
 ///     resolvers do not re-gate on it (the substrate read is their job); it is carried so run_body can
@@ -378,7 +378,7 @@ impl HostError {
     pub fn unknown_type(ty: &str) -> Self {
         HostError::new(
             Reason::UnknownType,
-            format!("makematter: unknown matter type \"{ty}\""),
+            format!("make: unknown matter type \"{ty}\""),
         )
     }
     /// The space is already soft-deleted. Formats the SAME refusal the prior `AlreadyDeleted` did.
@@ -581,7 +581,7 @@ pub fn able_word(name: &str) -> Option<String> {
 
 /// The name a store file coins as (treebook::op_word_name's rule): the file STEM, literally. The
 /// transitional `create`/`index` coin-as-bundle-dir exception died with the M1C rename
-/// (`create-space`→`makespace`; every stem is the coined name — one word, one token).
+/// (`create-space`→`make`; every stem is the coined name).
 fn coined_name(rel: &str) -> String {
     std::path::Path::new(rel)
         .file_stem()
@@ -590,13 +590,27 @@ fn coined_name(rel: &str) -> String {
         .to_string()
 }
 
-/// Resolve a coined word NAME (outside the able namespace) to its store-relative path.
+/// Resolve a coined word NAME (outside the able namespace) to its store-relative path. ONE word may
+/// carry a per-noun FLOOR BODY across the three noun bundles (`make` = `words/space/make.word` +
+/// `words/matter/make.word`, one coin — build.rs invariant 2 keys those by (name, noun)); a noun-less
+/// lookup of such a word lands on the SPACE body (the genesis make — `I make heaven.` makes places;
+/// noun-specific resolution goes through `op_word(op, Some(noun))`). Transitional until the frames
+/// speak the made noun in the word itself (M3).
 pub fn word_path(name: &str) -> Option<String> {
-    WORDS
+    let claims: Vec<&str> = WORDS
         .iter()
         .map(|(r, _)| *r)
-        .find(|r| !r.starts_with("words/ables/") && coined_name(r) == name)
-        .map(|r| r.to_string())
+        .filter(|r| !r.starts_with("words/ables/") && coined_name(r) == name)
+        .collect();
+    match claims.as_slice() {
+        [] => None,
+        [one] => Some(one.to_string()),
+        many => many
+            .iter()
+            .find(|r| r.starts_with("words/space/"))
+            .or_else(|| many.first())
+            .map(|r| r.to_string()),
+    }
 }
 
 /// An OP word's body: `words/<noun>/<op>.word` when the noun bundle carries it, else the unique
@@ -666,9 +680,17 @@ pub fn assert_no_drift() -> Result<(), String> {
         ("words/space/set-space.word", "materials op — not coined at genesis (yet)"),
     ];
     let indexed: std::collections::HashSet<String> = vocabulary().into_iter().collect();
+    // coverage is by COINED NAME, not by file: one word may carry a per-noun floor body across the
+    // noun bundles (`make` = space/make.word + matter/make.word) — `I read make.` covers BOTH bodies
+    // with the ONE coin (one word, one meaning; the noun picks the floor).
+    let indexed_names: std::collections::HashSet<String> =
+        indexed.iter().map(|r| coined_name(r)).collect();
     let mut missing = Vec::new();
     for (rel, _) in WORDS {
         if indexed.contains(*rel) {
+            continue;
+        }
+        if !rel.starts_with("words/ables/") && indexed_names.contains(&coined_name(rel)) {
             continue;
         }
         if UNINDEXED_PENDING.iter().any(|(p, _)| p == rel) {

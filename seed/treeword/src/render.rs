@@ -336,7 +336,7 @@ fn render_being_act(eff: &Json) -> Option<String> {
             "form the being as the new Name's own".to_string()
         });
     }
-    if act == "makespace" {
+    if act == "make" {
         if of.map(|o| s(o, "ref")).unwrap_or("") == "placeRoot" {
             return Some(format!("make a {} space", s(eff, "bind")));
         }
@@ -661,7 +661,7 @@ fn render_kindverb(node: &Json) -> String {
 /// branch fires ONLY when the node is the genesis SHAPE. A flow-body `do <op>` deed of the same op carries
 /// `of:{kind,ref}` + `params` instead (do_op_act / parse_do_target); it has no `of.id`, so it falls
 /// through to None and renders via render_effect_word's body path (render_act_effect), which keeps the
-/// deed's ref + params. Without the `of.id` guard a deed like `do makespace on the place root with {…}`
+/// deed's ref + params. Without the `of.id` guard a deed like `do make on the place root with {…}`
 /// would mis-render to the genesis "I make ." and DROP its target + params.
 fn render_act(node: &Json) -> Option<String> {
     let verb = s(node, "verb");
@@ -683,7 +683,7 @@ fn render_act(node: &Json) -> Option<String> {
                 _ => Some(format!("I am {id}.")),
             }
         }
-        ("do", "makespace") if has_id => {
+        ("do", "make") if has_id => {
             let id = of_id(node);
             match get(node, "params").and_then(|p| get(p, "gloss")) {
                 Some(Json::Str(g)) if !g.is_empty() => Some(format!("I make {id}, {g}.")),
@@ -724,10 +724,10 @@ mod tests {
         for src in [
             // a kinded target + object params
             "When the sky is summoned:\n  do set-being on the being b1 with { field: \"mood\", value: \"calm\" }.",
-            // makespace deed: must NOT collapse to the genesis \"I make .\" (the bug this guards)
-            "When the sky is summoned:\n  do makespace on the place root with { name: \"grove\", type: \"home-territory\" }.",
+            // make deed: must NOT collapse to the genesis \"I make .\" (the bug this guards)
+            "When the sky is summoned:\n  do make on the place root with { name: \"grove\", type: \"home-territory\" }.",
             // a kinded space target
-            "When the sky is summoned:\n  do makespace on the space grove with { name: \"grove\" }.",
+            "When the sky is summoned:\n  do make on the space grove with { name: \"grove\" }.",
             // give deed (genesis `give` shares the op)
             "When the sky is summoned:\n  do give on the matter apple with { to: \"Bob\" }.",
             // move deed with a target (genesis `move` shares the op)

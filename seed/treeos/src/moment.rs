@@ -138,7 +138,7 @@ pub fn run_moment(being_id: &str, entry: &Entry, root: &Path) -> MomentReport {
     let spec = treeibp::fold_word_able(&able, ables_dir).unwrap_or(Json::Null);
     // the able's flows: supplied on the entry (an embedder/test seam) else parsed from its `.word` file.
     // The override is a convenience seam (a test can inject a pre-built decision); the FILE path is the
-    // real one — treeword now round-trips a parameterized flow deed (`do makespace on the space <ref>
+    // real one — treeword now round-trips a parameterized flow deed (`do make on the space <ref>
     // with { name, type }`), so a being's own `.word` flow decides AND seals end to end. The four beats +
     // the real `cognize::decide` + the real `act::run_word` SEAL are identical for both.
     let flows = entry.flows.clone().unwrap_or_else(|| {

@@ -125,7 +125,7 @@ fn create_space(id: &str, name: &str, parent: &str, heaven_space: Option<&str>) 
     obj(vec![
         ("through", jstr("be1")),
         ("verb", jstr("do")),
-        ("act", jstr("makespace")),
+        ("act", jstr("make")),
         ("of", obj(vec![("kind", jstr("space")), ("id", jstr(id))])),
         ("params", obj(params)),
     ])
@@ -145,7 +145,7 @@ fn create_matter(id: &str, name: &str, space_id: &str, parent_matter: &str) -> J
     obj(vec![
         ("through", jstr("be1")),
         ("verb", jstr("do")),
-        ("act", jstr("makematter")),
+        ("act", jstr("make")),
         ("of", obj(vec![("kind", jstr("matter")), ("id", jstr(id))])),
         (
             "params",

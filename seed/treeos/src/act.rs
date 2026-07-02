@@ -2,7 +2,7 @@
 // with the custodial story key (a being's key is client-side, so a being's acts stay unsigned):
 //
 //   run_word(word)        — a raw Word (a genesis act "I make x.", a do-op) -> treeibp::act_via_fold.
-//   run_op(op, trigger)   — a MATERIALS op (set-being / set-space / makematter / …) invoked by name +
+//   run_op(op, trigger)   — a MATERIALS op (set-being / set-space / make / …) invoked by name +
 //                           a trigger {target, field, value, merge, branch} -> treeibp::run_op_word, which
 //                           seeds the trigger bindings + drives the op's `.word` through the host see-op
 //                           resolver (treehost). This is the channel act(word) lacks.

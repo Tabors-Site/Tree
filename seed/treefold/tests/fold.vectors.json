@@ -355,7 +355,7 @@
       "facts": [
         {
           "verb": "do",
-          "act": "makespace",
+          "act": "make",
           "of": {
             "kind": "space",
             "id": "sp1"
@@ -486,7 +486,7 @@
       "facts": [
         {
           "verb": "do",
-          "act": "makespace",
+          "act": "make",
           "of": {
             "kind": "space",
             "id": "sp2"
@@ -523,7 +523,7 @@
       "facts": [
         {
           "verb": "do",
-          "act": "makematter",
+          "act": "make",
           "of": {
             "kind": "matter",
             "id": "m1"
@@ -639,7 +639,7 @@
       "facts": [
         {
           "verb": "do",
-          "act": "makematter",
+          "act": "make",
           "of": {
             "kind": "matter",
             "id": "m2"

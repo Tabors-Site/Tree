@@ -1,4 +1,4 @@
-// The HOST SEE-OP SEAM, END-TO-END: a materials `.word` (set-being / makespace) runs through
+// The HOST SEE-OP SEAM, END-TO-END: a materials `.word` (set-being / make) runs through
 // treeibp's `run_op_word` -> `run_body_host` hits its `see resolve-X(args) as bind` node -> treehost's
 // HostResolver resolves the substrate spec against the REAL on-disk store -> the `Return` terminator
 // synthesizes the do-fact -> it AUTHORIZES + STAMPS on the right reel. The KEYSTONE: the `.word` files
@@ -38,17 +38,10 @@ fn no_spec(_: &str) -> Option<Json> {
     None
 }
 
-/// The seed dir: `$TREE_SEED_DIR` if set (a relocated checkout), else `<crate>/../../seed` (the tree).
-fn seed_dir() -> std::path::PathBuf {
-    match std::env::var("TREE_SEED_DIR") {
-        Ok(d) if !d.is_empty() => std::path::PathBuf::from(d),
-        _ => std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../seed")),
-    }
-}
-/// The seed materials `.word` files (the genuine artifacts, read off disk - no inlined copies).
-fn materials_word(rel: &str) -> String {
-    let p = seed_dir().join("materials").join(rel);
-    std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {}: {e}", p.display()))
+/// A noun-bundle op `.word` from THE store (treeseed embeds them; the old `seed/materials` JS layout
+/// is dead — the reference corpus is `legacySeed/`, and the live words are `store/words/<noun>/`).
+fn materials_word(op: &str, noun: &str) -> String {
+    treeseed::op_word(op, Some(noun)).unwrap_or_else(|| panic!("store carries {noun}/{op}.word"))
 }
 
 /// Stamp one fact (act WRAPS fact via seal_moment) onto a reel + write it (the proven plant pattern).
@@ -108,7 +101,7 @@ fn coin_op(dir: &Path, op: &str, noun: &str, ord: f64) {
     stamp(dir, "being", "Am", &coin, ord); // the vocabulary reel is the being Am
 }
 
-/// Plant a space (makespace: name + parent + optional size) then refold.
+/// Plant a space (make: name + parent + optional size) then refold.
 fn plant_space(dir: &Path, id: &str, name: &str, parent: &str, size: Option<Json>, ord: f64) {
     let mut params = vec![("name", jstr(name)), ("parent", jstr(parent))];
     if let Some(s) = size {
@@ -117,7 +110,7 @@ fn plant_space(dir: &Path, id: &str, name: &str, parent: &str, size: Option<Json
     let birth = obj(vec![
         ("through", jstr("i-am")),
         ("verb", jstr("do")),
-        ("act", jstr("makespace")),
+        ("act", jstr("make")),
         ("of", obj(vec![("kind", jstr("space")), ("id", jstr(id))])),
         ("params", obj(params)),
     ]);
@@ -136,7 +129,7 @@ fn host_seam_set_being_end_to_end_and_name_gate() {
     plant_being(&dir, "b1", "Alice", "root", None, 2.0);
     plant_being(&dir, "b2", "Bob", "root", None, 3.0);
 
-    let word = materials_word("being/set-being.word");
+    let word = materials_word("set-being", "being");
     let i = pj(r#"{"beingId":"I","nameId":"I"}"#).unwrap(); // run as I -> authorize bypasses; the test
                                                             // exercises the SEE -> resolve -> stamp path.
 
@@ -204,7 +197,7 @@ fn host_seam_set_being_end_to_end_and_name_gate() {
     println!("  treeibp: HOST SEAM end-to-end - set-being.word resolves via treehost + STAMPS; the name-collision gate REFUSES  OK");
 }
 
-// ── makespace: the birth see-op enriches the spec, the fact stamps; the coord/size gate refuses ───
+// ── make: the birth see-op enriches the spec, the fact stamps; the coord/size gate refuses ───
 #[test]
 fn host_seam_create_space_end_to_end_and_size_gate() {
     let dir = std::env::temp_dir().join("treeos-ibp-hostseam-createspace");
@@ -213,30 +206,30 @@ fn host_seam_create_space_end_to_end_and_size_gate() {
     plant_space(&dir, "root", "root", "", Some(obj(vec![("x", Json::Num(100.0)), ("y", Json::Num(100.0))])), 1.0);
     plant_being(&dir, "maker", "Maker", "root", Some("root"), 2.0);
 
-    // the op word lives in THE rust store now (words/space/makespace.word — the M1C rename; the
+    // the op word lives in THE rust store now (words/space/make.word — the M1C rename; the
     // seed/ tree is a dead reference corpus and keeps the old create-space layout).
-    let word = treeseed::op_word("makespace", Some("space")).expect("makespace.word in the store");
-    // run AS the maker being (a real caller - makespace's resolver requires an identified actor);
+    let word = treeseed::op_word("make", Some("space")).expect("make.word in the store");
+    // run AS the maker being (a real caller - make's resolver requires an identified actor);
     // run the authorize as I-less is fine because we attribute through the maker but authorize via I?
-    // No: makespace authorize needs a grant. To keep this test on the SEE-OP seam (not re-test the
+    // No: make authorize needs a grant. To keep this test on the SEE-OP seam (not re-test the
     // able-walk), grant nothing and run as I so authorize bypasses - but create's resolver still needs
     // a caller, which we pass in the trigger params (beingId), and AuthCtx.i_am supplies "I".
     let i = pj(r#"{"beingId":"I","nameId":"I"}"#).unwrap();
 
     // HAPPY PATH - bring a space "garden" into root: resolve-birth-space validates name/size + mints a
-    // spaceId, the Return synthesizes the do:makespace fact (params = the enriched spec), it stamps.
+    // spaceId, the Return synthesizes the do:make fact (params = the enriched spec), it stamps.
     let trigger = obj(vec![
         ("target", obj(vec![("kind", jstr("space")), ("id", jstr("root"))])),
         ("targetKind", jstr("space")),
         ("params", obj(vec![("name", jstr("garden")), ("parent", jstr("root"))])),
     ]);
     let out = run_op_word(&word, &i, &trigger, &dir, "0", no_spec, None, None);
-    assert_eq!(out.len(), 1, "one do:makespace fact");
+    assert_eq!(out.len(), 1, "one do:make fact");
     let fact = match &out[0] {
         Outcome::Authorized(f) => f,
-        Outcome::Denied(r) => panic!("makespace end-to-end denied (the seam did not run): {r}"),
+        Outcome::Denied(r) => panic!("make end-to-end denied (the seam did not run): {r}"),
     };
-    assert_eq!(get_str(fact, "act"), Some("makespace"), "the makespace op (renamed from create-space, M1C)");
+    assert_eq!(get_str(fact, "act"), Some("make"), "the make op (renamed from create-space, M1C)");
     assert_eq!(get_str(get(fact, "of").expect("of"), "kind"), Some("space"), "targets a space reel");
     let new_id = get_str(get(fact, "of").expect("of"), "id").expect("a minted spaceId");
     assert!(!new_id.is_empty(), "the birth see-op minted a spaceId");
@@ -247,8 +240,8 @@ fn host_seam_create_space_end_to_end_and_size_gate() {
     // the fact landed on the minted space's reel
     let sp_facts = treestore::read_reel_file(&dir, "0", "space", new_id, None, None);
     assert!(
-        sp_facts.iter().any(|f| get_str(f, "act") == Some("makespace")),
-        "the makespace fact is on the new space's reel"
+        sp_facts.iter().any(|f| get_str(f, "act") == Some("make")),
+        "the make fact is on the new space's reel"
     );
 
     // GATE - bring a space with an OVERSIZE axis (size.x beyond the seed cap): the birth resolver's
@@ -266,7 +259,7 @@ fn host_seam_create_space_end_to_end_and_size_gate() {
     match denied.first() {
         Some(Outcome::Denied(reason)) => {
             assert!(!reason.is_empty(), "the size refusal carries a reason: {reason}");
-            println!("    makespace size gate refused with: {reason}");
+            println!("    make size gate refused with: {reason}");
         }
         Some(Outcome::Authorized(_)) => panic!("an oversize space must REFUSE (a clean Denied), not stamp"),
         None => panic!("an oversize space must produce a refusal outcome, got none"),
@@ -305,7 +298,7 @@ fn composite_runs_as_n_separate_moments() {
         "  do set-space on the space beta with { field: \"qualities.mark.b\", value: \"two\" }.\n",
     )
     .to_string();
-    let set_space = materials_word("space/set-space.word");
+    let set_space = materials_word("set-space", "space");
     // DECLARE the ops on the chain (do:coin, kind:"op") so the fold resolves them, then supply their
     // bodies via `file_of` - the REAL `act_via_fold` seam (`op_word_via_fold` = fold says "op" && the
     // host loads the body). `set-two`'s noun is irrelevant (it synthesizes no fact of its own); set-space
@@ -375,7 +368,7 @@ fn composite_runs_as_n_separate_moments() {
     )
     .to_string();
     let set_deep = "When a being marks deeply:\n  do set-two on the space root with {}.\n".to_string();
-    let set_space2 = materials_word("space/set-space.word");
+    let set_space2 = materials_word("set-space", "space");
     // declare the three ops on dir2's chain, then supply their bodies via `file_of` (the real seam).
     coin_op(&dir2, "set-deep", "space", 10.0);
     coin_op(&dir2, "set-two", "space", 11.0);

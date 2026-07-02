@@ -54,19 +54,19 @@ fn main() {
     // the foundation concepts (from word.word's declarations) + the op/able words (coined by name).
     for w in [
         "word", "fact", "being", "space", "see", "fold",
-        "makespace", "makematter", "grant-able", "cherub", "birther", "angel", "arrival",
+        "make", "grant-able", "cherub", "birther", "angel", "arrival",
     ] {
         assert!(resolve_word(&dir, "0", w).is_some(), "`{w}` must fold from the chain");
     }
     assert!(resolve_word(&dir, "0", "no-such-word").is_none(), "an undeclared word does not fold");
-    println!("   foundation (word/fact/being/space/see/fold) + op/able words (makespace, grant-able, cherub, angel, …) all resolve  OK");
+    println!("   foundation (word/fact/being/space/see/fold) + op/able words (make, grant-able, cherub, angel, …) all resolve  OK");
 
     // ── VERIFY 2: the root + heaven spaces exist (be on their reels), and every space verifies ──
     let mut spaces_ok = 0;
     for (name, id) in &born.spaces {
         let facts = read_reel_file(&dir, "0", "space", id, None, None);
         assert!(!facts.is_empty(), "space `{name}` has a reel");
-        assert_eq!(gs(&facts[0], "act"), Some("makespace"), "space `{name}` is a makespace");
+        assert_eq!(gs(&facts[0], "act"), Some("make"), "space `{name}` is a make");
         assert!(ok(&verify_fact_chain(&facts)), "space `{name}` chain verifies");
         spaces_ok += 1;
     }
@@ -81,11 +81,9 @@ fn main() {
         assert!(!facts.is_empty(), "delegate `{name}` has a reel");
         assert_eq!(gs(&facts[0], "verb"), Some("be"), "delegate `{name}` first fact is a be");
         assert_eq!(gs(&facts[0], "act"), Some("birth"), "delegate `{name}` is born (be:birth)");
-        assert_eq!(
-            get(&facts[0], "params").and_then(|p| gs(p, "able")),
-            Some(able.as_str()),
-            "delegate `{name}` carries able `{able}`"
-        );
+        // the birth is BARE (WORD-DRIVEN-PARSER: the fat-birth able/description params are retired);
+        // the able arrives as its own grant moment, keyed by the `able` anchor the reader collected.
+        assert!(!able.is_empty(), "delegate `{name}` was collected under its able anchor");
         assert!(ok(&verify_fact_chain(&facts)), "delegate `{name}` chain verifies");
         delegates_ok += 1;
     }
@@ -100,8 +98,11 @@ fn main() {
         let facts = read_reel_file(&dir, "0", "being", name, None, None);
         grant_facts += facts.iter().filter(|f| gs(f, "act") == Some("grant-able")).count();
     }
-    println!("\n-- the grants: {grant_facts} grant-able facts on the delegate reels (laid: {})", born.grants_laid);
-    assert!(born.grants_laid > 0, "the grant flow laid grants");
+    println!("\n-- the grants: {grant_facts} grant-able facts on the delegate reels (flow-laid: {})", born.grants_laid);
+    // the grants ride the DELEGATE COMPOSITES now ("I am Cherub in root, a cherub in root, …" unfolds
+    // birth + grants, each its own moment) — genesis.word's separate flow lays 0 (both fingerprints
+    // agree). The truthful check is the grant facts ON THE REELS.
+    assert!(grant_facts > 0, "the delegate composites laid grant-able facts");
 
     // ── VERIFY 5: I's own reel verifies (the genesis + the vocabulary coins + the creation acts) ──
     let i_reel = read_reel_file(&dir, "0", "being", "I", None, None);
@@ -137,7 +138,7 @@ fn main() {
     }
     for (_n, id) in &born.spaces {
         for f in read_reel_file(&dir, "0", "space", id, None, None) {
-            if gs(&f, "act") == Some("makespace") {
+            if gs(&f, "act") == Some("make") {
                 if let Some(p) = render_fact(&f) {
                     story.push((ord_of(&f), p));
                 }

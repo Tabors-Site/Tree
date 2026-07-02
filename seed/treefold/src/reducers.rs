@@ -16,10 +16,10 @@ const SET_ACTIONS: &[&str] = &[
     "set-space", "set-being", "set-matter", "set-model", "rename-matter", "set-render",
     "set-being-flow", "set-owner", "remove-owner",
 ];
-// The creation ops, renamed in M1C to verb truth: one word = ONE act of ONE thing, one token
-// (rain.md) — compounds, never a noun-disambiguated base verb. `create-space`→`makespace`,
-// `create-matter`→`makematter`.
-const CREATE_ACTIONS: &[&str] = &["makespace", "makematter"];
+// `make` = THE creation op (M1C, Tabor's ruling: one word meaning "create new"; whatever noun comes
+// after is what's made). Replaces `create-space` + `create-matter`; of.kind is the noun — the fold
+// already dispatches per-kind reels, so the one act name folds both.
+const CREATE_ACTIONS: &[&str] = &["make"];
 const SCALAR_SET_FIELDS: &[&str] = &[
     "name", "type", "owner", "parent", "parentBeingId", "defaultAble", "homeSpace", "homeHistory",
     "password", "content", "spaceId", "beingId", "coord", "size", "position",

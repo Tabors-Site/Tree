@@ -170,10 +170,14 @@ fn derive_coord(id: &str) -> (f64, f64) {
 /// the actor's current space (`homeSpace`). Explicit values a later word set (`… at 0,0`, `… in heaven`)
 /// always win — this only fills what's absent. General over ALL make/birth words, present and future.
 fn with_default_placement(spec: &Json, actor: &Json) -> Json {
+    // `make` is ONE act over both nouns (of.kind picks); placement is for the SPACE make only — a
+    // matter-make fact keeps its shape exactly (no coord derive, no parent default), as create-matter
+    // never placed.
+    let of_kind = get(spec, "of").and_then(|o| get_str(o, "kind"));
     let placeable = matches!(
         (get_str(spec, "verb"), get_str(spec, "act")),
-        (Some("be"), Some("birth")) | (Some("do"), Some("makespace"))
-    );
+        (Some("be"), Some("birth")) | (Some("do"), Some("make"))
+    ) && (get_str(spec, "verb") == Some("be") || of_kind == Some("space"));
     if !placeable {
         return spec.clone();
     }
@@ -184,7 +188,7 @@ fn with_default_placement(spec: &Json, actor: &Json) -> Json {
         params = set_field(&params, "coord", obj(vec![("x", Json::Num(x)), ("y", Json::Num(y))]));
     }
     // a new SPACE with no parent falls under the actor's current space (the "current parent" default).
-    if get_str(spec, "act") == Some("makespace") && get(&params, "parent").is_none() {
+    if get_str(spec, "act") == Some("make") && get(&params, "parent").is_none() {
         if let Some(home) = get_str(actor, "homeSpace").filter(|h| !h.is_empty()) {
             params = set_field(&params, "parent", jstr(home));
         }
@@ -574,8 +578,8 @@ pub fn act(
 /// EXPANDING runner (`run_body_expand`, the one real body loop) -> AUTHORIZE + SEAL each produced spec as
 /// a moment (`seal_specs`). PRIVATE: the public entries (`act`, `act_via_fold`, `act_via_fold_bound`) are
 /// thin wrappers differing ONLY in the two injected closures - `op_word_of` (the COMPOSITE-by-reference
-/// resolver: a WORD-SOLE materials op - set-being / set-space / makespace / end-space / set-matter /
-/// makematter - carries NO inline body; `op_word_of(op)` returns its co-located `.word` and the deed
+/// resolver: a WORD-SOLE materials op - set-being / set-space / make / end-space / set-matter /
+/// make - carries NO inline body; `op_word_of(op)` returns its co-located `.word` and the deed
 /// naming it is EXPANDED, its trigger derived from the act's OWN fields, its `Return` do-fact sealed as
 /// the moment) and `binds` (the WORLD-ANCHOR seam: a `{ <anchor>: <id>, ... }` object the genesis reader
 /// seeds into ctx.bindings so a creation Word's `of`/`params` refs resolve to already-created ids). A
@@ -744,7 +748,7 @@ pub fn op_word_via_fold(
 /// This is the BOTTOM TURTLE (the JS `registerAbleWord(able, op, URL)` host registration), NOT the
 /// vocabulary: the vocabulary is the fold; this only maps a known seed op to the bundled body file. It
 /// searches the two seed roots the JS registers from — `materials/<kind>/<op>.word` (the set/end family)
-/// and the carved-out `store/words/<folder>/<op>.word` (makespace/makematter/owner/…). The op's
+/// and the carved-out `store/words/<folder>/<op>.word` (make/make/owner/…). The op's
 /// NOUN (from the fold descriptor) names the materials subfolder; the store/words layout is folder-per-op
 /// so the op name is tried as `<op>/<op>.word`. (The `create.word` alias probe died with the M1C
 /// rename — every op file's stem IS the op name now.)
@@ -756,10 +760,19 @@ pub fn op_word_file(op: &str, noun: Option<&str>, materials_dir: &Path, store_wo
             return Some(s);
         }
     }
-    // 2) store/words/<op>/<op>.word (the carved-out word-sole ops: makematter, …).
+    // 2) store/words/<op>/<op>.word (the carved-out word-sole ops).
     let rel = store_words_dir.join(op).join(format!("{op}.word"));
     if let Ok(s) = std::fs::read_to_string(&rel) {
         return Some(s);
+    }
+    // 2b) the noun bundles in FIXED order — space first, so a noun-less `make` lands on the SPACE
+    //     body deterministically (mirrors treeseed::word_path's preference; the M1C generic-make:
+    //     one coin, a floor body per noun, transitional until the frames speak the made noun).
+    for n in ["space", "being", "matter"] {
+        let p = store_words_dir.join(n).join(format!("{op}.word"));
+        if let Ok(s) = std::fs::read_to_string(&p) {
+            return Some(s);
+        }
     }
     // 3) the carved-out ops live under a FEATURE folder keyed by their able / extension (owner/set-owner,
     //    credential/credential-read, llm-assigner/set-story-llm, …) — the folder is the JS
@@ -929,7 +942,7 @@ fn seal_specs(
 }
 
 /// runOpWord (do.js) in Rust - the materials-`.word` entry. A WORD-SOLE op (`set-being` / `set-space` /
-/// `makespace` / `set-matter` / `makematter` / `end-space`) runs its co-located `.word` THROUGH
+/// `make` / `set-matter` / `make` / `end-space`) runs its co-located `.word` THROUGH
 /// this: seed the STANDARD trigger bindings (`target` / `field` / `value` / `merge` / `branch` / the
 /// extracted `caller` / `targetId`), parse + run the body with the host see-op seam wired (so the
 /// body's `see resolve-X` reaches treehost), and AUTHORIZE + SEAL the do-fact the `Return` terminator
@@ -1338,8 +1351,8 @@ fn fact_binding_of(see_op: &str) -> Option<(&'static str, &'static str)> {
         "resolve-set-being-spec" => Some(("set-being", "being")),
         "resolve-set-space-spec" => Some(("set-space", "space")),
         "resolve-set-matter-spec" => Some(("set-matter", "matter")),
-        "resolve-birth-space" => Some(("makespace", "space")),
-        "resolve-birth-spec" => Some(("makematter", "matter")),
+        "resolve-birth-space" => Some(("make", "space")),
+        "resolve-birth-spec" => Some(("make", "matter")),
         "resolve-end-space-spec" => Some(("end-space", "space")),
         // move (being step): the do:move on the walker's being reel (move.word direction mode). The
         // Return names an explicit factTarget { kind:"being", id }, so the noun here is advisory.

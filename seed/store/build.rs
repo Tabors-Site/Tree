@@ -27,10 +27,27 @@ fn walk_words(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 /// The name a file coins as (treebook::op_word_name): the file STEM, literally. The transitional
-/// `create`/`index` coin-as-bundle-dir exception died with the M1C rename (`create-space`→`makespace`;
-/// every stem is the coined name now — one word, one token).
+/// `create`/`index` coin-as-bundle-dir exception died with the M1C rename (`create-space`→`make`;
+/// every stem is the coined name now).
 fn coined_name(p: &Path) -> String {
     p.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string()
+}
+
+/// The NOUN BUNDLE a word file lives in — one of the three material kinds (being / space / matter),
+/// else None. Inside a noun bundle the uniqueness key is (name, noun): ONE word (`make`) may carry a
+/// per-noun FLOOR BODY in each bundle (`space/make.word` + `matter/make.word`), resolved by
+/// `op_word(op, noun)`. Transitional until the frames speak the made noun in the word itself.
+fn noun_bundle(rel: &str) -> Option<&'static str> {
+    for n in ["being", "space", "matter"] {
+        if rel.starts_with(&format!("words/{n}/")) {
+            return Some(match n {
+                "being" => "being",
+                "space" => "space",
+                _ => "matter",
+            });
+        }
+    }
+    None
 }
 
 fn main() {
@@ -73,18 +90,22 @@ fn main() {
         );
     }
 
-    // invariant 2: coined names unique outside ables/.
-    let mut seen: HashMap<String, PathBuf> = HashMap::new();
+    // invariant 2: coined names unique outside ables/ — EXCEPT across the three noun bundles
+    // (being/space/matter), where (name, noun) is the key: one word, one coin, a per-noun floor body
+    // (`make` = space/make.word + matter/make.word). Two files claiming the same name in the SAME
+    // bundle (or outside any bundle) still collide.
+    let mut seen: HashMap<(String, Option<&'static str>), PathBuf> = HashMap::new();
     for w in &words {
         let rel = w.strip_prefix(&root).unwrap();
         if rel.starts_with("words/ables") {
             continue;
         }
         let name = coined_name(w);
-        if let Some(prev) = seen.insert(name.clone(), w.clone()) {
+        let noun = noun_bundle(&rel.to_string_lossy().replace('\\', "/"));
+        if let Some(prev) = seen.insert((name.clone(), noun), w.clone()) {
             panic!(
                 "STORE DRIFT: coined name `{name}` is claimed by BOTH {} and {} — `I read {name}.` \
-                 must land on exactly one file",
+                 must land on exactly one file (per noun bundle)",
                 prev.display(),
                 w.display()
             );

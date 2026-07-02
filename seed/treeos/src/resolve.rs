@@ -519,9 +519,16 @@ fn past_phrase(f: &Json) -> String {
         ("be", "birth") => format!("was born as {}", pstr("name")),
         ("be", "kill") => "died".to_string(),
         ("be", a) if !a.is_empty() => format!("was {a}"),
-        (_, "makespace") => format!("made the space {}", first_nonempty(&[pstr("name"), sget(f, "to").unwrap_or_default()])),
+        // ONE make (M1C): of.kind is the noun — a space-make phrases the place, a matter-make the thing.
+        (_, "make") => {
+            let of_kind = get(f, "of").and_then(|o| sget(o, "kind")).unwrap_or_default();
+            if of_kind == "space" {
+                format!("made the space {}", first_nonempty(&[pstr("name"), sget(f, "to").unwrap_or_default()]))
+            } else {
+                format!("made {}", pstr("name"))
+            }
+        }
         (_, "form-being") => format!("gave birth to {}", pstr("name")),
-        (_, "makematter") => format!("made {}", pstr("name")),
         (_, "coin") => format!("coined the word \"{}\"", pstr("word")),
         (_, "declare") => "declared a name".to_string(),
         (_, a) if a.starts_with("set-") => {

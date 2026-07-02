@@ -11,7 +11,7 @@
 // warning. A PURE compute + (in the JS) an able-registry READ for the warning — the Rust able-word fold
 // is NOT yet ported, so the bridge defers the registry membership (every able is treated as known: the
 // warning is non-fatal in the JS and an authored-moments-later able would clear it anyway), the SAME
-// deferral makematter's extension-type gate + grant's able-exists make. The clause-SHAPE validation
+// deferral make's extension-type gate + grant's able-exists make. The clause-SHAPE validation
 // (the substance) is ported EXACTLY. It lays NO fact; a HostError IS the .word's refusal.
 
 use std::path::Path;

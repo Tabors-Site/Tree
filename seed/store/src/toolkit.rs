@@ -666,7 +666,7 @@ pub fn heaven_space_qualities(root: &Path, kind: &str) -> Option<(String, Json)>
 /// The live matter NAMES in one (space, parentMatter) FOLDER (projections.js listMatterNamesInFolder):
 /// scan the history's live matter ids (cross-history), keep those whose folded (spaceId, parentMatterId)
 /// matches. Composes treeproj::list_by_type + load_row. The rename-matter uniqueness gate + the
-/// makematter generated-name floor share this scan.
+/// make generated-name floor share this scan.
 pub fn folder_matter_names(
     root: &Path,
     history: &str,

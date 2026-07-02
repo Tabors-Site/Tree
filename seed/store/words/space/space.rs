@@ -197,12 +197,12 @@ pub fn resolve_set_space_spec(
     }
 }
 
-// ── resolve-birth-space (makespace — the space creation op, renamed from create-space in M1C) ─────
+// ── resolve-birth-space (make — the space creation op, renamed from create-space in M1C) ─────
 /// resolve-birth-space(target, targetKind, params, caller, branch) -> { enrichedSpec, spaceId }.
 /// The substrate validation half of spaces.js resolveBirthSpace: name/type/size validation + sibling-
 /// name uniqueness under the parent + the uuid mint. The parent is the target's id (or a stance's
 /// position spaceId). `caller` (AuthCtx.actor_being_id) is the creator; the `.word` already refused
-/// "no caller". Returns the enriched birth spec the do:makespace fact records.
+/// "no caller". Returns the enriched birth spec the do:make fact records.
 pub fn resolve_create_space(
     root: &Path,
     history: &str,
@@ -222,7 +222,7 @@ pub fn resolve_create_space(
         Some(c) if !c.is_empty() => c,
         _ => {
             return Err(HostError::unauthorized(
-                "makespace requires an identified actor",
+                "make requires an identified actor",
             ))
         }
     };
@@ -235,14 +235,14 @@ pub fn resolve_create_space(
 
     // name: explicit -> validated; else a generated default (the JS resolveBirthSpace mints "space<n>"
     // when absent — the bridge accepts the explicit name and validates it; an absent name is left for
-    // the caller's name-floor, matching how makematter's name floor stays caller-assistable).
+    // the caller's name-floor, matching how make's name floor stays caller-assistable).
     let raw_name = get(params, "name").cloned().unwrap_or(Json::Null);
     let name = match &raw_name {
         Json::Str(s) if !s.is_empty() => assert_valid_space_name(s)?,
         Json::Null => String::new(),
         _ => {
             return Err(HostError::invalid(
-                "makespace: `name` must be a string",
+                "make: `name` must be a string",
             ))
         }
     };
@@ -250,7 +250,7 @@ pub fn resolve_create_space(
     if !name.is_empty() {
         let scope = obj(vec![("parent", jstr(&parent_id))]);
         if !name_unique(root, &history, "space", &name, &scope, None)? {
-            return Err(HostError::name_taken("makespace", &name, &history));
+            return Err(HostError::name_taken("make", &name, &history));
         }
     }
 

@@ -10,7 +10,7 @@
 //   - capture the SOURCE space: a space subject's `parent`, a matter subject's `spaceId` (or null when
 //     it is the DELETED sentinel) — the live-SEE invalidation hint the move fact carries as fromSpaceId.
 //   - coord-mode (`coord` present): bounds-check the coord against the CONTAINER's `size`
-//     (assertCoordWithinSize — the SAME canonical math makematter / set-matter use; THROW, never
+//     (assertCoordWithinSize — the SAME canonical math make / set-matter use; THROW, never
 //     clamp — a silent clamp would lie).
 //
 // It returns `fromSpaceId` (a space-id string, or Json::Null) — the value move.word binds as
@@ -125,7 +125,7 @@ pub fn resolve_move(
     };
 
     // coord-mode bounds: THROW out-of-bounds (no silent clamp) against the container's size. The SAME
-    // canonical bounds math makematter / set-matter use (assert_coord_within_size). x/y are finite
+    // canonical bounds math make / set-matter use (assert_coord_within_size). x/y are finite
     // (move.word's shape gates) and z is finite-or-absent, so the helper's non-finite skip is a no-op.
     if is_plain_obj(coord) {
         if let Some(container_id) = &from_space_id {

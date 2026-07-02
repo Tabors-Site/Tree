@@ -67,7 +67,7 @@ fn plant_being(dir: &Path, id: &str, name: &str, home_space: &str, position: Opt
     refold(dir, "0", "being", id).expect("refold being");
 }
 
-/// Plant a space: makespace (name, parent, optional size, optional heavenSpace) -> stamp + refold.
+/// Plant a space: make (name, parent, optional size, optional heavenSpace) -> stamp + refold.
 fn plant_space(
     dir: &Path,
     id: &str,
@@ -87,7 +87,7 @@ fn plant_space(
     let birth = obj(vec![
         ("through", jstr("i-am")),
         ("verb", jstr("do")),
-        ("act", jstr("makespace")),
+        ("act", jstr("make")),
         ("of", obj(vec![("kind", jstr("space")), ("id", jstr(id))])),
         ("params", obj(params)),
     ]);
@@ -95,7 +95,7 @@ fn plant_space(
     refold(dir, "0", "space", id).expect("refold space");
 }
 
-/// Plant a matter: makematter (name, spaceId, optional content) -> stamp + refold.
+/// Plant a matter: make (name, spaceId, optional content) -> stamp + refold.
 fn plant_matter(dir: &Path, id: &str, name: &str, space_id: &str, content: Option<Json>, ord: f64) {
     let mut params = vec![("name", jstr(name)), ("spaceId", jstr(space_id))];
     if let Some(c) = content {
@@ -104,7 +104,7 @@ fn plant_matter(dir: &Path, id: &str, name: &str, space_id: &str, content: Optio
     let birth = obj(vec![
         ("through", jstr("be-creator")),
         ("verb", jstr("do")),
-        ("act", jstr("makematter")),
+        ("act", jstr("make")),
         ("of", obj(vec![("kind", jstr("matter")), ("id", jstr(id))])),
         ("params", obj(params)),
     ]);
@@ -430,12 +430,12 @@ fn set_space_field_required_and_unknown_type() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════
-// makespace (resolve-birth-space — the space creation op)
+// make (resolve-birth-space — the space creation op)
 // ════════════════════════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn create_space_happy_and_sibling_collision_and_no_caller() {
-    let dir = fresh("makespace");
+    let dir = fresh("make");
     plant_space(&dir, "par", "parent", "space-root", None, None, 1.0);
     plant_space(&dir, "sib", "taken", "par", None, None, 2.0); // an existing sibling name
 
@@ -446,7 +446,7 @@ fn create_space_happy_and_sibling_collision_and_no_caller() {
         &args(vec![target("space", "par"), jstr("space"), obj(vec![("name", jstr("fresh"))]), Json::Null, Json::Null]),
         &AuthCtx::caller("be-creator"),
     )
-    .expect("makespace happy");
+    .expect("make happy");
     let space_id = get_str(&block, "spaceId").expect("spaceId minted").to_string();
     assert!(space_id.starts_with("sp-"), "minted a positional id, got {space_id}");
     let spec = get(&block, "enrichedSpec").expect("enrichedSpec");
@@ -636,12 +636,12 @@ fn set_matter_coord_bounds_and_deleted_sentinels() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════
-// makematter (resolve-birth-spec)
+// make (resolve-birth-spec)
 // ════════════════════════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn create_matter_happy_type_gate_and_content_id() {
-    let dir = fresh("makematter");
+    let dir = fresh("make");
     plant_space(&dir, "sp1", "room", "space-root", None, None, 1.0);
 
     // happy: a generic note (text content) -> { enrichedSpec, matterId, spaceId, parentMatterId }.
@@ -657,7 +657,7 @@ fn create_matter_happy_type_gate_and_content_id() {
         ]),
         &AuthCtx::caller("be-creator"),
     )
-    .expect("makematter happy");
+    .expect("make happy");
     let matter_id = get_str(&block, "matterId").expect("matterId").to_string();
     assert_eq!(matter_id.len(), 64, "content-addressed id is a 64-hex sha256");
     assert_eq!(get_str(&block, "spaceId"), Some("sp1"));
@@ -715,7 +715,7 @@ fn create_matter_happy_type_gate_and_content_id() {
 
 #[test]
 fn create_matter_cas_existence_gate() {
-    let dir = fresh("makematter-cas");
+    let dir = fresh("make-cas");
     plant_space(&dir, "sp1", "room", "space-root", None, None, 1.0);
 
     // a file matter with a cas ref to bytes NOT in the store -> UnknownContent.
@@ -733,7 +733,7 @@ fn create_matter_cas_existence_gate() {
         &AuthCtx::caller("be-creator"),
     )
     .unwrap_err();
-    assert!(err.reason == Reason::UnknownContent, "makematter CAS-missing -> UnknownContent, got {err:?}");
+    assert!(err.reason == Reason::UnknownContent, "make CAS-missing -> UnknownContent, got {err:?}");
 
     // put the bytes, then it passes (file allows binary; a utf8-encoded cas ref is "text", which file
     // also allows).
@@ -751,7 +751,7 @@ fn create_matter_cas_existence_gate() {
         ]),
         &AuthCtx::caller("be-creator"),
     )
-    .expect("makematter with present CAS bytes");
+    .expect("make with present CAS bytes");
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -793,7 +793,7 @@ fn plant_submatter(dir: &Path, id: &str, name: &str, space_id: &str, parent_matt
     let birth = obj(vec![
         ("through", jstr("be-creator")),
         ("verb", jstr("do")),
-        ("act", jstr("makematter")),
+        ("act", jstr("make")),
         ("of", obj(vec![("kind", jstr("matter")), ("id", jstr(id))])),
         ("params", obj(vec![
             ("name", jstr(name)),
@@ -814,7 +814,7 @@ fn plant_matter_with_author(dir: &Path, id: &str, name: &str, space_id: &str, au
     let birth = obj(vec![
         ("through", jstr(author)),
         ("verb", jstr("do")),
-        ("act", jstr("makematter")),
+        ("act", jstr("make")),
         ("of", obj(vec![("kind", jstr("matter")), ("id", jstr(id))])),
         ("params", obj(params)),
     ]);
@@ -822,12 +822,12 @@ fn plant_matter_with_author(dir: &Path, id: &str, name: &str, space_id: &str, au
     refold(dir, "0", "matter", id).expect("refold authored matter");
 }
 
-/// Plant a space with an explicit owner field (makespace reads params.owner) -> stamp + refold.
+/// Plant a space with an explicit owner field (make reads params.owner) -> stamp + refold.
 fn plant_owned_space(dir: &Path, id: &str, name: &str, parent: &str, owner: &str, ord: f64) {
     let birth = obj(vec![
         ("through", jstr("i-am")),
         ("verb", jstr("do")),
-        ("act", jstr("makespace")),
+        ("act", jstr("make")),
         ("of", obj(vec![("kind", jstr("space")), ("id", jstr(id))])),
         ("params", obj(vec![("name", jstr(name)), ("parent", jstr(parent)), ("owner", jstr(owner))])),
     ]);
@@ -1532,7 +1532,7 @@ fn plant_matter_typed(dir: &Path, id: &str, name: &str, space_id: &str, ty: &str
     let birth = obj(vec![
         ("through", jstr("i-am")),
         ("verb", jstr("do")),
-        ("act", jstr("makematter")),
+        ("act", jstr("make")),
         ("of", obj(vec![("kind", jstr("matter")), ("id", jstr(id))])),
         ("params", obj(params)),
     ]);
@@ -1909,7 +1909,7 @@ fn part3_ops_route_through_table() {
 // ════════════════════════════════════════════════════════════════════════════════════════════════
 
 /// Plant a heaven space with an explicit `heavenSpace` marker AND a `qualities.pointers` map: a
-/// makespace (with heavenSpace) then a set-space fact that folds qualities.pointers. Mirrors the
+/// make (with heavenSpace) then a set-space fact that folds qualities.pointers. Mirrors the
 /// `.histories` heaven space the pointer registry reads.
 fn plant_histories_space(dir: &Path, id: &str, pointers: Option<Json>, ord: f64) {
     plant_space(dir, id, ".histories", "space-root", None, Some("histories"), ord);

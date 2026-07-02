@@ -12,7 +12,7 @@
 // in the ables dir; `getAble` looks the folded able up). There is NO static seed set to mirror, and the
 // Rust able-word fold is not yet ported. So the bridge validates the able is a WELL-FORMED non-empty
 // kebab identifier (the gate SHAPE: an empty / blank / malformed able is refused); the registry-
-// membership check resolves from the able-word fold (the deferred refinement), exactly as makematter
+// membership check resolves from the able-word fold (the deferred refinement), exactly as make
 // defers the extension matter-type to the word-fold. The gate is meaningful (rejects the bad shapes)
 // without inventing a wrong static allowlist.
 

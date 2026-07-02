@@ -57,7 +57,7 @@ fn i_reads_the_whole_book_and_the_world_is_born() {
     // 1. THE VOCABULARY FOLDS from I's chain (the fold, not a code table).
     for w in [
         "word", "fact", "being", "space", "see", "fold", // foundation concepts (word.word)
-        "makespace", "makematter", "grant-able", "cherub", "birther", "angel", "arrival", // op/able words
+        "make", "grant-able", "cherub", "birther", "angel", "arrival", // op/able words
     ] {
         assert!(resolve_word(&dir, "0", w).is_some(), "`{w}` folds from the chain");
     }
@@ -68,7 +68,7 @@ fn i_reads_the_whole_book_and_the_world_is_born() {
     for (name, id) in &born.spaces {
         let facts = read_reel_file(&dir, "0", "space", id, None, None);
         assert!(!facts.is_empty(), "space `{name}` has a reel");
-        assert_eq!(gs(&facts[0], "act"), Some("makespace"), "space `{name}` is a makespace");
+        assert_eq!(gs(&facts[0], "act"), Some("make"), "space `{name}` is a make");
         assert!(ok(&verify_fact_chain(&facts)), "space `{name}` chain verifies");
     }
     assert!(born.spaces.iter().any(|(n, _)| n == "root"), "the place root exists");
@@ -132,7 +132,7 @@ fn i_reads_the_whole_book_and_the_world_is_born() {
     };
     let heaven_id = born.spaces.iter().find(|(n, _)| n == "heaven").map(|(_, id)| id.clone()).unwrap();
     let heaven = read_reel_file(&dir, "0", "space", &heaven_id, None, None);
-    let made_heaven = heaven.iter().find(|f| gs(f, "act") == Some("makespace")).unwrap();
+    let made_heaven = heaven.iter().find(|f| gs(f, "act") == Some("make")).unwrap();
     assert_eq!(render(made_heaven).as_deref(), Some("I make heaven."), "heaven re-utters as I spoke it");
     let cherub = read_reel_file(&dir, "0", "being", "Cherub", None, None);
     let made_cherub = cherub.iter().find(|f| gs(f, "act") == Some("birth")).unwrap();

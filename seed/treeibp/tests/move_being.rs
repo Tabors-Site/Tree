@@ -87,7 +87,7 @@ fn plant_space(dir: &Path, id: &str, name: &str, parent: &str, ord: f64) {
     let birth = obj(vec![
         ("through", jstr("i-am")),
         ("verb", jstr("do")),
-        ("act", jstr("makespace")),
+        ("act", jstr("make")),
         ("of", obj(vec![("kind", jstr("space")), ("id", jstr(id))])),
         ("params", obj(vec![("name", jstr(name)), ("parent", jstr(parent))])),
     ]);

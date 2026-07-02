@@ -8,7 +8,7 @@
 use treehash::*;
 
 const VECTORS_PATH: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/../../seed/past/fact/canon.vectors.json");
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../../legacySeed/past/fact/canon.vectors.json");
 
 fn get<'a>(v: &'a Json, k: &str) -> &'a Json {
     match v {

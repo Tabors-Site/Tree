@@ -4,5 +4,5 @@ When a being forms a portal:
   If not valid-address(params's target), refuse with "form-portal: target does not look like a foreign IBPA. Expected <story-domain>[#<history>]/<position>." as invalid-input.
   see resolve-containing-space(target) as spaceId.
   If no spaceId, refuse with "form-portal: cannot determine containing space for the matter target" as invalid-input.
-  do makematter on the space spaceId with { type: "ibpa", content: { target: $params.target }, name: $name, qualities: { portal: { target: $params.target, createdBy: $caller } } } as portalMatter.
+  do make on the space spaceId with { type: "ibpa", content: { target: $params.target }, name: $name, qualities: { portal: { target: $params.target, createdBy: $caller } } } as portalMatter.
   Return formed: true, matterId: $portalMatter, spaceId: $spaceId, target: $params.target.

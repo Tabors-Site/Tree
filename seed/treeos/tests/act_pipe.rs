@@ -103,15 +103,15 @@ fn authorized_act_stamps_and_denied_act_does_not() {
     assert_eq!(get_str(&as_arr(&grants)[0], "able"), Some("builder"));
 
     // 3. the builder able's spec (its foldAbleNoun production is the JS side's port; provided here).
-    let builder_spec = pj(r#"{"canDo":["makespace"],"reach":["/**"]}"#).unwrap();
+    let builder_spec = pj(r#"{"canDo":["make"],"reach":["/**"]}"#).unwrap();
     let b1 = pj(r#"{"beingId":"b1","nameId":"builder-being"}"#).unwrap();
     let ctx = pj(r#"{"identity":{"beingId":"b1","nameId":"builder-being"},"bindings":{},"state":{},"beings":{}}"#).unwrap();
 
-    // 4. AUTHORIZED PATH — "I make garden." -> do:makespace; builder permits it.
+    // 4. AUTHORIZED PATH — "I make garden." -> do:make; builder permits it.
     let ir = treeword::parse("I make garden.");
     let act = &ir[0];
     let decision = authorize_act(act, &b1, &grants, &builder_spec, "garden");
-    assert!(ok_true(&decision), "b1 (holding builder) is authorized to makespace");
+    assert!(ok_true(&decision), "b1 (holding builder) is authorized to make");
     assert_eq!(get_str(&decision, "actor"), Some("builder"), "the granting able is the actor");
 
     // authorized -> rasterize -> stamp -> verify
@@ -124,7 +124,7 @@ fn authorized_act_stamps_and_denied_act_does_not() {
     assert_eq!(facts.len(), 1, "the authorized act landed on its reel");
     assert!(ok_true(&verify_fact_chain(&facts)), "the authorized act's chain verifies");
 
-    // 5. DENIED PATH — a stranger with no grant cannot makespace; nothing is stamped.
+    // 5. DENIED PATH — a stranger with no grant cannot make; nothing is stamped.
     let stranger = pj(r#"{"beingId":"b2","nameId":"stranger"}"#).unwrap();
     let denial = authorize_act(act, &stranger, &Json::Arr(vec![]), &builder_spec, "garden");
     assert!(!ok_true(&denial), "the stranger is denied");

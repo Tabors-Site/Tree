@@ -180,7 +180,7 @@
         {
           "kind": "act",
           "verb": "do",
-          "act": "makespace",
+          "act": "make",
           "by": "I",
           "of": {
             "kind": "space",
@@ -196,7 +196,7 @@
         {
           "kind": "act",
           "verb": "do",
-          "act": "makespace",
+          "act": "make",
           "by": "I",
           "of": {
             "kind": "space",
@@ -965,7 +965,7 @@
             {
               "kind": "act",
               "verb": "do",
-              "act": "makespace",
+              "act": "make",
               "by": "I",
               "through": "Cherub",
               "bind": "home",

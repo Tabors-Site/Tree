@@ -256,13 +256,13 @@ fn rules() -> &'static [(Regex, Builder)] {
                     }
                 }
                 obj(vec![
-                    ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("makespace")), ("by", jstr("I")),
+                    ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("make")), ("by", jstr("I")),
                     ("of", obj(vec![("kind", jstr("space")), ("id", jstr(&m[1]))])),
                     ("params", obj(params)),
                 ])
             },
         ),
-        // (`I make <space>` and `I make <space> in <parent>` -> do:makespace are now the WORD-DRIVEN
+        // (`I make <space>` and `I make <space> in <parent>` -> do:make are now the WORD-DRIVEN
         // READER — reader.rs, `make` a Do-verb from do.word. `I stand in <space>` is RETIRED: there is no
         // `stand`; it is `I move to <space>` (do:move — the move word). Those regexes were DELETED. Only the
         // coord form (`I make <space> [in <parent>] at <x>, <y>`) stays above — the reader defers it (the
@@ -486,7 +486,7 @@ fn effect_rules() -> &'static [(Regex, EffBuilder)] {
             Regex::new(r"(?i)^replace the (being|space|matter) ([\w-]+)'s (\$?[\w.]+) with (.+?)\.$").unwrap(),
             |m, ctx| write_act(ctx, &m[1], &m[3], &m[4], Some(false), &m[2]),
         ),
-        // make a <name> space.   -> do:makespace under the place root (binds the created space's id)
+        // make a <name> space.   -> do:make under the place root (binds the created space's id)
         (
             Regex::new(r"(?i)^make a (\w+) space\.$").unwrap(),
             |m, ctx| {
@@ -495,7 +495,7 @@ fn effect_rules() -> &'static [(Regex, EffBuilder)] {
                     None => Json::Null,
                 };
                 obj(vec![
-                    ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("makespace")), ("by", jstr("I")),
+                    ("kind", jstr("act")), ("verb", jstr("do")), ("act", jstr("make")), ("by", jstr("I")),
                     ("through", through), ("bind", jstr(&m[1].to_lowercase())),
                     ("of", obj(vec![("kind", jstr("space")), ("ref", jstr("placeRoot"))])),
                     ("params", obj(vec![("name", jstr("$name")), ("type", jstr("home-territory"))])),

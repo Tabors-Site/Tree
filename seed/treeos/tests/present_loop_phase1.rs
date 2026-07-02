@@ -9,17 +9,17 @@
 //
 // Proofs:
 //   (A) the full SEAL path: summon -> wake -> scripted DECIDES "I make <space>." -> ACT stamps
-//       makespace -> the new space reel exists + verifies, and the being woke exactly once.
+//       make -> the new space reel exists + verifies, and the being woke exactly once.
 //   (B) the See path: a real scripted able with no matching trigger -> a clean See, NO act row.
 //   (F) the FILE-flow DECIDE leg: a scripted being's `.word` file holds a PARAMETERIZED deed; load it
 //       off disk and decide -> the spoken Word carries its target + params (the renderer round-trip).
-//   (F-seal) the FILE-flow SEAL leg: the SAME parameterized flow deed (`do makespace on the space
+//   (F-seal) the FILE-flow SEAL leg: the SAME parameterized flow deed (`do make on the space
 //       <ref> with { name, type }`), decided by the conductor and SEALED end-to-end over a real
-//       genesis-born world (the vocabulary coined so `makespace` resolves as an op word). The deed
+//       genesis-born world (the vocabulary coined so `make` resolves as an op word). The deed
 //       targets a bare `{ref}` (no resolved id); the conductor's seal (act::run_word -> act_via_fold)
 //       runs it through the SAME op-word path genesis uses (op_word_via_fold + derive_trigger's
 //       literal-ref recovery), so the deed resolves its op-word + its `{ref}` and STAMPS the enriched
-//       makespace fact — which lands on a real space reel and chain-VERIFIES. Node-free, clock-free.
+//       make fact — which lands on a real space reel and chain-VERIFIES. Node-free, clock-free.
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -57,7 +57,7 @@ fn plant_builder_able(ables_dir: &std::path::Path) {
     std::fs::create_dir_all(ables_dir).unwrap();
     let body = "# scratch scripted builder able for the present-loop verification.\n\
 A builder is an able.\n\
-A builder can do makespace.\n\
+A builder can do make.\n\
 A builder can see place.\n\
 A builder reaches /**.\n\
 A builder needs scripted cognition.\n";
@@ -66,7 +66,7 @@ A builder needs scripted cognition.\n";
 
 /// Plant a scratch "scripted-flow" able whose `.word` carries the DECISION as a PARAMETERIZED FLOW DEED
 /// in the file itself; no injected flow. On the summon event the flow's body deed
-/// `do makespace on the space <id> with { name, type }` is parsed AND rendered by treeword (the
+/// `do make on the space <id> with { name, type }` is parsed AND rendered by treeword (the
 /// round-trip the renderer fix unlocked: the deed's target + params are carried, not dropped), spoken as
 /// a Word, and stamped by the real act path. This proves the FILE path end-to-end: a scripted being's
 /// `.word` flow with a parameterized deed drives the loop.
@@ -77,13 +77,13 @@ fn plant_flowfile_able(ables_dir: &std::path::Path, space: &str) {
     let body = [
         "# scratch scripted builder able whose DECISION lives in this .word file as a flow.".to_string(),
         "A builder is an able.".to_string(),
-        "A builder can do makespace.".to_string(),
+        "A builder can do make.".to_string(),
         "A builder can see place.".to_string(),
         "A builder reaches /**.".to_string(),
         "A builder needs scripted cognition.".to_string(),
         String::new(),
         "When the sky is summoned:".to_string(),
-        format!("  do makespace on the space {space} with {{ name: \"{space}\", type: \"home-territory\" }}."),
+        format!("  do make on the space {space} with {{ name: \"{space}\", type: \"home-territory\" }}."),
         String::new(),
     ]
     .join("\n");
@@ -96,7 +96,7 @@ fn obj(f: Vec<(&str, Json)>) -> Json {
 
 /// A scripted FLOW that, on the summon event, speaks "I make <space>." — a complete, stampable Word.
 /// The When trigger is `event: "the sky is summoned"` (matches face.event); the effect is a directly
-/// built makespace node that renders to "I make <space>.".
+/// built make node that renders to "I make <space>.".
 fn make_flow(space: &str) -> Json {
     let make = treeword::parse(&format!("I make {space}.")).remove(0);
     obj(vec![
@@ -152,7 +152,7 @@ fn summoned_being_wakes_decides_acts_chain_advances() {
     assert_eq!(r.facts.len(), 1, "the decided Word stamped one fact");
     assert!(ok_true(&r.facts[0]), "the stamped fact is authorized: {}", treehash::stringify(&r.facts[0]));
     let stamped = get(&r.facts[0], "fact").expect("a fact row");
-    assert_eq!(get_str(stamped, "act"), Some("makespace"), "the decided Word was makespace");
+    assert_eq!(get_str(stamped, "act"), Some("make"), "the decided Word was make");
 
     // ── the new space reel EXISTS + the chain VERIFIES ──────────────────────
     let grove = read_reel_file(&root, "0", "space", "grove", None, None);
@@ -162,7 +162,7 @@ fn summoned_being_wakes_decides_acts_chain_advances() {
 
     let _ = std::fs::remove_dir_all(&base);
     std::env::remove_var("TREE_ABLES_DIR");
-    println!("  treeos present-loop Phase 1 (A): summon -> wake -> scripted decide -> ACT stamps makespace -> chain verifies (Node-free, clock-free)  OK");
+    println!("  treeos present-loop Phase 1 (A): summon -> wake -> scripted decide -> ACT stamps make -> chain verifies (Node-free, clock-free)  OK");
 }
 
 #[test]
@@ -244,17 +244,17 @@ fn wire_summon_drives_the_conductor_node_free() {
 #[test]
 fn scripted_word_file_flow_with_a_parameterized_deed_drives_the_loop() {
     // THE FILE PATH (the gap closed): a scripted being's `.word` FILE carries a PARAMETERIZED flow deed
-    // (`do makespace on the space <id> with { name, type }`). The conductor PARSES the able's flows off
+    // (`do make on the space <id> with { name, type }`). The conductor PARSES the able's flows off
     // disk (no injected decision) and RENDERS the matched effect to the spoken decision Word. The renderer
-    // no longer DROPS the deed's target/params (the of.id genesis guard keeps a flow `do makespace`
+    // no longer DROPS the deed's target/params (the of.id genesis guard keeps a flow `do make`
     // deed from collapsing to the genesis "I make ."), so the being decides the FULL deed
-    // `do makespace on the space <id> with { name: ..., type: ... }`; end-to-end FROM THE FILE, Node-free.
+    // `do make on the space <id> with { name: ..., type: ... }`; end-to-end FROM THE FILE, Node-free.
     //
     // This drives the conductor's REAL decide path: load the able's `.word` flows the same way moment.rs
     // does (entry.flows is None -> read the file), build the inner-face the summon event makes, and run
     // treecognition's scripted decider. Before the fix that decision was the collapsed genesis stub
     // (target + params gone); now it is the complete parameterized Word the file declared. (The literal-id
-    // SEAL of a makespace DEED is the op-word path's job; a flow deed targets `{ref}`, resolved by the
+    // SEAL of a make DEED is the op-word path's job; a flow deed targets `{ref}`, resolved by the
     // op-word body on the real seed vocabulary; the seal RAIL itself is proven by proof (A) above. This
     // proof is the file -> decide -> a COMPLETE parameterized decision Word leg the renderer fix unlocks.)
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -292,7 +292,7 @@ fn scripted_word_file_flow_with_a_parameterized_deed_drives_the_loop() {
     };
     // THE FIX: the spoken Word is the FULL deed; it CARRIES the target + the { name, type } params, not
     // the collapsed genesis "I make .". This is the precise round-trip the renderer fix unlocked.
-    assert!(content.starts_with("do makespace on the space "), "spoke the targeted deed (not the genesis stub): {content:?}");
+    assert!(content.starts_with("do make on the space "), "spoke the targeted deed (not the genesis stub): {content:?}");
     assert!(content.contains(space), "the deed carries its target id: {content:?}");
     assert!(content.contains(&format!("name: \"{space}\"")), "the deed carries its name param: {content:?}");
     assert!(content.contains("type: \"home-territory\""), "the deed carries its type param: {content:?}");
@@ -302,65 +302,18 @@ fn scripted_word_file_flow_with_a_parameterized_deed_drives_the_loop() {
 
     let _ = std::fs::remove_dir_all(&base);
     std::env::remove_var("TREE_ABLES_DIR");
-    println!("  treeos present-loop Phase 1 (F): scripted .word FILE flow (parameterized deed) -> load-from-file -> decide -> ACT speaks the FULL `do makespace ... with {{ name, type }}` (target + params carried, not dropped), Node-free  OK");
+    println!("  treeos present-loop Phase 1 (F): scripted .word FILE flow (parameterized deed) -> load-from-file -> decide -> ACT speaks the FULL `do make ... with {{ name, type }}` (target + params carried, not dropped), Node-free  OK");
 }
 
-/// The repo root (CARGO_MANIFEST_DIR is rust/treeos), canonicalized — so the seed's `materials/` +
-/// `store/words/` resolve when the conductor seal (act::run_word) loads an op's `.word` body off disk.
+/// The repo root (CARGO_MANIFEST_DIR is seed/treeos), canonicalized — so `seed/store/words/` resolves
+/// when the conductor seal (act::run_word) loads an op's `.word` body off disk.
 fn repo_root() -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
         .canonicalize()
         .expect("repo root canonicalizes")
 }
 
-/// The genesis vocabulary in dependency order (the foundation flats first, then every remaining op/able
-/// `.word` under the seed) — the SAME list the treebook full-genesis test reads, so the world I births
-/// here is the real one (every op declared on chain, `makespace` resolving as a kind:"op" word).
-fn genesis_vocabulary(seed: &std::path::Path) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-    let mut push = |out: &mut Vec<String>, rel: &str| {
-        if seen.insert(rel.to_string()) {
-            out.push(rel.to_string());
-        }
-    };
-    for rel in [
-        "store/words/word.word", "store/words/iam.word", "store/words/base.word",
-        "store/words/in.word", "store/words/out.word", "store/words/chain.word",
-        "store/words/history.word", "store/words/story.word", "store/words/fold.word",
-        "store/words/see.word", "store/words/do.word", "store/words/name.word",
-        "store/words/being.word", "store/words/space.word", "store/words/matter.word",
-        "store/words/weave.word", "store/words/be.word", "store/words/call.word",
-        "store/words/can.word", "store/words/recall.word", "store/words/able.word",
-        "store/words/flow.word", "store/words/verbs.word", "store/words/if.word",
-        "store/words/while.word", "store/words/for.word",
-    ] {
-        push(&mut out, rel);
-    }
-    let mut rest = Vec::new();
-    let mut stack = vec![seed.join("store/words")];
-    while let Some(d) = stack.pop() {
-        if let Ok(rd) = std::fs::read_dir(&d) {
-            for ent in rd.flatten() {
-                let p = ent.path();
-                if p.is_dir() {
-                    stack.push(p);
-                } else if p.extension().and_then(|e| e.to_str()) == Some("word") {
-                    if let Ok(rel) = p.strip_prefix(seed) {
-                        rest.push(rel.to_string_lossy().to_string());
-                    }
-                }
-            }
-        }
-    }
-    rest.sort();
-    for rel in rest {
-        push(&mut out, &rel);
-    }
-    out
-}
-
-/// Plant a scratch scripted "builder" able whose `.word` flow holds a parameterized makespace deed
+/// Plant a scratch scripted "builder" able whose `.word` flow holds a parameterized make deed
 /// targeting a bare `{ref}` — with a VALID space type (`place`), so the deed SEALS a real fact (proof F
 /// used the illustrative `home-territory` type to prove the render leg; the seal leg must use a type the
 /// space type-registry admits). The deed's `<ref>` is a literal id named directly in the flow, which the
@@ -368,15 +321,15 @@ fn genesis_vocabulary(seed: &std::path::Path) -> Vec<String> {
 fn plant_seal_flow_able(ables_dir: &std::path::Path, space_ref: &str) {
     std::fs::create_dir_all(ables_dir).unwrap();
     let body = [
-        "# scratch scripted builder whose flow SEALS a real makespace (valid space type).".to_string(),
+        "# scratch scripted builder whose flow SEALS a real make (valid space type).".to_string(),
         "A builder is an able.".to_string(),
-        "A builder can do makespace.".to_string(),
+        "A builder can do make.".to_string(),
         "A builder can see place.".to_string(),
         "A builder reaches /**.".to_string(),
         "A builder needs scripted cognition.".to_string(),
         String::new(),
         "When the sky is summoned:".to_string(),
-        format!("  do makespace on the space {space_ref} with {{ name: \"{space_ref}\", type: \"place\" }}."),
+        format!("  do make on the space {space_ref} with {{ name: \"{space_ref}\", type: \"place\" }}."),
         String::new(),
     ]
     .join("\n");
@@ -386,31 +339,30 @@ fn plant_seal_flow_able(ables_dir: &std::path::Path, space_ref: &str) {
 #[test]
 fn scripted_word_file_flow_deed_seals_a_real_fact_end_to_end() {
     // THE SEAL leg of the file-flow proof: a scripted being's `.word` flow deed
-    // `do makespace on the space <ref> with { name, type }` is SUMMONED -> the conductor WAKES it,
+    // `do make on the space <ref> with { name, type }` is SUMMONED -> the conductor WAKES it,
     // DECIDES the parameterized Word off the FILE, and SEALS it through act::run_word -> act_via_fold.
     // The deed targets a bare `{ref}` (no resolved id), so the seal MUST run it through the op-word path
-    // (op_word_via_fold resolves `makespace` from the chain word-fold; derive_trigger's literal-ref
-    // recovery supplies the `{ref}` id; the makespace `.word` body runs through the host see-op and
-    // enriches the fact). The proof: a REAL makespace fact stamps + its space reel chain-VERIFIES.
+    // (op_word_via_fold resolves `make` from the chain word-fold; derive_trigger's literal-ref
+    // recovery supplies the `{ref}` id; the make `.word` body runs through the host see-op and
+    // enriches the fact). The proof: a REAL make fact stamps + its space reel chain-VERIFIES.
     //
-    // The vocabulary must be coined on chain for `makespace` to fold as a kind:"op" word, so this
+    // The vocabulary must be coined on chain for `make` to fold as a kind:"op" word, so this
     // proof births a real genesis world first (treebook::full_genesis) — the SAME world the runtime
     // serves. Node-free (pure Rust over the spine) and clock-free (the only ord is the append count).
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let seed = repo_root().join("seed");
-    // cwd = repo root so act::run_word's `seed/materials` + `seed/store/words` relative paths resolve to
-    // the op `.word` bodies on disk (the bottom-turtle file map). Harmless to the other tests (they key
-    // off absolute scratch paths) and serialized by ENV_LOCK.
+    // cwd = repo root so act::run_word's `seed/store/words` relative path resolves to the rust store's
+    // word bodies on disk (the bottom-turtle file map; `seed/` IS the rust workspace since the
+    // restructure). Harmless to the other tests (they key off absolute scratch paths), ENV_LOCK-serialized.
     std::env::set_current_dir(repo_root()).unwrap();
 
     let base = std::env::temp_dir().join(format!("treeos-present-loop-Fseal-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     let root = base.join("store");
 
-    // 1. BIRTH a real world: the vocabulary coined (so `makespace` resolves as an op word), the
+    // 1. BIRTH a real world: the vocabulary coined (so `make` resolves as an op word), the
     //    spaces/delegates created, the grants run — exactly the runtime's born world, Node-free.
-    let vocab = genesis_vocabulary(&seed);
-    let born = treebook::full_genesis(&seed, &root, &vocab).expect("the genesis world is born");
+    //    (M1B: full_genesis boots from the EMBEDDED store — the reading order is book/index.word.)
+    let born = treebook::full_genesis(&root).expect("the genesis world is born");
     assert!(born.vocabulary_coined > 400, "the vocabulary coined ({})", born.vocabulary_coined);
 
     // 2. a scripted being granted the builder able whose FILE flow holds the parameterized deed.
@@ -438,18 +390,18 @@ fn scripted_word_file_flow_deed_seals_a_real_fact_end_to_end() {
     assert_eq!(r.mode, "scripted", "the able routed to scripted cognition");
     assert!(r.acted(), "the file flow's deed decided an ACT (not See/Failure): {:?}", r.decision);
     if let treecognition::Cognition::Act { content } = &r.decision {
-        assert!(content.starts_with("do makespace on the space "), "the decided Word is the targeted deed: {content:?}");
+        assert!(content.starts_with("do make on the space "), "the decided Word is the targeted deed: {content:?}");
         assert!(content.contains(space_ref), "the decided Word carries its `{{ref}}`: {content:?}");
     }
 
-    // ── the SEAL stamped a real makespace fact (NOT just rendered) ────────────────────────────────
+    // ── the SEAL stamped a real make fact (NOT just rendered) ────────────────────────────────
     assert_eq!(r.facts.len(), 1, "the decided Word SEALED exactly one fact: {}", treehash::stringify(&Json::Arr(r.facts.clone())));
     assert!(ok_true(&r.facts[0]), "the stamped fact is authorized (the seal RAIL did not refuse): {}", treehash::stringify(&r.facts[0]));
     let stamped = get(&r.facts[0], "fact").expect("a stamped fact row");
-    assert_eq!(get_str(stamped, "act"), Some("makespace"), "the SEAL is a makespace fact");
+    assert_eq!(get_str(stamped, "act"), Some("make"), "the SEAL is a make fact");
     assert_eq!(get_str(stamped, "verb"), Some("do"), "a do-fact");
     assert_eq!(get_str(stamped, "through"), Some(being), "attributed through the acting being");
-    // the makespace op DERIVES the new space's reel id (id-from-nature); read it off the sealed fact.
+    // the make op DERIVES the new space's reel id (id-from-nature); read it off the sealed fact.
     let new_space_id = get(stamped, "of").and_then(|o| get_str(o, "id")).expect("the sealed fact names its space reel id").to_string();
     assert!(!new_space_id.is_empty(), "the op-word path resolved + enriched the fact's target id (not null)");
     // the params the deed carried rode into the enriched fact (the `{ name, type }` the flow declared).
@@ -460,11 +412,11 @@ fn scripted_word_file_flow_deed_seals_a_real_fact_end_to_end() {
     // ── the new space reel EXISTS on disk + the chain VERIFIES ───────────────────────────────────────
     let new_reel = read_reel_file(&root, "0", "space", &new_space_id, None, None);
     assert_eq!(new_reel.len(), 1, "the conductor's SEAL birthed the new space reel ({new_space_id})");
-    assert_eq!(get_str(&new_reel[0], "act"), Some("makespace"), "the reel's first fact is the sealed makespace");
+    assert_eq!(get_str(&new_reel[0], "act"), Some("make"), "the reel's first fact is the sealed make");
     let verdict = verify_fact_chain(&new_reel);
     assert!(ok_true(&verdict), "the sealed space chain verifies: {}", treehash::stringify(&verdict));
 
     let _ = std::fs::remove_dir_all(&base);
     std::env::remove_var("TREE_ABLES_DIR");
-    println!("  treeos present-loop Phase 1 (F-seal): scripted .word FILE flow deed (`do makespace on the space {{ref}} with {{ name, type }}`) -> summon -> wake -> decide -> SEAL via the op-word path (op_word_via_fold + literal-ref recovery) -> a REAL makespace fact lands + chain-verifies (Node-free, clock-free)  OK");
+    println!("  treeos present-loop Phase 1 (F-seal): scripted .word FILE flow deed (`do make on the space {{ref}} with {{ name, type }}`) -> summon -> wake -> decide -> SEAL via the op-word path (op_word_via_fold + literal-ref recovery) -> a REAL make fact lands + chain-verifies (Node-free, clock-free)  OK");
 }

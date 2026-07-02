@@ -11,7 +11,7 @@ A global can do set-being:coord.
 A global can do set-being:position.
 A global can do ask-able.
 A global can do take-able.
-A global can do makematter:model.
+A global can do make:model.
 A global can do set-model.
 A global can call @cherub.
 A global can be release.

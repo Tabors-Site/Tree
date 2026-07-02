@@ -10,7 +10,7 @@ last section).
 
 The materials act-handlers are **WORD-SOLE**: each `.word`
 (`set-being.word` / `set-space.word` / `create.word` / `end-space.word` / `set-matter.word` /
-`makematter.word`) is the ONLY path. Its CONTROL strand is the `.word`; its genuine substrate
+`make.word`) is the ONLY path. Its CONTROL strand is the `.word`; its genuine substrate
 **reads** bottom out in a host see-op, `see resolve-X(args) as bind` — the strand the JS floor
 (`*Host.js`) carried. Example (`set-being.word`):
 
@@ -91,7 +91,7 @@ read/validation composing the past-engine crates + the refined `HostError`; each
   snapshots `{ matterId, hash, url:"/api/v1/content/<hash>", name }`, and builds the set-<kind>
   `{ field, value, merge }` (a per-type space default at the deep `qualities.render.matterModels.<type>`
   path with the `forMatterType` gate — space-only + a known seed type via `matter::type_known`, the SAME
-  deferral makematter makes for `ext:<type>`; else the entity-level `qualities.render` patch with the
+  deferral make makes for `ext:<type>`; else the entity-level `qualities.render` patch with the
   optional positive scale + rotation object). CLEAR nulls the model at its field path.
 - **`resolve_set_being_flow_spec`** (`resolve-set-being-flow-spec`): resolve the target being (explicit
   `params.beingId` wins, else the `{kind:"being",id}` verb target — `InvalidInput` on neither), validate
@@ -129,7 +129,7 @@ read/validation composing the past-engine crates + the refined `HostError`; each
 - **`resolve_rename_matter`** (`resolve-rename-spec`): load the matter, require its `spaceId`, run the
   per-(spaceId, parentMatterId) FOLDER name-uniqueness (case-insensitive, own current name excluded, an
   `allowReplace` bypass). Returns `{ matterId, name }`. Reuses the toolkit's `folder_matter_names`
-  (`listMatterNamesInFolder`), now shared with makematter's generated-name floor.
+  (`listMatterNamesInFolder`), now shared with make's generated-name floor.
 - **`resolve_purge`** (`resolve-purge`): load the matter, resolve the hash (explicit arg or the current
   cas ref), the author-or-root-owner auth gate (`resolve_root_owner` walks the parent chain on "0" for
   the nearest non-I owner; `Forbidden` on a miss), and the SHARED-FATE refcount over the dedup'd hash
@@ -151,7 +151,7 @@ read/validation composing the past-engine crates + the refined `HostError`; each
 - **`resolve_grant`** (`able-exists`): the able-registry lookup. The JS registry FOLDS from the able-words
   ("all rules fold"); the Rust able-word fold is not yet ported, so the bridge validates the able is a
   well-formed non-empty kebab identifier (the gate SHAPE) and defers registry-membership to the fold, the
-  SAME deferral makematter's extension-type gate makes.
+  SAME deferral make's extension-type gate makes.
 - **`resolve_kill` / `resolve_switch` / `resolve_truename`** (the cherub `be:` hosts): irreducible reads
   the verb's control strand reaches through `see`; the kill/switch/truename AUTHORITY is the verb's
   able-walk (the `AuthCtx` input), never a floor read. `resolve-target-being` = `findByName("being")` on
@@ -244,7 +244,7 @@ owner/not-root check, the actor's `beingId`) arrives as **`AuthCtx`** — mirror
 `able_spec_of: impl Fn(&str) -> Option<Json>` and `host: &dyn Fn(...)` injection seams. The resolvers
 TRUST it (the `.word` comments say so: "Authorization is the verb dispatcher's able-walk; this trusts
 it"). `AuthCtx { actor_being_id, authorized, is_i }`:
-- `actor_being_id` — the creator (makematter / makespace) + the deleter (end-space). `caller("be")`.
+- `actor_being_id` — the creator (make / make) + the deleter (end-space). `caller("be")`.
 - `authorized` — the able-walk verdict; `resolve_end_space_spec` refuses on it (owner/not-root) unless `is_i`.
 - `is_i` — the genesis / boot-mirror identity that bypasses the `beingId !== I` gates (`i_am()`).
 
@@ -253,7 +253,7 @@ it"). `AuthCtx { actor_being_id, authorized, is_i }`:
 These stay caller-side / JS for now (the bridge ports the **validation**, not the host I/O — exactly
 the cut the JS `.word` made: "the host throws; this validates and RETURNS"):
 
-- **content PUT** (`putContent`) on a string makematter content: the bridge validates the type
+- **content PUT** (`putContent`) on a string make content: the bridge validates the type
   allows `text` and returns the raw string as content; the **caller's host emit** does the `putContent`.
   A `{kind:"cas"}` ref is verified to EXIST (the read), which is the byte-correctness gate.
 - **the parent-lock + max-children check + heaven-parent gate + `beforeSpaceCreate/Delete` hooks** in
@@ -313,7 +313,7 @@ files went fully clean: `history-manager`, `delete-pointer`, `ask-able`, `take-a
 
 **The honest-impurity DEFERRAL (able-manager).** In JS, `author-able` / `remove-able` are NOT pure
 reads — they WRITE the `.ables/<name>` manifest child (`addManifestChild` / `removeManifestChild` = a
-`do:makespace` / `do:end-space` chain write on the `.ables` reel) AND hot-(un)register the able in an
+`do:make` / `do:end-space` chain write on the `.ables` reel) AND hot-(un)register the able in an
 in-memory registry (live without a restart). A treehost resolver lays NO fact, and the Rust able-word
 fold + in-memory registry are not yet ported. So this bridge ports the VALIDATION + the manifest-child
 SPEC (the `ableQualities` + `manifestName` the seal needs) and DEFERS: the manifest WRITE to the
@@ -623,7 +623,7 @@ The `treeibp` half of this handoff is LANDED and validated (additive; every exis
 **TEST (additive, `treeibp/tests/ibp_host_seam.rs`, 2 tests, both green):** `set-being.word` and
 `create.word` run END-TO-END (`run_op_word` -> `run_body_host` -> `see resolve-X` -> treehost resolves
 -> the do-fact STAMPS on the right reel + the chain verifies). Each also fires a GATE: set-being's
-name-collision REFUSES ("...name \"Alice\" already taken..."), makespace's oversize-axis REFUSES -
+name-collision REFUSES ("...name \"Alice\" already taken..."), make's oversize-axis REFUSES -
 both clean `Outcome::Denied`, no panic. Rows are planted the SAME way treehost's resolver tests do
 (stamp a reel + `treeproj::refold` to build the name index). The seed `.word`/index dir is
 `$TREE_SEED_DIR` if set, else `<crate>/../../seed`.

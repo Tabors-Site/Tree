@@ -592,7 +592,7 @@ pub fn read_book_plain(book: &str, dir: &Path, history: &str) -> Result<BookRead
 //      only fires when a word is RUN (a `see <op>` escape executed), never when it is declared.
 //   2. the CREATION sequence (the spaces, then the delegate births, then I's placement): plain natural
 //      sentences (`I make heaven.`, `I make Cherub.`, `I stand in heaven.`) the reader lowers to real
-//      acting facts (do:makespace / be:birth / do:move) and seals as moments on their reels.
+//      acting facts (do:make / be:birth / do:move) and seals as moments on their reels.
 //   3. the GRANTS (genesis.word): the flow whose effects grant each delegate the angel able at heaven +
 //      its own able at the root. The grant flow references beings/spaces by name (`cherub`, `heaven`,
 //      `root`) — refs the runner resolves against the ANCHOR bindings the reader holds (the ids it just
@@ -725,7 +725,7 @@ pub fn coin_word(
 }
 
 /// The op-word NAME a `.word` file declares — the word the file is the body of: the file STEM,
-/// literally (`space/makespace.word` -> `makespace`, `federation-manager/offer-template.word` ->
+/// literally (`space/make.word` -> `make`, `federation-manager/offer-template.word` ->
 /// `offer-template`). The transitional `create.word`-coins-as-its-dir alias died with the M1C rename.
 fn op_word_name(rel: &str) -> String {
     std::path::Path::new(rel)
@@ -783,6 +783,10 @@ pub fn full_genesis(dir: &Path) -> Result<BornWorld, GenesisBookError> {
     //    not-yet-handled words (federation / llm — the other agent's) coin fine; the runtime guard only
     //    fires when a word is actually RUN (the creation + grant sequence below). Dependency order.
     let mut vocabulary_coined = 0;
+    // ONE WORD = ONE COIN: a word may carry a per-noun floor BODY across the noun bundles (make =
+    // space/make.word + matter/make.word, resolved by op_word(op, noun)); if the book ever reads the
+    // same coined NAME twice, the FIRST coin wins and the rest are skipped — one word, one meaning.
+    let mut coined_names: std::collections::HashSet<String> = std::collections::HashSet::new();
     for rel in treeseed::vocabulary() {
         // iam.word (the sayer) was already read as the FIRST WORD above (it births Am); skip it here so
         // its verse is not re-read (Am is born once).
@@ -796,7 +800,7 @@ pub fn full_genesis(dir: &Path) -> Result<BornWorld, GenesisBookError> {
         if is_op_word_file(&text) {
             // an op-word: one name-coin, no body run (the body runs only when the op is invoked).
             let name = op_word_name(&rel);
-            if !name.is_empty() {
+            if !name.is_empty() && coined_names.insert(name.clone()) {
                 coin_word(&name, "op", &text, dir, "0", Some(sign_ref))?;
                 vocabulary_coined += 1;
             }
@@ -808,7 +812,7 @@ pub fn full_genesis(dir: &Path) -> Result<BornWorld, GenesisBookError> {
     }
 
     // 3. THE CREATION SEQUENCE — the spaces, the delegate births, my placement. Plain natural sentences
-    //    the reader lowers to real facts. Each `I make <name>.` lays a do:makespace (a lowercase
+    //    the reader lowers to real facts. Each `I make <name>.` lays a do:make (a lowercase
     //    name) or a be:birth (a Capitalized Name) on the new reel; `I stand in heaven.` a do:move.
     let read_opt = |rel: &str, dir: &Path| -> Result<Option<BookRead>, GenesisBookError> {
         match treeseed::book(rel) {
@@ -863,10 +867,10 @@ pub fn full_genesis(dir: &Path) -> Result<BornWorld, GenesisBookError> {
     })
 }
 
-/// The space NAME `I make [the] <name>.` creates (the do:makespace it lowers to), or None.
+/// The space NAME `I make [the] <name>.` creates (the do:make it lowers to), or None.
 fn created_space_id(statement: &str) -> Option<String> {
     for n in treeword::parse(statement) {
-        if get_str(&n, "kind") == Some("act") && get_str(&n, "act") == Some("makespace") {
+        if get_str(&n, "kind") == Some("act") && get_str(&n, "act") == Some("make") {
             return get(&n, "of").and_then(|o| get_str(o, "id")).map(|s| s.to_string());
         }
     }

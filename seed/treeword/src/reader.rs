@@ -301,7 +301,7 @@ fn read_base(clause: &str, vocab: &Vocabulary) -> Option<(Vec<Json>, String)> {
             let birth = be_act(&object, &roles)?;
             Some((vec![birth], object))
         }
-        // `I make <space> [in <parent>]` -> do:makespace (make is a Do form; the ACT is the one-token
+        // `I make <space> [in <parent>]` -> do:make (make is a Do form; the ACT is the one-token
         // compound — a word is ONE act of ONE thing, so the base verb never coins as an act. The M1C
         // rename closed the create-space drift); the object is a SPACE.
         Some(Family::Do) if verb.present.as_str() == "make" => {
@@ -423,9 +423,9 @@ fn strip_article(s: &str) -> String {
     t.to_string()
 }
 
-/// `I make <space> [in <parent>]` -> do:makespace. For `make`, the `in <space>` role is the PARENT
-/// (where the child space sits), NOT a home. The act is the compound `makespace` (the M1C rename —
-/// the spoken "make" is the language layer; the one-token word is makespace).
+/// `I make <space> [in <parent>]` -> do:make. For `make`, the `in <space>` role is the PARENT
+/// (where the child space sits), NOT a home. The act is the compound `make` (the M1C rename —
+/// the spoken "make" is the language layer; the one-token word is make).
 fn make_space_act(space: &str, roles: &Roles) -> Json {
     let mut params: Vec<(&str, Json)> = vec![];
     if let Some(parent) = &roles.in_space {
@@ -434,7 +434,7 @@ fn make_space_act(space: &str, roles: &Roles) -> Json {
     obj(vec![
         ("kind", jstr("act")),
         ("verb", jstr("do")),
-        ("act", jstr("makespace")),
+        ("act", jstr("make")),
         ("by", jstr("I")),
         ("of", obj(vec![("kind", jstr("space")), ("id", jstr(space))])),
         ("params", obj(params)),
@@ -618,16 +618,16 @@ mod tests {
     #[test]
     fn reads_i_make_space_off_the_word() {
         let v = full_vocab();
-        // `I make heaven in root.` -> do:makespace heaven, parent root. `make` is a Do verb (do.word);
+        // `I make heaven in root.` -> do:make heaven, parent root. `make` is a Do verb (do.word);
         // the verb decides being-vs-space -> a SPACE (not a being).
         let acts = read_act("I make heaven in root.", &v);
         assert_eq!(acts.len(), 1, "one space made: {acts:?}");
         assert_eq!(gs(&acts[0], "verb"), Some("do"));
-        assert_eq!(gs(&acts[0], "act"), Some("makespace"));
+        assert_eq!(gs(&acts[0], "act"), Some("make"));
         assert_eq!(get(&acts[0], "of").and_then(|o| gs(o, "kind")), Some("space"), "make -> a space");
         assert_eq!(of_id(&acts[0]), Some("heaven"));
         assert_eq!(get(&acts[0], "params").and_then(|p| gs(p, "parent")), Some("root"), "the `in` role -> parent");
-        // `I make the root.` -> makespace root, no parent (leading article stripped).
+        // `I make the root.` -> make root, no parent (leading article stripped).
         let r = read_act("I make the root.", &v);
         assert_eq!(of_id(&r[0]), Some("root"));
         assert!(get(&r[0], "params").and_then(|p| gs(p, "parent")).is_none(), "no `in` -> no parent");

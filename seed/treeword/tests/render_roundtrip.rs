@@ -30,7 +30,7 @@ fn render_round_trips_through_the_parser() {
     // WORD-DRIVEN-PARSER.md) — knowingly stale, skipped:
     //   - a be:birth carrying an `able`/`description` = the OLD FAT make-a-being (the reader births BARE,
     //     `I am <Name>`, no able), so `I am X` re-parses to a bare birth, not this fat node.
-    //   - a makespace (old create-space) carrying a `gloss` = the retired gloss form.
+    //   - a make (old create-space) carrying a `gloss` = the retired gloss form.
     fn gs<'a>(v: &'a Json, k: &str) -> Option<&'a str> {
         match get(v, k) {
             Some(Json::Str(x)) if !x.is_empty() => Some(x.as_str()),
@@ -40,7 +40,7 @@ fn render_round_trips_through_the_parser() {
     let stale_node = |node: &Json| -> bool {
         let is = |vv: &str, aa: &str| gs(node, "verb") == Some(vv) && gs(node, "act") == Some(aa);
         let has = |k: &str| get(node, "params").map_or(false, |p| gs(p, k).is_some());
-        (is("be", "birth") && (has("able") || has("description"))) || (is("do", "makespace") && has("gloss"))
+        (is("be", "birth") && (has("able") || has("description"))) || (is("do", "make") && has("gloss"))
     };
     let (mut rt, mut unhandled, mut total) = (0usize, 0usize, 0usize);
     let mut fails: Vec<String> = Vec::new();

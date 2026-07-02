@@ -62,7 +62,7 @@ fn word_to_fact_pipe_pure_rust() {
 
     // 2. RASTERIZE: act IR node → reel + fact spec
     let (kind, id, spec) = rasterize(node).expect("rasterize the act node");
-    assert_eq!((kind.as_str(), id.as_str()), ("space", "garden"), "I make garden -> makespace on (space, garden)");
+    assert_eq!((kind.as_str(), id.as_str()), ("space", "garden"), "I make garden -> make on (space, garden)");
 
     // 3. STAMP (treestore): derive identity + fsync'd reel append
     let stamped = compute_fact_doc("0", &spec, &Head::genesis(), None);
@@ -72,7 +72,7 @@ fn word_to_fact_pipe_pure_rust() {
     // 4. READ BACK + VERIFY (treestore + treeverify): the chain holds
     let facts = read_reel_file(&dir, "0", &kind, &id, None, None);
     assert_eq!(facts.len(), 1, "the fact landed on its reel");
-    assert_eq!(get_str(&facts[0], "act"), Some("makespace"), "the fact carries the word's act");
+    assert_eq!(get_str(&facts[0], "act"), Some("make"), "the fact carries the word's act");
     assert!(verdict_ok(&verify_fact_chain(&facts)), "the on-disk chain verifies");
 
     let _ = std::fs::remove_dir_all(&dir);

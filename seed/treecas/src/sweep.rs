@@ -107,7 +107,7 @@ pub fn sweep_entries(
             break;
         }
         // Grace: a fresh blob may belong to a put whose fact hasn't sealed (or a
-        // two-step upload whose makematter is coming). `now_ms - mtime_ms`
+        // two-step upload whose make is coming). `now_ms - mtime_ms`
         // is the JS check (mtime is an OS file property, not a world clock).
         if now_ms - entry.mtime_ms < grace_ms {
             continue;

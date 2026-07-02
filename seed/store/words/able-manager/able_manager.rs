@@ -16,15 +16,15 @@
 //
 // HONEST IMPURITY DEFERRAL (the cut this port makes): in JS, author-able / remove-able are NOT pure
 // reads — they WRITE the `.ables/<name>` manifest child (addManifestChild / removeManifestChild — a
-// do:makespace / do:end-space chain write on the .ables heaven space reel) AND hot-(un)register the
+// do:make / do:end-space chain write on the .ables heaven space reel) AND hot-(un)register the
 // able in an in-memory registry (registerAble / unregisterAble — live without a restart). A treehost
 // resolver lays NO fact and the Rust able-word fold / in-memory registry are not yet ported, so this
 // bridge ports the VALIDATION + the manifest-child SPEC and DEFERS:
-//   - the manifest WRITE (the do:makespace / do:end-space on .ables) -> caller-side seal, the SAME
+//   - the manifest WRITE (the do:make / do:end-space on .ables) -> caller-side seal, the SAME
 //     cut config.rs / model.rs make for the 5D NAME-ACT seal (the resolver returns the spec, the seal
 //     lays the fact). The returned `manifestName` + `ableQualities` carry what the write needs.
 //   - the in-memory HOT-REGISTER -> deferred with the able-word fold (the SAME deferral grant's
-//     `able-exists` / makematter's extension-type gate make). `hotRegistered: true` is preserved as
+//     `able-exists` / make's extension-type gate make). `hotRegistered: true` is preserved as
 //     the byte-compatible return the `.word` reads; the live-registry effect lands when the fold ports.
 // The `.ables` parent heaven space is read here (findByHeavenSpace, on-disk via toolkit) to confirm the
 // scaffold is planted — the read half of the manifest write the seal completes.

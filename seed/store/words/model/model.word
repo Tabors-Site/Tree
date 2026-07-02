@@ -4,6 +4,6 @@ When a caller sets a model on a target:
   If clear:
     see resolve-model-block(targetKind, modelMatterId, scale, rotation, forMatterType, clear) as block.
     Return cleared: true, factParams: $block, factTarget: { kind: $targetKind, id: $targetId }.
-  If no modelMatterId, refuse with "set-model: `modelMatterId` required (upload first via makematter type=model, or pass clear=true)" as invalid-input.
+  If no modelMatterId, refuse with "set-model: `modelMatterId` required (upload first via make type=model, or pass clear=true)" as invalid-input.
   see resolve-model-block(targetKind, modelMatterId, scale, rotation, forMatterType, clear) as block.
   Return set: true, factParams: $block, factTarget: { kind: $targetKind, id: $targetId }.

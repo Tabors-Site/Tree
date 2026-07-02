@@ -30,7 +30,7 @@ const RESERVED_SET_META_NS: &[&str] = &[]; // empty today; kept for symmetry wit
 /// A seed matter type's content-kind + mime allowlist. The JS registry resolves from the word-fold;
 /// the bridge carries the SEED basic set (the kernel-bound floor types.js ships). An extension type
 /// (`ext:name`) is unknown to the bridge -> the type gate refuses (the JS resolves it from the fold,
-/// the deferred refinement); the SHAPE of the gate is what makematter needs.
+/// the deferred refinement); the SHAPE of the gate is what make needs.
 struct MatterType {
     name: &'static str,
     content_kinds: &'static [&'static str],
@@ -57,7 +57,7 @@ fn get_matter_type(name: &str) -> Option<&'static MatterType> {
     SEED_TYPES.iter().find(|t| t.name == name)
 }
 /// Is `name` a KNOWN seed matter type? (the JS `getMatterType(name)` truthiness gate, shared by
-/// model.rs's `resolve-model-block` forMatterType check — the SAME deferral makematter makes for
+/// model.rs's `resolve-model-block` forMatterType check — the SAME deferral make makes for
 /// an `ext:<type>` unknown to the bridge.)
 pub(crate) fn type_known(name: &str) -> bool {
     get_matter_type(name).is_some()
@@ -214,7 +214,7 @@ pub fn resolve_set_matter_spec(
     }
 }
 
-// ── resolve-birth-spec (makematter) ──────────────────────────────────────────────────────────────
+// ── resolve-birth-spec (make) ──────────────────────────────────────────────────────────────
 /// resolve-birth-spec(target, targetKind, params, caller, branch) -> { enrichedSpec, matterId, spaceId,
 /// parentMatterId }. The substrate compute matterHost.js ran: parent-matter spaceId inheritance, the
 /// type-registry gate (THROW on unknown type / disallowed content-kind / disallowed mime), the name
@@ -240,7 +240,7 @@ pub fn resolve_create_matter(
         Some(c) if !c.is_empty() => c,
         _ => {
             return Err(HostError::unauthorized(
-                "makematter requires an identified actor",
+                "make requires an identified actor",
             ))
         }
     };
@@ -298,14 +298,14 @@ pub fn resolve_create_matter(
         Json::Str(_) => {
             if !type_allows_content_kind(type_def, "text") {
                 return Err(HostError::invalid(format!(
-                    "makematter: matter type \"{matter_type}\" does not carry text content"
+                    "make: matter type \"{matter_type}\" does not carry text content"
                 )));
             }
         }
         v if is_cas_ref(v) => {
             let hash = get_str(v, "hash").unwrap_or("");
             if !cas_exists(root, hash) {
-                return Err(HostError::unknown_content("makematter", hash));
+                return Err(HostError::unknown_content("make", hash));
             }
             let kind_of = match get_str(v, "encoding") {
                 Some("utf8") => "text",
@@ -313,12 +313,12 @@ pub fn resolve_create_matter(
             };
             if !type_allows_content_kind(type_def, kind_of) {
                 return Err(HostError::invalid(format!(
-                    "makematter: matter type \"{matter_type}\" does not carry {kind_of} content"
+                    "make: matter type \"{matter_type}\" does not carry {kind_of} content"
                 )));
             }
             if !type_allows_mime(type_def, get_str(v, "mimeType")) {
                 return Err(HostError::invalid(format!(
-                    "makematter: MIME \"{}\" is not allowed for matter type \"{matter_type}\"",
+                    "make: MIME \"{}\" is not allowed for matter type \"{matter_type}\"",
                     get_str(v, "mimeType").unwrap_or("")
                 )));
             }
@@ -326,20 +326,20 @@ pub fn resolve_create_matter(
         Json::Obj(_) | Json::Arr(_) => {
             if !type_allows_content_kind(type_def, "none") {
                 return Err(HostError::invalid(format!(
-                    "makematter: matter type \"{matter_type}\" does not carry reference content"
+                    "make: matter type \"{matter_type}\" does not carry reference content"
                 )));
             }
         }
         Json::Null => {
             if !type_allows_content_kind(type_def, "none") {
                 return Err(HostError::invalid(format!(
-                    "makematter: matter type \"{matter_type}\" requires content"
+                    "make: matter type \"{matter_type}\" requires content"
                 )));
             }
         }
         _ => {
             return Err(HostError::invalid(
-                "makematter: content must be a string, a cas content ref, a reference object, or null",
+                "make: content must be a string, a cas content ref, a reference object, or null",
             ))
         }
     }
@@ -364,7 +364,7 @@ pub fn resolve_create_matter(
         _ => None,
     };
 
-    // Build the enriched spec (the do:makematter fact's params). Drop stray coord/origin; re-add the
+    // Build the enriched spec (the do:make fact's params). Drop stray coord/origin; re-add the
     // validated coord only.
     let mut enriched: Vec<(String, Json)> = match params {
         Json::Obj(e) => e.iter().filter(|(k, _)| k != "coord" && k != "origin").cloned().collect(),
@@ -396,7 +396,7 @@ pub fn resolve_create_matter(
 
 // ── helpers ─────────────────────────────────────────────────────────────────────────────────────────
 /// detectTargetKind: a `{ kind }` target -> its kind; a bare string id -> "matter" (the set-matter /
-/// makematter default target). (_targetShape.js detectTargetKind, the matter-side default.)
+/// make default target). (_targetShape.js detectTargetKind, the matter-side default.)
 fn detect_target_kind(target: &Json) -> &str {
     match get_str(target, "kind") {
         Some(k) if !k.is_empty() => k,

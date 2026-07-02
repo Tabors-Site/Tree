@@ -224,19 +224,19 @@ fn full_seam_real_act_drives_the_emit_hook() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     subscriptions::reset_all();
 
-    // B subscribes to "makespace" everywhere (the event = the sealed fact's act name).
+    // B subscribes to "make" everywhere (the event = the sealed fact's act name).
     let b = "watcher3";
-    assert!(subscriptions::apply_fact(&sub_registered(b, "s2", "makespace", "INTERACTIVE")));
+    assert!(subscriptions::apply_fact(&sub_registered(b, "s2", "make", "INTERACTIVE")));
 
-    // a sealed makespace fact (as it would land off a reel: act + of=space + ord) drives the hook.
+    // a sealed make fact (as it would land off a reel: act + of=space + ord) drives the hook.
     let mut woke: Vec<String> = Vec::new();
-    let sealed = emitted_fact("builderA", "makespace", "space", "meadow", 7.0);
+    let sealed = emitted_fact("builderA", "make", "space", "meadow", 7.0);
     let n = subscriptions::emit_for_fact(&sealed, |being, _entry| woke.push(being.to_string()));
-    assert_eq!(n, 1, "the makespace seal woke the subscriber");
+    assert_eq!(n, 1, "the make seal woke the subscriber");
     assert_eq!(woke, vec![b.to_string()]);
 
     subscriptions::reset_all();
-    println!("  treeos present-loop Phase 2 (E): a real sealed fact (makespace) drives the emit hook -> wake  OK");
+    println!("  treeos present-loop Phase 2 (E): a real sealed fact (make) drives the emit hook -> wake  OK");
 }
 
 #[test]

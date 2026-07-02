@@ -26,7 +26,7 @@ fn ok_true(v: &Json) -> bool {
 /// and can be handed to act/moment repeatedly). "builder" can create spaces and see anywhere.
 fn builder_spec_of(name: &str) -> Option<Json> {
     if name == "builder" {
-        Some(pj(r#"{"canDo":["makespace"],"canSee":["*"],"reach":["/**"]}"#).unwrap())
+        Some(pj(r#"{"canDo":["make"],"canSee":["*"],"reach":["/**"]}"#).unwrap())
     } else {
         None
     }
@@ -49,7 +49,7 @@ fn ibp_act_then_moment() {
     let out = act("I make garden.", &b1, &dir, "0", builder_spec_of, None, None);
     assert_eq!(out.len(), 1, "one act in the Word");
     match &out[0] {
-        Outcome::Authorized(fact) => assert_eq!(get_str(fact, "act"), Some("makespace"), "the act stamped"),
+        Outcome::Authorized(fact) => assert_eq!(get_str(fact, "act"), Some("make"), "the act stamped"),
         Outcome::Denied(r) => panic!("expected authorized, got denied: {r}"),
     }
 
@@ -194,10 +194,10 @@ fn ibp_moment_seal_writes_act_then_fact() {
     let out = treeibp::act("I make garden.", &i, &dir, "0", no_spec, None, None);
     assert!(matches!(out[0], Outcome::Authorized(_)), "authorized");
 
-    // the FACT stamped on (space, garden) + verifies — the fact carries the act content (makespace)
+    // the FACT stamped on (space, garden) + verifies — the fact carries the act content (make)
     let facts = treestore::read_reel_file(&dir, "0", "space", "garden", None, None);
     assert_eq!(facts.len(), 1, "the fact stamped");
-    assert_eq!(get_str(&facts[0], "act"), Some("makespace"), "the fact carries the op");
+    assert_eq!(get_str(&facts[0], "act"), Some("make"), "the fact carries the op");
     assert!(ok_true(&treestore::verify_fact_chain(&facts)), "fact-chain verifies");
 
     // the ACT wrote to the act-log (story localhost, history 0, being I) + verifies — the moment is
@@ -215,7 +215,7 @@ fn ibp_moment_seal_writes_act_then_fact() {
 fn ibp_multi_act_bindings_propagate() {
     // two acts: #1 creates "home" and binds it as h; #2 targets $h — run_body threads the binding
     let acts = [
-        pj(r#"{"kind":"act","verb":"do","act":"makespace","by":"I","of":{"kind":"space","id":"home"},"bind":"h"}"#).unwrap(),
+        pj(r#"{"kind":"act","verb":"do","act":"make","by":"I","of":{"kind":"space","id":"home"},"bind":"h"}"#).unwrap(),
         pj(r#"{"kind":"act","verb":"do","act":"set-space","by":"I","of":{"kind":"space","ref":"$h"},"params":{"field":"owner","value":"b1"}}"#).unwrap(),
     ];
     let mut ctx = pj(r#"{"identity":{"nameId":"I"},"bindings":{},"state":{},"beings":{}}"#).unwrap();
@@ -249,9 +249,9 @@ fn ibp_fold_able_spec_authorizes() {
     assert!(ok_true(&v), "scribe authorized to see:ables (from the folded scribe.word)");
     assert_eq!(get_str(&v, "actor"), Some("scribe"));
 
-    // scribe has no canDo -> do:makespace is denied
-    let v2 = treeibp::authorize("do", Some("makespace"), Some("root"), None, &b1, &dir, "0", &spec_of);
-    assert!(!ok_true(&v2), "scribe denied do:makespace (not in its can-set)");
+    // scribe has no canDo -> do:make is denied
+    let v2 = treeibp::authorize("do", Some("make"), Some("root"), None, &b1, &dir, "0", &spec_of);
+    assert!(!ok_true(&v2), "scribe denied do:make (not in its can-set)");
 
     let _ = std::fs::remove_dir_all(&dir);
     println!("  treeibp: foldAbleNoun in Rust — scribe.word folded -> canSee; authorizes see:ables, denies do  OK");
@@ -408,14 +408,14 @@ fn ibp_moment_returns_world_ord() {
 #[test]
 fn ibp_concurrent_acts_same_reel_no_drop() {
     // The per-reel STRIPE LOCK under heavy contention: many NAMES writing the SAME reel at once must ALL
-    // land (the bare reel write would false-replay-drop a same-seq collision). N threads each makespace
+    // land (the bare reel write would false-replay-drop a same-seq collision). N threads each make
     // on "garden" as a DIFFERENT name (so the act-chains don't contend) → all N facts land, the chain
     // verifies, and every fact carries a DISTINCT global ord.
     const N: usize = 12;
     let dir = std::env::temp_dir().join("treeos-ibp-concurrent");
     let _ = std::fs::remove_dir_all(&dir);
 
-    // grant each writer b{n} the "builder" able (canDo makespace, reach /**, anchored at root)
+    // grant each writer b{n} the "builder" able (canDo make, reach /**, anchored at root)
     let append = |kind: &str, id: &str, spec: &Json| {
         let head = read_reel_head(&dir, "0", kind, id);
         let st = compute_fact_doc("0", spec, &head, None);

@@ -138,7 +138,7 @@ fn rust_stamps_then_folds_a_space() {
     let create = obj(vec![
         ("through", jstr("be1")),
         ("verb", jstr("do")),
-        ("act", jstr("makespace")),
+        ("act", jstr("make")),
         ("of", obj(vec![("kind", jstr("space")), ("id", jstr("sp9"))])),
         (
             "params",
@@ -156,8 +156,8 @@ fn rust_stamps_then_folds_a_space() {
     let verdict = verify_fact_chain(&facts);
     assert!(verdict_ok(&verdict), "space chain failed verify");
     let state = fold("space", &facts);
-    assert_eq!(sval(&state, "name"), "Garden", "makespace folded the name");
-    assert_eq!(sval(&state, "owner"), "be1", "makespace folded the owner");
+    assert_eq!(sval(&state, "name"), "Garden", "make (space) folded the name");
+    assert_eq!(sval(&state, "owner"), "be1", "make (space) folded the owner");
     assert_eq!(nval(&state, "bornOrd"), 1.0, "space bornOrd = the moment's ord");
 
     let _ = std::fs::remove_dir_all(&dir);
@@ -173,7 +173,7 @@ fn rust_stamps_then_folds_a_matter() {
     let create = obj(vec![
         ("through", jstr("be1")),
         ("verb", jstr("do")),
-        ("act", jstr("makematter")),
+        ("act", jstr("make")),
         ("of", obj(vec![("kind", jstr("matter")), ("id", jstr("mt9"))])),
         (
             "params",
@@ -191,8 +191,8 @@ fn rust_stamps_then_folds_a_matter() {
     let verdict = verify_fact_chain(&facts);
     assert!(verdict_ok(&verdict), "matter chain failed verify");
     let state = fold("matter", &facts);
-    assert_eq!(sval(&state, "name"), "note", "makematter folded the name");
-    assert_eq!(sval(&state, "content"), "hello", "makematter folded the content");
+    assert_eq!(sval(&state, "name"), "note", "make (matter) folded the name");
+    assert_eq!(sval(&state, "content"), "hello", "make (matter) folded the content");
     assert_eq!(nval(&state, "bornOrd"), 1.0, "matter bornOrd = the moment's ord");
 
     let _ = std::fs::remove_dir_all(&dir);

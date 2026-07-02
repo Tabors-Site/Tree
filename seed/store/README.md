@@ -51,15 +51,23 @@ store/
 
 - Coined name = the file stem (`kill.word` coins `kill`), literally — the transitional
   `create.word`-coins-as-its-dir exception died with the M1C rename.
-- A word is ONE act of ONE thing, ONE token (rain.md): verbs are never noun-disambiguated, so a base
-  verb like `make` never coins as an act — COMPOUNDS are the words. `create-space`→`makespace`
-  (`words/space/makespace.word`), `create-matter`→`makematter` (`words/matter/makematter.word`); the
-  coin name, the fact/act name, and the file stem are the same one token. A human's "I make a space X"
-  is the language layer translating down to `makespace`.
-- Coined names are unique outside `ables/` (build.rs invariant 2). The able-specs are a separate
-  namespace — an able may share a stem with an op word (`cherub` the able vs `cherub` the op).
+- GENERIC MAKE (Tabor's ruling): `make` is ONE word meaning "create new" — whatever noun comes after
+  is what's made. The act name is `make` for BOTH creations (`create-space`/`create-matter` are dead);
+  the fact keeps its per-noun shape unchanged (a space-make's `of` is the created space; a matter-make
+  targets the containing space at the deed and lands `of:{kind:"matter"}` from the see-op) — `of.kind`
+  is the noun, the fold already dispatches per-kind reels.
+- ONE coin, per-noun FLOOR BODIES (transitional until the M3 frames): `make` is coined ONCE
+  (`I read make.`; the coin's `says` body is the space file) but carries a body per noun bundle —
+  `words/space/make.word` + `words/matter/make.word` — because today's trigger does not say the made
+  noun (a matter-make deed targets the containing SPACE, the same `of.kind` a space-make deed
+  carries), so ONE body cannot branch on "the thing's kind". `op_word(op, noun)` picks the floor by
+  noun; a noun-less `make` lands on the SPACE body (the genesis make). Where this is heading: the
+  frames speak the made noun in the word itself — "make space named Home", bare "make space" =
+  unnamed (M3, not this pass). FLAGGED, not built: "make its name X" set-unification.
+- Coined names are unique outside `ables/` (build.rs invariant 2) — EXCEPT across the three noun
+  bundles (being/space/matter), where (name, noun) is the key (the per-noun floor bodies above).
 - Op resolution (`op_word(op, noun)`): the noun bundle's `words/<noun>/<op>.word` first, then the
-  unique bundle claiming the coined name.
+  bundle claiming the coined name (space-preferred when nouns share it).
 
 ## Dev iteration
 

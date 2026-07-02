@@ -23,7 +23,7 @@
 //   - the parent-able INHERITANCE grants (_inheritParentAbles — its OWN moments, afterSeal);
 //   - the global ANOINT (_anointGlobal — its OWN moment, afterSeal).
 //
-// The .word call shape (mirrors makematter / makespace):
+// The .word call shape (mirrors make / make):
 //   `see resolve-birth-being(target, params, caller, branch) as birth.`
 //     args = [target (the parent being), params (the be:birth spec), caller, branch]
 
