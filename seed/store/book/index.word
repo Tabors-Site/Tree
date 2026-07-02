@@ -62,8 +62,7 @@ I read truename.
 I read close-story.
 I read delete-config.
 I read set-config.
-I read makematter.
-I read makespace.
+I read make.
 I read credential-attach.
 I read credential-detach.
 I read credential-read.
